@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { getStorageKey } from '../config/clientIsolation'
+import { AuthContext } from './AuthContext'
+import { firestoreService } from '../services/firestore'
 
 const NetworkConfigContext = createContext()
 
@@ -50,9 +52,31 @@ const saveNetworkDataToStorage = (data) => {
 }
 
 export function NetworkConfigProvider({ children }) {
+  const { currentUser: user, loading: authLoading } = useContext(AuthContext)
   const [networkData, setNetworkData] = useState(() => loadNetworkDataFromStorage())
 
-  // Sauvegarder automatiquement
+  useEffect(() => {
+    if (authLoading) return undefined
+
+    if (!user) {
+      setNetworkData(loadNetworkDataFromStorage())
+      return undefined
+    }
+
+    firestoreService.ensureNetworkBalances(loadNetworkDataFromStorage())
+      .catch((error) => {
+        console.error('Erreur lors de l initialisation des soldes reseau:', error)
+      })
+
+    const unsubscribe = firestoreService.subscribeToNetworkBalances((balances) => {
+      setNetworkData(balances)
+      saveNetworkDataToStorage(balances)
+    })
+
+    return unsubscribe
+  }, [user, authLoading])
+
+  // Sauvegarde locale de secours pour l'affichage hors ligne.
   useEffect(() => {
     saveNetworkDataToStorage(networkData)
   }, [networkData])
@@ -73,7 +97,14 @@ export function NetworkConfigProvider({ children }) {
 
       return newData
     })
-  }, [])
+
+    if (user) {
+      firestoreService.setNetworkBalance(network, type, amount)
+        .catch((error) => {
+          console.error('Erreur lors de la sauvegarde du solde reseau:', error)
+        })
+    }
+  }, [user])
 
   // Réinitialiser
   const resetToDefaults = useCallback(() => {

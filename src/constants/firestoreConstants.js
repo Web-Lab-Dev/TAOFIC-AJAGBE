@@ -8,6 +8,7 @@ export const FIRESTORE_CONFIG = {
     CLIENTS: getFirestoreCollectionPath('clients'),
     DRAFTS: getFirestoreCollectionPath('drafts'),
     HISTORY: getFirestoreCollectionPath('history'),
+    NETWORK_BALANCES: getFirestoreCollectionPath('networkBalances'),
     SESSIONS: getFirestoreCollectionPath('sessions'),
     AUDIT_LOGS: getFirestoreCollectionPath('auditLogs')
   },

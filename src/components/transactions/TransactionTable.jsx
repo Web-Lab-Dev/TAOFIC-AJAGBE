@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useMemo, memo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useTransactions } from '../../context/transactions.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
-import { useNetworkCards } from '../../hooks/useNetworkCards'
 import { PAYMENT_METHODS } from '../../utils/constants.js'
 import { getClientName, formatTime } from '../../utils/helpers.js'
 import { TransactionRowSkeleton } from '../ui/LoadingSkeleton.jsx'
@@ -12,7 +11,6 @@ import logger from '../../utils/logger.js'
 const TransactionTable = memo(function TransactionTable() {
   const { pendingTransactions, getActionButtons, getTransactionStyles, validateTransaction, startEditTransaction, loading } = useTransactions()
   const { themeClasses } = useTheme()
-  const { addToStock, addToLiquidity } = useNetworkCards()
 
   // Déduplicateur pour éviter les erreurs de clés React
   const uniquePendingTransactions = useMemo(() => {
@@ -34,6 +32,10 @@ const TransactionTable = memo(function TransactionTable() {
 
 
   const handleActionClick = useCallback((transactionId, actionType, event) => {
+    if ([...processingActions].some(key => key.startsWith(`${transactionId}-`))) {
+      return
+    }
+
     if (actionType === 'modifier') {
       const transaction = pendingTransactions.find(t => t.id === transactionId)
       if (transaction) {
@@ -57,7 +59,7 @@ const TransactionTable = memo(function TransactionTable() {
         setCurrentActionType(actionType)
       }
     }
-  }, [pendingTransactions, startEditTransaction, activeDropdown, setActiveDropdown, setCurrentActionType, setDropdownPosition])
+  }, [pendingTransactions, startEditTransaction, activeDropdown, setActiveDropdown, setCurrentActionType, setDropdownPosition, processingActions])
 
   const handlePaymentMethodSelect = useCallback(async (transactionId, method, actionType) => {
     // Vérifier si cette action est déjà en cours de traitement
@@ -72,28 +74,6 @@ const TransactionTable = memo(function TransactionTable() {
       const transaction = pendingTransactions.find(t => t.id === transactionId)
       if (!transaction) return
 
-      // Mapping des méthodes de paiement vers les réseaux
-      const networkMapping = {
-        'Orange Money': 'Orange',
-        'Moov Money': 'Moov',
-        'Sank Money': 'Sank',
-        'Coris Money': 'Coris',
-        'Telecel Money': 'Telecel',
-        'Cash': 'Cash' // Cash reste Cash
-      }
-
-      const targetNetwork = networkMapping[method] || method
-      const amount = parseFloat(transaction.montant) || 0
-
-      // === OPTIMISTIC UPDATE : APPLIQUER IMMÉDIATEMENT ===
-      // Mettre à jour les cartes réseau instantanément
-      if (targetNetwork === 'Cash') {
-        addToLiquidity(amount)
-      } else {
-        addToStock(targetNetwork, amount)
-      }
-
-      // Fermer le dropdown immédiatement pour feedback instantané
       setActiveDropdown(null)
       setCurrentActionType(null)
 
@@ -109,60 +89,22 @@ const TransactionTable = memo(function TransactionTable() {
         statusText = 'Validée'
       }
 
-      // === SYNCHRONISATION FIRESTORE EN ARRIÈRE-PLAN ===
-      // Valider la transaction dans Firestore (non-bloquant pour l'UI)
-      validateTransaction(transactionId, statusText, method).then(success => {
-        if (!success) {
-          throw new Error('La transaction n’a pas pu être déplacée vers l’historique')
-        }
-      }).catch(error => {
-        // En cas d'erreur Firestore, rollback des cartes réseau
-        logger.user.error('Transaction validation failed, rolling back', error)
-
-        // Rollback : annuler les changements des cartes
-        if (targetNetwork === 'Cash') {
-          addToLiquidity(-amount) // Retirer ce qui a été ajouté
-        } else {
-          addToStock(targetNetwork, -amount) // Retirer ce qui a été ajouté
-        }
-
-        // Afficher notification de rollback
-        setRollbackToast({
-          show: true,
-          message: `Erreur de synchronisation - Changements annulés`,
-          type: 'rollback'
-        })
-
-        // Auto-fermer après 4 secondes
-        setTimeout(() => {
-          setRollbackToast({ show: false, message: '', type: 'info' })
-        }, 4000)
-      })
-
+      const success = await validateTransaction(transactionId, statusText, method)
+      if (!success) {
+        throw new Error('La transaction n’a pas pu être déplacée vers l’historique')
+      }
     } catch (error) {
       logger.user.error('Transaction validation', error)
 
-      // En cas d'erreur, rollback immédiat
-      const transaction = pendingTransactions.find(t => t.id === transactionId)
-      if (transaction) {
-        const networkMapping = {
-          'Orange Money': 'Orange',
-          'Moov Money': 'Moov',
-          'Sank Money': 'Sank',
-          'Coris Money': 'Coris',
-          'Telecel Money': 'Telecel',
-          'Cash': 'Cash'
-        }
-        const targetNetwork = networkMapping[method] || method
-        const amount = parseFloat(transaction.montant) || 0
+      setRollbackToast({
+        show: true,
+        message: `Erreur de synchronisation - operation non enregistree`,
+        type: 'rollback'
+      })
 
-        // Rollback
-        if (targetNetwork === 'Cash') {
-          addToLiquidity(-amount)
-        } else {
-          addToStock(targetNetwork, -amount)
-        }
-      }
+      setTimeout(() => {
+        setRollbackToast({ show: false, message: '', type: 'info' })
+      }, 4000)
     } finally {
       // Retirer l'action de la liste des actions en cours
       setProcessingActions(prev => {
@@ -171,7 +113,7 @@ const TransactionTable = memo(function TransactionTable() {
         return newSet
       })
     }
-  }, [processingActions, setProcessingActions, pendingTransactions, addToStock, addToLiquidity, validateTransaction, setActiveDropdown, setCurrentActionType])
+  }, [processingActions, setProcessingActions, pendingTransactions, validateTransaction, setActiveDropdown, setCurrentActionType])
 
 
   // Fermer le dropdown quand on clique ailleurs
@@ -246,7 +188,8 @@ const TransactionTable = memo(function TransactionTable() {
                 uniquePendingTransactions.map((transaction) => {
                   const actions = getActionButtons(transaction)
                   const styles = getTransactionStyles(transaction.type)
-                  
+                  const isProcessingTransaction = [...processingActions].some(key => key.startsWith(`${transaction.id}-`))
+
                   return (
                     <tr 
                       key={transaction.id}
@@ -272,6 +215,7 @@ const TransactionTable = memo(function TransactionTable() {
                           {actions.modifier && (
                             <button
                               onClick={(e) => handleActionClick(transaction.id, 'modifier', e)}
+                              disabled={isProcessingTransaction}
                               className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
                             >
                               Modifier
@@ -281,7 +225,8 @@ const TransactionTable = memo(function TransactionTable() {
                           {actions.encaisser && (
                             <button
                               onClick={(e) => handleActionClick(transaction.id, 'encaisser', e)}
-                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors dropdown-trigger"
+                              disabled={isProcessingTransaction}
+                              className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-xs font-medium transition-colors dropdown-trigger"
                             >
                               Encaisser
                             </button>
@@ -290,7 +235,8 @@ const TransactionTable = memo(function TransactionTable() {
                           {actions.payerPar && (
                             <button
                               onClick={(e) => handleActionClick(transaction.id, 'payerPar', e)}
-                              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors dropdown-trigger"
+                              disabled={isProcessingTransaction}
+                              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-xs font-medium transition-colors dropdown-trigger"
                             >
                               Payer par
                             </button>
@@ -299,7 +245,8 @@ const TransactionTable = memo(function TransactionTable() {
                           {actions.rembourser && (
                             <button
                               onClick={(e) => handleActionClick(transaction.id, 'rembourser', e)}
-                              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors dropdown-trigger"
+                              disabled={isProcessingTransaction}
+                              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-3 py-1 rounded text-xs font-medium transition-colors dropdown-trigger"
                             >
                               Rembourser
                             </button>

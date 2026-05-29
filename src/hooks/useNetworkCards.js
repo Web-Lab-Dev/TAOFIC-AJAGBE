@@ -83,6 +83,10 @@ export const useNetworkCards = () => {
     return totalLiquidite
   }
 
+  const getLiquidite = () => {
+    return totalLiquidite
+  }
+
   // Éditer la liquidité totale (pour la carte Liquidité)
   const updateLiquidity = (newTotalAmount) => {
     const currentTotal = totalLiquidite
@@ -118,6 +122,7 @@ export const useNetworkCards = () => {
     addToLiquidity,
     removeFromLiquidity,
     getStock,
+    getLiquidite,
     getTotalLiquidity,
     formatAmount
   }

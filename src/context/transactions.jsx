@@ -131,11 +131,7 @@ export const TransactionsProvider = ({ children }) => {
         userEmail: user?.email || 'Utilisateur inconnu' // Ajouter l'email de l'utilisateur connecté
       }
 
-      if (transaction.statut === 'Non Terminées') {
-        await firestoreService.addDraft(transaction)
-      } else {
-        await firestoreService.addToHistory(transaction)
-      }
+      await firestoreService.addTransaction(transaction)
       // La mise à jour de l'état se fera automatiquement via onSnapshot
     } catch (error) {
       console.error('Erreur lors de l\'ajout de la transaction:', error)

@@ -31,6 +31,12 @@ service cloud.firestore {
              status.matches('^(Payé|Remboursé|Encaissé) par .+$');
     }
 
+    function isValidNetworkBalances(data) {
+      return data.keys().hasAll(['balances', 'updatedAt']) &&
+             data.balances is map &&
+             data.updatedAt is timestamp;
+    }
+
     match /clients/{tenantId} {
 
       match /users/{userId} {
@@ -89,6 +95,14 @@ service cloud.firestore {
                      isValidStatus(request.resource.data.statut);
 
         allow delete: if isAuthenticated();
+      }
+
+      match /networkBalances/{balanceId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() &&
+                             balanceId == 'current' &&
+                             isValidNetworkBalances(request.resource.data);
+        allow delete: if false;
       }
 
       match /sessions/{sessionId} {

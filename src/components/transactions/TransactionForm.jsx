@@ -7,14 +7,12 @@ import { useSimpleNetworkData } from '../../hooks/useSimpleNetworkData'
 import Toast from '../Toast'
 import { NETWORK_OPTIONS, TRANSACTION_TYPES, NETWORK_CODES, MESSAGES } from '../../utils/constants.js'
 import { validateTransactionForm, validateTransactionAction } from '../../utils/helpers.js'
-import { useNetworkCards } from '../../hooks/useNetworkCards'
 import logger from '../../utils/logger.js'
 
 function TransactionForm({ clients }) {
   const { toasts, showToast, removeToast } = useToast()
   const { addTransaction, editingTransaction, clearEditTransaction, updateTransaction } = useTransactions()
   const { validateAmount, getStock, getFormattedStock } = useSimpleNetworkData()
-  const { addToStock, removeFromStock, addToLiquidity, removeFromLiquidity } = useNetworkCards()
   const [selectedClient, setSelectedClient] = useState(null)
   const [amount, setAmount] = useState('')
   const [network, setNetwork] = useState('Orange')
@@ -154,6 +152,7 @@ function TransactionForm({ clients }) {
     // Vérifier que le client a bien un code pour ce réseau
     if (!selectedClient[networkKey]?.trim()) {
       showToast(`${selectedClient.nom} ${selectedClient.prenom} n'a pas de code ${network}`, 'error')
+      setIsSubmitting(false)
       return
     }
 
@@ -169,81 +168,15 @@ function TransactionForm({ clients }) {
 
     try {
       if (editingTransaction) {
-        // Mode édition - traitement normal car pas de latence critique
         await updateTransaction(editingTransaction.id, transactionData)
         clearEditTransaction()
         showToast(MESSAGES.SUCCESS.TRANSACTION_MODIFIED, 'success')
       } else {
-        // === OPTIMISTIC UPDATE : APPLIQUER IMMÉDIATEMENT ===
-        // Impact immédiat des boutons "Valider" et "Non terminée"
-        const amountValue = parseFloat(amount)
-
-        if (statut === 'Non Terminées') {
-          // DÉPÔT Non terminée : - Stock réseau choisi
-          if (transactionType === 'Dépôt') {
-            removeFromStock(network, amountValue)
-          }
-          // CRÉDIT Non terminée : - Stock réseau choisi
-          else if (transactionType === 'Crédit') {
-            removeFromStock(network, amountValue)
-          }
-          // RETRAIT Non terminée : + Stock réseau choisi
-          else if (transactionType === 'Retrait') {
-            addToStock(network, amountValue)
-          }
-        }
-        else if (statut === 'Validée') {
-          // DÉPÔT Valider : - Stock réseau choisi + Liquidité
-          if (transactionType === 'Dépôt') {
-            removeFromStock(network, amountValue)
-            addToLiquidity(amountValue)
-          }
-          // RETRAIT Valider : + Stock réseau choisi - Liquidité
-          else if (transactionType === 'Retrait') {
-            addToStock(network, amountValue)
-            removeFromLiquidity(amountValue)
-          }
-          // CRÉDIT ne peut pas être validé directement (déjà géré dans la validation)
-        }
-
-        // Afficher le toast immédiatement
+        await addTransaction(transactionData)
         showToast(
           statut === 'Validée' ? MESSAGES.SUCCESS.TRANSACTION_VALIDATED : MESSAGES.SUCCESS.TRANSACTION_SAVED,
           'success'
         )
-
-        // === SYNCHRONISATION FIRESTORE EN ARRIÈRE-PLAN ===
-        // Envoyer à Firestore de manière non-bloquante
-        addTransaction(transactionData).catch(error => {
-          // En cas d'erreur Firestore, rollback des cartes réseau
-          logger.user.error('Transaction save failed, rolling back', error)
-
-          // Rollback : annuler les changements des cartes
-          if (statut === 'Non Terminées') {
-            if (transactionType === 'Dépôt') {
-              addToStock(network, amountValue) // Inverser : + au lieu de -
-            }
-            else if (transactionType === 'Crédit') {
-              addToStock(network, amountValue) // Inverser : + au lieu de -
-            }
-            else if (transactionType === 'Retrait') {
-              removeFromStock(network, amountValue) // Inverser : - au lieu de +
-            }
-          }
-          else if (statut === 'Validée') {
-            if (transactionType === 'Dépôt') {
-              addToStock(network, amountValue) // Inverser : + au lieu de -
-              removeFromLiquidity(amountValue) // Inverser : - au lieu de +
-            }
-            else if (transactionType === 'Retrait') {
-              removeFromStock(network, amountValue) // Inverser : - au lieu de +
-              addToLiquidity(amountValue) // Inverser : + au lieu de -
-            }
-          }
-
-          // Afficher erreur
-          showToast('Erreur lors de la sauvegarde de la transaction', 'error')
-        })
       }
     } catch (error) {
       showToast('Erreur lors de la sauvegarde de la transaction', 'error')
@@ -258,7 +191,7 @@ function TransactionForm({ clients }) {
     setAmount('')
     setNetwork('Orange')
     setTransactionType('')
-  }, [formValidation.isFormValid, isSubmitting, selectedClient, network, amount, transactionType, editingTransaction, updateTransaction, clearEditTransaction, addTransaction, addToStock, removeFromStock, addToLiquidity, removeFromLiquidity, showToast])
+  }, [formValidation.isFormValid, isSubmitting, selectedClient, network, amount, transactionType, editingTransaction, updateTransaction, clearEditTransaction, addTransaction, showToast])
 
   const handleCancel = useCallback(() => {
     clearEditTransaction()

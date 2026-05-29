@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
@@ -13,6 +14,7 @@ import {
   limit,
   startAfter,
   writeBatch,
+  runTransaction,
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
@@ -21,6 +23,15 @@ import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
 
 // Service Firestore modulaire avec cache, gestion d'erreurs et optimisations
+
+const CURRENT_BALANCE_DOC_ID = 'current'
+const DEFAULT_NETWORK_BALANCES = {
+  Orange: { stock: 0, liquidite: 0 },
+  Moov: { stock: 0, liquidite: 0 },
+  Telecel: { stock: 0, liquidite: 0 },
+  Coris: { stock: 0, liquidite: 0 },
+  Sank: { stock: 0, liquidite: 0 }
+}
 
 export class FirestoreService {
   constructor() {
@@ -528,6 +539,176 @@ export class FirestoreService {
     }
   }
 
+  getNetworkBalanceDocRef() {
+    return doc(db, FIRESTORE_CONFIG.COLLECTIONS.NETWORK_BALANCES, CURRENT_BALANCE_DOC_ID)
+  }
+
+  normalizeNetworkBalances(data = {}) {
+    const source = data.balances || data
+    const normalized = { ...DEFAULT_NETWORK_BALANCES }
+
+    Object.entries(source || {}).forEach(([network, value]) => {
+      if (!value || typeof value !== 'object') return
+
+      normalized[network] = {
+        stock: Math.max(0, Number(value.stock) || 0),
+        liquidite: Math.max(0, Number(value.liquidite) || 0)
+      }
+    })
+
+    return normalized
+  }
+
+  adjustBalanceValue(balances, network, field, delta) {
+    const next = { ...balances }
+    const current = next[network] || { stock: 0, liquidite: 0 }
+    const currentValue = Number(current[field]) || 0
+
+    if (delta < 0 && currentValue + delta < 0) {
+      throw new Error(`${field === 'stock' ? 'Stock' : 'Liquidite'} insuffisant pour ${network}`)
+    }
+
+    next[network] = {
+      ...current,
+      [field]: currentValue + delta
+    }
+
+    return next
+  }
+
+  applyLiquidityDelta(balances, delta) {
+    const networks = Object.keys(balances)
+    const firstNetwork = networks[0] || 'Orange'
+
+    if (delta >= 0) {
+      return this.adjustBalanceValue(balances, firstNetwork, 'liquidite', delta)
+    }
+
+    let remaining = Math.abs(delta)
+    let next = { ...balances }
+
+    for (const network of networks) {
+      if (remaining <= 0) break
+
+      const currentLiquidity = Number(next[network]?.liquidite) || 0
+      const amountToRemove = Math.min(currentLiquidity, remaining)
+      next = this.adjustBalanceValue(next, network, 'liquidite', -amountToRemove)
+      remaining -= amountToRemove
+    }
+
+    if (remaining > 0) {
+      throw new Error('Liquidite insuffisante pour cette operation')
+    }
+
+    return next
+  }
+
+  applyInitialTransactionImpact(balances, transactionData) {
+    const amount = Number(transactionData.montant) || 0
+    const network = transactionData.reseau
+
+    if (transactionData.statut === FIRESTORE_CONFIG.STATUS.PENDING) {
+      if (transactionData.type === 'Depot' || transactionData.type === 'Dépôt' || transactionData.type === 'Crédit') {
+        return this.adjustBalanceValue(balances, network, 'stock', -amount)
+      }
+
+      if (transactionData.type === 'Retrait') {
+        return this.adjustBalanceValue(balances, network, 'stock', amount)
+      }
+    }
+
+    if (transactionData.statut === FIRESTORE_CONFIG.STATUS.VALIDATED) {
+      if (transactionData.type === 'Depot' || transactionData.type === 'Dépôt') {
+        return this.applyLiquidityDelta(
+          this.adjustBalanceValue(balances, network, 'stock', -amount),
+          amount
+        )
+      }
+
+      if (transactionData.type === 'Retrait') {
+        return this.applyLiquidityDelta(
+          this.adjustBalanceValue(balances, network, 'stock', amount),
+          -amount
+        )
+      }
+    }
+
+    return balances
+  }
+
+  applySettlementImpact(balances, amount, paymentMethod) {
+    const targetNetwork = this.mapPaymentMethodToNetwork(paymentMethod)
+
+    if (targetNetwork === 'Liquidite') {
+      return this.applyLiquidityDelta(balances, amount)
+    }
+
+    return this.adjustBalanceValue(balances, targetNetwork, 'stock', amount)
+  }
+
+  async setNetworkBalances(balances) {
+    const normalizedBalances = this.normalizeNetworkBalances(balances)
+
+    await setDoc(this.getNetworkBalanceDocRef(), {
+      balances: normalizedBalances,
+      updatedAt: serverTimestamp()
+    }, { merge: true })
+
+    return normalizedBalances
+  }
+
+  async ensureNetworkBalances(initialBalances) {
+    return runTransaction(db, async (tx) => {
+      const balanceRef = this.getNetworkBalanceDocRef()
+      const balanceSnap = await tx.get(balanceRef)
+
+      if (balanceSnap.exists()) {
+        return this.normalizeNetworkBalances(balanceSnap.data())
+      }
+
+      const normalizedBalances = this.normalizeNetworkBalances(initialBalances)
+      tx.set(balanceRef, {
+        balances: normalizedBalances,
+        updatedAt: serverTimestamp()
+      })
+
+      return normalizedBalances
+    })
+  }
+
+  async setNetworkBalance(network, type, amount) {
+    return runTransaction(db, async (tx) => {
+      const balanceRef = this.getNetworkBalanceDocRef()
+      const balanceSnap = await tx.get(balanceRef)
+      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
+      const nextBalances = {
+        ...currentBalances,
+        [network]: {
+          ...(currentBalances[network] || { stock: 0, liquidite: 0 }),
+          [type]: Math.max(0, Number(amount) || 0)
+        }
+      }
+
+      tx.set(balanceRef, {
+        balances: nextBalances,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+
+      return nextBalances
+    })
+  }
+
+  subscribeToNetworkBalances(callback) {
+    return onSnapshot(this.getNetworkBalanceDocRef(),
+      (snapshot) => {
+        callback(this.normalizeNetworkBalances(snapshot.exists() ? snapshot.data() : {}))
+      },
+      (error) => {
+        console.error('Network balances subscription error:', error)
+      }
+    )
+  }
+
   /**
    * Reset des métriques
    */
@@ -671,6 +852,34 @@ export class FirestoreService {
     })
   }
 
+  async addTransaction(transactionData) {
+    return runTransaction(db, async (tx) => {
+      const balanceRef = this.getNetworkBalanceDocRef()
+      const balanceSnap = await tx.get(balanceRef)
+      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
+      const nextBalances = this.applyInitialTransactionImpact(currentBalances, transactionData)
+      const targetCollection = transactionData.statut === FIRESTORE_CONFIG.STATUS.PENDING
+        ? FIRESTORE_CONFIG.COLLECTIONS.DRAFTS
+        : FIRESTORE_CONFIG.COLLECTIONS.HISTORY
+      const transactionRef = doc(collection(db, targetCollection))
+      const now = serverTimestamp()
+      const transactionPayload = {
+        ...transactionData,
+        date: new Date().toLocaleDateString('fr-FR'),
+        createdAt: now,
+        updatedAt: now
+      }
+
+      tx.set(transactionRef, transactionPayload)
+      tx.set(balanceRef, {
+        balances: nextBalances,
+        updatedAt: now
+      }, { merge: true })
+
+      return { id: transactionRef.id, ...transactionPayload }
+    })
+  }
+
   async deleteFromHistory(historyId) {
     return this.deleteDocument(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, historyId)
   }
@@ -758,31 +967,41 @@ export class FirestoreService {
         }
       }
 
-      // 4. Ajouter à l'historique avec le nouveau statut et méthode de paiement
       const effectiveNetworkMapped = effectivePaymentMethod ? this.mapPaymentMethodToNetwork(effectivePaymentMethod) : transactionData.reseau
+      return await runTransaction(db, async (tx) => {
+        const lockedDraftDoc = await tx.get(draftDocRef)
 
-      const historyData = {
-        ...transactionData,
-        statut: customStatus,
-        paymentMethod: effectivePaymentMethod,
-        effectiveNetwork: effectiveNetworkMapped,
-        validatedAt: serverTimestamp()
-      }
+        if (!lockedDraftDoc.exists()) {
+          return false
+        }
 
-      // === OPTIMISATION : UTILISER BATCH POUR OPÉRATIONS ATOMIQUES ===
-      const batch = writeBatch(db)
+        const lockedTransactionData = lockedDraftDoc.data()
+        const balanceRef = this.getNetworkBalanceDocRef()
+        const balanceSnap = await tx.get(balanceRef)
+        const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
+        const nextBalances = effectivePaymentMethod
+          ? this.applySettlementImpact(currentBalances, Number(lockedTransactionData.montant) || 0, effectivePaymentMethod)
+          : currentBalances
+        const now = serverTimestamp()
+        const historyData = {
+          ...lockedTransactionData,
+          statut: customStatus,
+          paymentMethod: effectivePaymentMethod,
+          effectiveNetwork: effectiveNetworkMapped,
+          validatedAt: now,
+          updatedAt: now
+        }
 
-      // Ajouter à l'historique
-      const historyRef = doc(collection(db, FIRESTORE_CONFIG.COLLECTIONS.HISTORY))
-      batch.set(historyRef, historyData)
+        const historyRef = doc(collection(db, FIRESTORE_CONFIG.COLLECTIONS.HISTORY))
+        tx.set(historyRef, historyData)
+        tx.delete(draftDocRef)
+        tx.set(balanceRef, {
+          balances: nextBalances,
+          updatedAt: now
+        }, { merge: true })
 
-      // Supprimer des drafts
-      batch.delete(draftDocRef)
-
-      // Exécuter le batch (1 seule opération réseau au lieu de 2)
-      await batch.commit()
-
-      return true
+        return true
+      })
     } catch (error) {
       console.error('Transaction validation error:', error)
       throw error
