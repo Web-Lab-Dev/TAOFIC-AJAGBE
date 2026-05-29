@@ -4,6 +4,7 @@ import Toast from './Toast'
 
 function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' }) {
   const { toasts, showToast, removeToast } = useToast()
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     nom: '',
     prenom: '',
@@ -45,7 +46,7 @@ function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' 
     }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     
     // Validation basique
@@ -54,23 +55,32 @@ function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' 
       return
     }
 
-    onSubmit(formData)
-    
-    // Reset du formulaire seulement si on n'est pas en mode modification
-    if (!initialData) {
-      setFormData({
-        nom: '',
-        prenom: '',
-        numeroIdentite: '',
-        numeroPersonnel: '',
-        orange: '',
-        moov: '',
-        telecel: '',
-        coris: '',
-        sank: '',
-        localite: '',
-        agentCommercial: ''
-      })
+    try {
+      setIsSubmitting(true)
+      await onSubmit(formData)
+      showToast(initialData ? 'Client modifié avec succès' : 'Client enregistré avec succès', 'success')
+
+      // Reset du formulaire seulement si on n'est pas en mode modification
+      if (!initialData) {
+        setFormData({
+          nom: '',
+          prenom: '',
+          numeroIdentite: '',
+          numeroPersonnel: '',
+          orange: '',
+          moov: '',
+          telecel: '',
+          coris: '',
+          sank: '',
+          localite: '',
+          agentCommercial: ''
+        })
+      }
+    } catch (error) {
+      console.error('Erreur formulaire client:', error)
+      showToast(error.message || 'Impossible d’enregistrer le client', 'error')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -178,9 +188,10 @@ function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' 
 
         <button
           type="submit"
-          className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded mt-6"
+          disabled={isSubmitting}
+          className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-medium py-2 px-6 rounded mt-6"
         >
-          {initialData ? 'Modifier' : 'Enregistrer'}
+          {isSubmitting ? 'Enregistrement...' : initialData ? 'Modifier' : 'Enregistrer'}
         </button>
       </form>
 

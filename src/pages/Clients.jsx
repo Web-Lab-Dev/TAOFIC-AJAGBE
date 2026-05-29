@@ -18,8 +18,8 @@ function Clients() {
     setEditingClient(client)
   }
 
-  const handleEditSubmit = (updatedData) => {
-    editClient(editingClient.id, updatedData)
+  const handleEditSubmit = async (updatedData) => {
+    await editClient(editingClient.id, updatedData)
     setEditingClient(null)
   }
 

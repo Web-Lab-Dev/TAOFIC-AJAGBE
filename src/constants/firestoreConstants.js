@@ -121,7 +121,10 @@ service cloud.firestore {
     function validateClientData(data) {
       return data.keys().hasAll(['nom', 'prenom']) &&
              data.nom is string && data.nom.size() >= 2 &&
-             data.prenom is string && data.prenom.size() >= 2;
+             data.prenom is string && data.prenom.size() >= 2 &&
+             (!data.keys().hasAny(['numeroPersonnel']) ||
+              data.numeroPersonnel == '' ||
+              data.numeroPersonnel.matches('^[0-9+\\\\-\\\\s()]{8,15}$'));
     }
 
     function validateTransactionData(data) {

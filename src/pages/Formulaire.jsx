@@ -6,8 +6,8 @@ function Formulaire() {
   const navigate = useNavigate()
   const { addClient } = useClients()
 
-  const handleSubmit = (newClient) => {
-    addClient(newClient)
+  const handleSubmit = async (newClient) => {
+    await addClient(newClient)
     navigate('/clients')
   }
 

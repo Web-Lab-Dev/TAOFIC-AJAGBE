@@ -18,7 +18,9 @@ service cloud.firestore {
       return data.keys().hasAll(['nom', 'prenom']) &&
              data.nom is string && data.nom.size() >= 2 && data.nom.size() <= 50 &&
              data.prenom is string && data.prenom.size() >= 2 && data.prenom.size() <= 50 &&
-             (!data.keys().hasAny(['numeroPersonnel']) || data.numeroPersonnel.matches('^[0-9+\\-\\s()]{8,15}$'));
+             (!data.keys().hasAny(['numeroPersonnel']) ||
+              data.numeroPersonnel == '' ||
+              data.numeroPersonnel.matches('^[0-9+\\-\\s()]{8,15}$'));
     }
 
     function isValidTransactionData(data) {
