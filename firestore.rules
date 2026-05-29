@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ====================
+    // FONCTIONS UTILITAIRES
+    // ====================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isValidClientData(data) {
+      return data.keys().hasAll(['nom', 'prenom']) &&
+             data.nom is string && data.nom.size() >= 2 && data.nom.size() <= 50 &&
+             data.prenom is string && data.prenom.size() >= 2 && data.prenom.size() <= 50 &&
+             (!data.keys().hasAny(['numeroPersonnel']) || data.numeroPersonnel.matches('^[0-9+\\-\\s()]{8,15}$'));
+    }
+
+    function isValidTransactionData(data) {
+      return data.keys().hasAll(['type', 'montant', 'clientId']) &&
+             data.type in ['Dépôt', 'Retrait', 'Crédit'] &&
+             data.montant is number && data.montant > 0 && data.montant <= 1000000 &&
+             data.clientId is string && data.clientId.size() > 0;
+    }
+
+    function isValidStatus(status) {
+      return status in ['Non Terminées', 'Validée', 'Remboursée', 'Annulée'];
+    }
+
+    // Toutes les données applicatives sont isolées sous:
+    // clients/{tenantId}/{collection}/{documentId}
+    match /clients/{tenantId} {
+
+      match /users/{userId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+
+        allow create: if isAuthenticated() &&
+                     isOwner(userId) &&
+                     request.resource.data.keys().hasAll(['email', 'createdAt']) &&
+                     request.resource.data.email == request.auth.token.email;
+      }
+
+      match /clients/{clientId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isAuthenticated() &&
+                     isValidClientData(request.resource.data) &&
+                     request.resource.data.createdAt is timestamp &&
+                     request.resource.data.updatedAt is timestamp;
+
+        allow update: if isAuthenticated() &&
+                     isValidClientData(request.resource.data) &&
+                     request.resource.data.updatedAt is timestamp &&
+                     request.resource.data.updatedAt > resource.data.updatedAt;
+
+        allow delete: if isAuthenticated();
+      }
+
+      match /drafts/{draftId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isAuthenticated() &&
+                     isValidTransactionData(request.resource.data) &&
+                     request.resource.data.statut == 'Non Terminées' &&
+                     request.resource.data.createdAt is timestamp;
+
+        allow update: if isAuthenticated() &&
+                     isValidTransactionData(request.resource.data) &&
+                     request.resource.data.updatedAt is timestamp &&
+                     request.resource.data.updatedAt > resource.data.updatedAt;
+
+        allow delete: if isAuthenticated();
+      }
+
+      match /history/{historyId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isAuthenticated() &&
+                     isValidTransactionData(request.resource.data) &&
+                     isValidStatus(request.resource.data.statut) &&
+                     request.resource.data.statut != 'Non Terminées' &&
+                     request.resource.data.createdAt is timestamp;
+
+        allow update: if isAuthenticated() &&
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['statut', 'updatedAt', 'notes']) &&
+                     isValidStatus(request.resource.data.statut);
+
+        allow delete: if isAuthenticated();
+      }
+
+      match /sessions/{sessionId} {
+        allow read, write: if isAuthenticated() && isOwner(sessionId);
+      }
+
+      match /auditLogs/{logId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    // Blocage explicite de toutes les anciennes collections racine et du reste.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
