@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 /**
- * Configuration Vite pour Moalim Telecom CRM
+ * Configuration Vite pour TAOFIC AJAGBE CRM
  * - React avec SWC pour compilation rapide
  * - Tailwind CSS v4 intégré
  * - PWA avec Service Worker automatique
@@ -97,9 +97,9 @@ export default defineConfig({
 
       // Manifest PWA - métadonnées de l'application
       manifest: {
-        name: 'Moalim Telecom CRM',
-        short_name: 'Moalim CRM',
-        description: 'Application CRM pour la gestion des clients et transactions de Moalim Telecom',
+        name: 'TAOFIC AJAGBE CRM',
+        short_name: 'TAOFIC CRM',
+        description: 'Application CRM pour la gestion des clients et transactions de TAOFIC AJAGBE',
         theme_color: '#3b82f6', // Couleur de la barre d'adresse mobile
         background_color: '#ffffff',
         display: 'standalone', // Affichage en plein écran (comme une app native)

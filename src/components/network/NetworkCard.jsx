@@ -101,20 +101,20 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
         bg-gradient-to-br ${config.gradient}
         border ${config.border}
         rounded-lg shadow-sm
-        p-3 flex-1 min-w-[140px] max-w-[180px]
+        min-h-[104px] p-4
         transition-all duration-200 hover:shadow-md
         ${statusConfig[stockStatus].glow}
       `}
       title={`Double-cliquez pour éditer le montant${!isLiquiditeCard ? ` - Stock: ${stockStatus}` : ''}`}
     >
       {/* En-tête avec point coloré et nom */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div
-            className="w-2 h-2 rounded-full"
+            className="h-2.5 w-2.5 rounded-full"
             style={{ backgroundColor: config.color }}
           />
-          <h3 className={`font-semibold text-xs ${config.text}`}>
+          <h3 className={`text-sm font-semibold ${config.text}`}>
             {config.name}
           </h3>
         </div>
@@ -132,34 +132,41 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
 
       {/* Section Stock/Liquidité */}
       <div
-        className="text-center"
+        className="flex items-end justify-between gap-3"
         onDoubleClick={handleDoubleClick}
         style={{ cursor: 'pointer' }}
       >
-        {isEditing ? (
-          <input
-            type="number"
-            value={editValue}
-            onChange={handleInputChange}
-            onKeyDown={handleInputKeyDown}
-            onBlur={handleInputBlur}
-            className={`font-bold text-lg ${config.text} mb-1 w-full text-center bg-transparent border-b-2 outline-none transition-all duration-200 ${
-              isValidAmount(editValue)
-                ? 'border-current focus:border-opacity-100'
-                : 'border-red-500 focus:border-red-600'
-            }`}
-            autoFocus
-            min="0"
-            step="1000"
-            placeholder="Montant"
-          />
-        ) : (
-          <div className={`font-bold text-lg ${config.text} mb-1 transition-transform duration-200 hover:scale-105`}>
-            {amount}
-          </div>
-        )}
-        <span className={`text-xs ${config.textLight} font-medium`}>
-          {label}
+        <div className="min-w-0">
+          {isEditing ? (
+            <input
+              type="number"
+              value={editValue}
+              onChange={handleInputChange}
+              onKeyDown={handleInputKeyDown}
+              onBlur={handleInputBlur}
+              className={`mb-1 w-full bg-transparent text-left text-2xl font-bold outline-none transition-all duration-200 ${
+                config.text
+              } border-b-2 ${
+                isValidAmount(editValue)
+                  ? 'border-current focus:border-opacity-100'
+                  : 'border-red-500 focus:border-red-600'
+              }`}
+              autoFocus
+              min="0"
+              step="1000"
+              placeholder="Montant"
+            />
+          ) : (
+            <div className={`mb-1 text-2xl font-bold leading-none ${config.text} transition-transform duration-200 hover:scale-[1.02]`}>
+              {amount}
+            </div>
+          )}
+          <span className={`text-xs font-semibold uppercase tracking-wide ${config.textLight}`}>
+            {label}
+          </span>
+        </div>
+        <span className="shrink-0 rounded-md bg-white/60 px-2 py-1 text-xs font-medium text-slate-600">
+          Modifier
         </span>
       </div>
     </div>

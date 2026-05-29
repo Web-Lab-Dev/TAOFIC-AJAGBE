@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { useEffect } from 'react'
 import { ClientsProvider } from './context/ClientsContext.jsx'
 import { TransactionsProvider } from './context/transactions.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
@@ -11,7 +12,6 @@ import Clients from './pages/Clients'
 import Transactions from './pages/Transactions'
 import Historique from './pages/Historique'
 import Formulaire from './pages/Formulaire'
-import Personnalisation from './pages/Personnalisation'
 import Profil from './pages/Profil'
 
 function AppContent() {
@@ -24,7 +24,6 @@ function AppContent() {
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/historique" element={<Historique />} />
           <Route path="/formulaire" element={<Formulaire />} />
-          <Route path="/personnalisation" element={<Personnalisation />} />
           <Route path="/profil" element={<Profil />} />
         </Routes>
       </Layout>
@@ -33,6 +32,10 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    document.title = 'TAOFIC AJAGBE CRM'
+  }, [])
+
   return (
     <Router>
       <AuthProvider>

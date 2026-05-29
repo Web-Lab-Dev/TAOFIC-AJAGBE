@@ -7,7 +7,6 @@ import Chatbot from './chatbot/Chatbot'
 function Layout({ children }) {
   const { themeClasses, backgroundImage } = useTheme()
   const [navbarHeight, setNavbarHeight] = useState(0)
-  const [networkCardsHeight, setNetworkCardsHeight] = useState(0)
   const [isNavbarSticky, setIsNavbarSticky] = useState(false)
 
   useEffect(() => {
@@ -18,16 +17,11 @@ function Layout({ children }) {
       setIsNavbarSticky(scrollTop >= headerHeight)
     }
 
-    // Mesurer la hauteur de la navbar et des cartes réseau
+    // Mesurer la hauteur de la navbar
     const navbar = document.querySelector('nav')
-    const networkCards = document.querySelector('[data-network-cards]')
 
     if (navbar) {
       setNavbarHeight(navbar.offsetHeight)
-    }
-
-    if (networkCards) {
-      setNetworkCardsHeight(networkCards.offsetHeight)
     }
 
     window.addEventListener('scroll', handleScroll)
@@ -59,7 +53,7 @@ function Layout({ children }) {
               textShadow: '0 3px 12px rgba(0, 0, 0, 0.8), 0 2px 6px rgba(0, 0, 0, 0.6)'
             }}
           >
-            Moalim Telecom
+            TAOFIC AJAGBE
           </h1>
         </div>
       </header>
@@ -74,7 +68,7 @@ function Layout({ children }) {
       <main
         className="w-full px-4 py-6 transition-all duration-300"
         style={{
-          paddingTop: isNavbarSticky ? `${navbarHeight + networkCardsHeight + 24}px` : '24px'
+          paddingTop: isNavbarSticky ? `${navbarHeight + 24}px` : '24px'
         }}
       >
         <div className="relative">

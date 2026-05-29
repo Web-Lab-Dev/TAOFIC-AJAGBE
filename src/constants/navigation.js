@@ -4,6 +4,5 @@ export const NAV_ITEMS = [
   { name: 'Transactions', path: '/transactions' },
   { name: 'Historique', path: '/historique' },
   { name: 'Formulaire', path: '/formulaire' },
-  { name: 'Personnalisation', path: '/personnalisation' },
   { name: 'Profil', path: '/profil' }
 ]

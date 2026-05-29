@@ -32,12 +32,12 @@ export const THEMES = {
     name: 'Thème Sombre',
     backgroundImage: '/bg-noir.png',
     classes: {
-      background: 'bg-white',
+      background: 'bg-slate-100',
       text: 'text-gray-900',
-      accent: 'bg-gray-800',
-      navbar: 'bg-gray-800/95 backdrop-blur-sm text-white',
-      tableHeader: 'bg-gray-800/80 border-gray-700 text-white',
-      tableAccent: 'bg-gray-800/60 text-white'
+      accent: 'bg-slate-900',
+      navbar: 'bg-slate-950/95 backdrop-blur-sm text-white',
+      tableHeader: 'bg-slate-100/80 border-slate-300',
+      tableAccent: 'bg-slate-50/60'
     }
   },
   green: {
@@ -81,6 +81,6 @@ export const THEMES = {
   }
 }
 
-export const DEFAULT_THEME = 'blue'
+export const DEFAULT_THEME = 'dark'
 
 export const STORAGE_KEY = getStorageKey('theme')

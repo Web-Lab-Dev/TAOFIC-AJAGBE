@@ -1,13 +1,13 @@
-# Moalim Telecom CRM
+# TAOFIC AJAGBE CRM
 
-Application CRM complète pour la gestion des clients et transactions de Moalim Telecom.
+Application CRM complète pour la gestion des clients et transactions de TAOFIC AJAGBE.
 
 ## 🚀 Fonctionnalités
 
 - **Gestion Clients** : Ajout, modification, recherche de clients
 - **Transactions** : Suivi des transactions avec historique complet
 - **Dashboard** : Statistiques et graphiques en temps réel
-- **Thèmes personnalisables** : 4 thèmes intégrés + personnalisation
+- **Thème sombre par défaut** : interface sobre et stable
 - **PWA** : Installation sur mobile et desktop + mode hors ligne
 - **Multi-réseaux** : Support Orange, Moov, MTN, Telecel
 - **Chatbot intégré** : Assistant pour rappels et informations
@@ -41,7 +41,7 @@ L'application peut être installée sur n'importe quel appareil :
 1. **Cloner le projet**
 ```bash
 git clone <votre-repo>
-cd "Moalim 2.2"
+cd taofic-ajagbe-crm
 ```
 
 2. **Installer les dépendances**
@@ -101,7 +101,7 @@ npm run preview
 ## 📂 Structure du projet
 
 ```
-Moalim 2.2/
+taofic-ajagbe-crm/
 ├── public/              # Assets statiques
 │   ├── pwa-*.png       # Icônes PWA
 │   └── bg-*.png        # Images de fond thèmes
@@ -149,4 +149,4 @@ Moalim 2.2/
 
 ## 📄 Licence
 
-Propriété de Moalim Telecom
+Propriété de TAOFIC AJAGBE

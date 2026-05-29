@@ -59,7 +59,7 @@ function AuthSidebar({ isSignUp, onToggle }) {
               />
             </svg>
           </div>
-          <p className="text-sm opacity-75">Moalim Telecom</p>
+          <p className="text-sm opacity-75">TAOFIC AJAGBE</p>
         </div>
       </div>
     </div>
