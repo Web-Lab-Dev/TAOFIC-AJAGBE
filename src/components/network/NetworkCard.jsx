@@ -14,7 +14,6 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
     ? formatAmountWithCurrency(displayAmount, isLiquiditeCard)
     : { amount: '0', label: '' }
 
-  // Indicateurs de stock
   const getStockStatus = () => {
     if (isLiquiditeCard) return 'normal'
 
@@ -28,36 +27,33 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
   const stockStatus = getStockStatus()
   const statusConfig = {
     critical: {
-      indicator: 'bg-red-500',
-      glow: 'ring-2 ring-red-200',
-      text: 'text-red-600'
+      ring: 'ring-1 ring-red-300/60',
+      dot: 'bg-red-400',
+      warning: true
     },
     low: {
-      indicator: 'bg-orange-500',
-      glow: 'ring-2 ring-orange-200',
-      text: 'text-orange-600'
+      ring: 'ring-1 ring-orange-300/60',
+      dot: 'bg-orange-400',
+      warning: false
     },
     warning: {
-      indicator: 'bg-yellow-500',
-      glow: 'ring-1 ring-yellow-200',
-      text: 'text-yellow-600'
+      ring: 'ring-1 ring-yellow-300/60',
+      dot: 'bg-yellow-400',
+      warning: false
     },
     normal: {
-      indicator: 'bg-green-500',
-      glow: '',
-      text: 'text-green-600'
+      ring: 'ring-1 ring-white/10',
+      dot: 'bg-emerald-400',
+      warning: false
     }
   }
 
-  // Logique d'édition pour STOCKS et LIQUIDITÉ
   const saveAmount = useCallback(() => {
     const newAmount = parseFloat(editValue) || 0
 
     if (isLiquiditeCard) {
-      // Éditer la liquidité totale
       updateLiquidity(newAmount)
     } else {
-      // Éditer le stock du réseau
       updateStock(network, newAmount)
     }
 
@@ -95,79 +91,63 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
 
   if (!config) return null
 
+  const status = statusConfig[stockStatus]
+
   return (
     <div
       className={`
-        bg-gradient-to-br ${config.gradient}
-        border ${config.border}
-        rounded-lg shadow-sm
-        min-h-[104px] p-4
-        transition-all duration-200 hover:shadow-md
-        ${statusConfig[stockStatus].glow}
+        flex min-h-[68px] items-center justify-between gap-4 rounded-lg
+        bg-white/95 px-4 py-3 shadow-sm ${status.ring}
       `}
-      title={`Double-cliquez pour éditer le montant${!isLiquiditeCard ? ` - Stock: ${stockStatus}` : ''}`}
+      title="Double-cliquez le montant pour le modifier"
+      onDoubleClick={handleDoubleClick}
     >
-      {/* En-tête avec point coloré et nom */}
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className="h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: config.color }}
-          />
-          <h3 className={`text-sm font-semibold ${config.text}`}>
-            {config.name}
-          </h3>
-        </div>
-
-        {/* Indicateur de niveau de stock */}
-        {!isLiquiditeCard && stockStatus !== 'normal' && (
-          <div className="flex items-center gap-1">
-            <div className={`w-2 h-2 rounded-full ${statusConfig[stockStatus].indicator} animate-pulse`} />
-            {stockStatus === 'critical' && (
-              <span className="text-xs text-red-500 font-bold">!</span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: config.color }}
+        />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-bold text-slate-900">
+              {config.name}
+            </h3>
+            {status.warning && (
+              <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                Bas
+              </span>
             )}
           </div>
-        )}
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            {label}
+          </p>
+        </div>
       </div>
 
-      {/* Section Stock/Liquidité */}
-      <div
-        className="flex items-end justify-between gap-3"
-        onDoubleClick={handleDoubleClick}
-        style={{ cursor: 'pointer' }}
-      >
-        <div className="min-w-0">
-          {isEditing ? (
-            <input
-              type="number"
-              value={editValue}
-              onChange={handleInputChange}
-              onKeyDown={handleInputKeyDown}
-              onBlur={handleInputBlur}
-              className={`mb-1 w-full bg-transparent text-left text-2xl font-bold outline-none transition-all duration-200 ${
-                config.text
-              } border-b-2 ${
-                isValidAmount(editValue)
-                  ? 'border-current focus:border-opacity-100'
-                  : 'border-red-500 focus:border-red-600'
-              }`}
-              autoFocus
-              min="0"
-              step="1000"
-              placeholder="Montant"
-            />
-          ) : (
-            <div className={`mb-1 text-2xl font-bold leading-none ${config.text} transition-transform duration-200 hover:scale-[1.02]`}>
-              {amount}
-            </div>
-          )}
-          <span className={`text-xs font-semibold uppercase tracking-wide ${config.textLight}`}>
-            {label}
-          </span>
-        </div>
-        <span className="shrink-0 rounded-md bg-white/60 px-2 py-1 text-xs font-medium text-slate-600">
-          Modifier
-        </span>
+      <div className="shrink-0 text-right">
+        {isEditing ? (
+          <input
+            type="number"
+            value={editValue}
+            onChange={handleInputChange}
+            onKeyDown={handleInputKeyDown}
+            onBlur={handleInputBlur}
+            className={`w-28 border-b-2 bg-transparent text-right text-xl font-black text-slate-950 outline-none ${
+              isValidAmount(editValue) ? 'border-slate-400' : 'border-red-500'
+            }`}
+            autoFocus
+            min="0"
+            step="1000"
+            placeholder="Montant"
+          />
+        ) : (
+          <p className="text-2xl font-black leading-none text-slate-950">
+            {amount}
+          </p>
+        )}
+        <p className="mt-1 text-[10px] font-medium text-slate-400">
+          Double-clic
+        </p>
       </div>
     </div>
   )
