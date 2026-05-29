@@ -111,7 +111,11 @@ const TransactionTable = memo(function TransactionTable() {
 
       // === SYNCHRONISATION FIRESTORE EN ARRIÈRE-PLAN ===
       // Valider la transaction dans Firestore (non-bloquant pour l'UI)
-      validateTransaction(transactionId, statusText, method).catch(error => {
+      validateTransaction(transactionId, statusText, method).then(success => {
+        if (!success) {
+          throw new Error('La transaction n’a pas pu être déplacée vers l’historique')
+        }
+      }).catch(error => {
         // En cas d'erreur Firestore, rollback des cartes réseau
         logger.user.error('Transaction validation failed, rolling back', error)
 

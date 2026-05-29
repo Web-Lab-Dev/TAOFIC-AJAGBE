@@ -174,7 +174,7 @@ export const TransactionsProvider = ({ children }) => {
     } catch (error) {
       console.error('Erreur lors de la validation de la transaction:', error)
       setError(error.message)
-      return false
+      throw error
     }
   }, [])
 
