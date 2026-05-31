@@ -1,16 +1,15 @@
-import { getFirestoreCollectionPath } from '../config/clientIsolation'
-
 // Configuration et constantes Firestore
 export const FIRESTORE_CONFIG = {
   // Collections
   COLLECTIONS: {
-    USERS: getFirestoreCollectionPath('users'),
-    CLIENTS: getFirestoreCollectionPath('clients'),
-    DRAFTS: getFirestoreCollectionPath('drafts'),
-    HISTORY: getFirestoreCollectionPath('history'),
-    NETWORK_BALANCES: getFirestoreCollectionPath('networkBalances'),
-    SESSIONS: getFirestoreCollectionPath('sessions'),
-    AUDIT_LOGS: getFirestoreCollectionPath('auditLogs')
+    STORES: 'stores',
+    USERS: 'users',
+    CLIENTS: 'globalClients',
+    DRAFTS: 'drafts',
+    HISTORY: 'history',
+    NETWORK_BALANCES: 'networkBalances',
+    SESSIONS: 'sessions',
+    AUDIT_LOGS: 'auditLogs'
   },
 
   // Limites et pagination

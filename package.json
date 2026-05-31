@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:stores": "node scripts/seedStores.mjs",
+    "accounts:delete:dry-run": "node scripts/deleteExistingAccounts.mjs",
+    "accounts:delete": "node scripts/deleteExistingAccounts.mjs --execute"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",

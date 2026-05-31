@@ -13,6 +13,7 @@ import Transactions from './pages/Transactions'
 import Historique from './pages/Historique'
 import Formulaire from './pages/Formulaire'
 import Profil from './pages/Profil'
+import Users from './pages/Users'
 
 function AppContent() {
   return (
@@ -24,6 +25,7 @@ function AppContent() {
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/historique" element={<Historique />} />
           <Route path="/formulaire" element={<Formulaire />} />
+          <Route path="/utilisateurs" element={<Users />} />
           <Route path="/profil" element={<Profil />} />
         </Routes>
       </Layout>

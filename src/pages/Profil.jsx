@@ -4,12 +4,12 @@ import { useTheme } from '../context/ThemeContext'
 import { useNavigate } from 'react-router-dom'
 import ChangePasswordModal from '../components/auth/ChangePasswordModal'
 import { formatDate, getAvatarInitial } from '../utils/authHelpers'
-import { AUTH_LABELS, AUTH_ROLES } from '../constants/authMessages'
+import { AUTH_LABELS, AUTH_ROLE_LABELS } from '../constants/authMessages'
 import { AUTH_STYLES } from '../constants/authStyles'
 import { useUserActivity } from '../hooks/useUserActivity'
 
 function Profil() {
-  const { currentUser, userProfile, logout } = useAuth()
+  const { currentUser, userProfile, activeStore, logout } = useAuth()
   const { themeClasses } = useTheme()
   const navigate = useNavigate()
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -40,16 +40,7 @@ function Profil() {
     }
   }, [logout, navigate])
 
-  const getRoleLabel = useCallback((role) => {
-    switch (role) {
-      case AUTH_ROLES.ADMIN:
-        return 'Administrateur'
-      case AUTH_ROLES.EMPLOYEE:
-        return 'Employé'
-      default:
-        return 'Utilisateur'
-    }
-  }, [])
+  const getRoleLabel = useCallback((role) => AUTH_ROLE_LABELS[role] || 'Utilisateur', [])
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -65,6 +56,9 @@ function Profil() {
                 {displayName}
               </h1>
               <p className="text-gray-600">{displayEmail}</p>
+              <p className="text-sm text-gray-500">
+                Boutique: {activeStore?.name || userProfile?.storeName || 'Non rattachée'}
+              </p>
               <p className="text-sm text-gray-500">
                 Rôle: {getRoleLabel(userProfile?.role)}
               </p>

@@ -21,6 +21,7 @@ import { db } from '../config/firebase'
 import { withErrorHandling } from '../utils/errorHandler'
 import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
+import { CLIENT_ID, getFirestoreCollectionPath } from '../config/clientIsolation'
 
 // Service Firestore modulaire avec cache, gestion d'erreurs et optimisations
 
@@ -35,6 +36,10 @@ const DEFAULT_NETWORK_BALANCES = {
 
 export class FirestoreService {
   constructor() {
+    this.activeStore = {
+      id: CLIENT_ID,
+      name: 'Boutique principale'
+    }
     this.listeners = new Map()
     this.connectionPool = new Map() // Pool de connexions pour optimiser les listeners
     this.metrics = {
@@ -46,6 +51,49 @@ export class FirestoreService {
 
     // Configurer la fonction de fetch pour le cache
     cacheManager.setFetchFunction(this.fetchFromFirestore.bind(this))
+  }
+
+  setActiveStore(store = {}) {
+    store = store || {}
+    const nextStoreId = store.id || store.storeId || CLIENT_ID
+    const nextStoreName = store.name || store.storeName || 'Boutique principale'
+
+    if (this.activeStore.id !== nextStoreId) {
+      this.unsubscribeAll()
+    }
+
+    this.activeStore = {
+      id: nextStoreId,
+      name: nextStoreName
+    }
+  }
+
+  getActiveStore() {
+    return this.activeStore
+  }
+
+  resolveCollectionPath(collectionName) {
+    if (
+      collectionName === FIRESTORE_CONFIG.COLLECTIONS.USERS ||
+      collectionName === FIRESTORE_CONFIG.COLLECTIONS.STORES ||
+      collectionName === FIRESTORE_CONFIG.COLLECTIONS.CLIENTS
+    ) {
+      return collectionName
+    }
+
+    if (!this.activeStore?.id) {
+      return getFirestoreCollectionPath(collectionName)
+    }
+
+    return `clients/${this.activeStore.id}/${collectionName}`
+  }
+
+  collectionRef(collectionName) {
+    return collection(db, this.resolveCollectionPath(collectionName))
+  }
+
+  docRef(collectionName, docId) {
+    return doc(db, this.resolveCollectionPath(collectionName), docId)
   }
 
   // ====================
@@ -64,7 +112,7 @@ export class FirestoreService {
 
   // Construire une query optimisée
   buildQuery(collectionName, options = {}) {
-    let q = collection(db, collectionName)
+    let q = this.collectionRef(collectionName)
 
     if (options.where) {
       options.where.forEach(whereClause => {
@@ -159,7 +207,7 @@ export class FirestoreService {
         updatedAt: serverTimestamp()
       }
 
-      const docRef = await addDoc(collection(db, collectionName), enrichedData)
+      const docRef = await addDoc(this.collectionRef(collectionName), enrichedData)
       const result = { id: docRef.id, ...enrichedData }
 
       // Invalider le cache
@@ -178,7 +226,7 @@ export class FirestoreService {
   async updateDocument(collectionName, docId, updates) {
     return await withErrorHandling(async () => {
       // Vérifier d'abord que le document existe
-      const docRef = doc(db, collectionName, docId)
+      const docRef = this.docRef(collectionName, docId)
       const docSnap = await getDoc(docRef)
 
       if (!docSnap.exists()) {
@@ -209,7 +257,7 @@ export class FirestoreService {
    */
   async deleteDocument(collectionName, docId) {
     return await withErrorHandling(async () => {
-      await deleteDoc(doc(db, collectionName, docId))
+      await deleteDoc(this.docRef(collectionName, docId))
 
       // Invalider le cache
       cacheUtils.invalidateRelated('delete', collectionName, docId)
@@ -237,8 +285,8 @@ export class FirestoreService {
         this.metrics.cacheMisses++
       }
 
-      const docRef = doc(db, collectionName, docId)
-      const docSnap = await getDocs(query(collection(db, collectionName), where('__name__', '==', docRef)))
+      const docRef = this.docRef(collectionName, docId)
+      const docSnap = await getDocs(query(this.collectionRef(collectionName), where('__name__', '==', docRef)))
 
       if (docSnap.empty) {
         return null
@@ -301,7 +349,7 @@ export class FirestoreService {
 
         switch (type) {
           case 'create': {
-            const newDocRef = doc(collection(db, collectionName))
+            const newDocRef = doc(this.collectionRef(collectionName))
             batch.set(newDocRef, {
               ...data,
               createdAt: serverTimestamp(),
@@ -311,7 +359,7 @@ export class FirestoreService {
           }
 
           case 'update': {
-            const updateDocRef = doc(db, collectionName, id)
+            const updateDocRef = this.docRef(collectionName, id)
             batch.update(updateDocRef, {
               ...data,
               updatedAt: serverTimestamp()
@@ -320,7 +368,7 @@ export class FirestoreService {
           }
 
           case 'delete': {
-            const deleteDocRef = doc(db, collectionName, id)
+            const deleteDocRef = this.docRef(collectionName, id)
             batch.delete(deleteDocRef)
             break
           }
@@ -540,7 +588,7 @@ export class FirestoreService {
   }
 
   getNetworkBalanceDocRef() {
-    return doc(db, FIRESTORE_CONFIG.COLLECTIONS.NETWORK_BALANCES, CURRENT_BALANCE_DOC_ID)
+    return this.docRef(FIRESTORE_CONFIG.COLLECTIONS.NETWORK_BALANCES, CURRENT_BALANCE_DOC_ID)
   }
 
   normalizeNetworkBalances(data = {}) {
@@ -806,14 +854,23 @@ export class FirestoreService {
   }
 
   async addClient(clientData) {
+    const activeStore = this.getActiveStore()
+
     return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
       ...clientData,
+      registeredStoreId: clientData.registeredStoreId || activeStore.id,
+      registeredStoreName: clientData.registeredStoreName || activeStore.name,
       dateAjout: new Date().toLocaleDateString('fr-FR')
     })
   }
 
   async updateClient(clientId, updates) {
-    return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, clientId, updates)
+    const activeStore = this.getActiveStore()
+    return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, clientId, {
+      ...updates,
+      registeredStoreId: updates.registeredStoreId || activeStore.id,
+      registeredStoreName: updates.registeredStoreName || activeStore.name
+    })
   }
 
   async deleteClient(clientId) {
@@ -822,7 +879,7 @@ export class FirestoreService {
 
   subscribeToClients(callback) {
     // Version simplifiée qui bypasse le système complexe
-    const collectionRef = collection(db, FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
+    const collectionRef = this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
 
     return onSnapshot(collectionRef,
       (snapshot) => {
@@ -858,7 +915,7 @@ export class FirestoreService {
 
   async updateDraft(draftId, updates) {
     return runTransaction(db, async (tx) => {
-      const draftRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
+      const draftRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
       const draftSnap = await tx.get(draftRef)
 
       if (!draftSnap.exists()) {
@@ -892,9 +949,34 @@ export class FirestoreService {
     })
   }
 
+  subscribeToStoreUsers(storeId, callback) {
+    const q = query(
+      this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.USERS),
+      where('storeId', '==', storeId)
+    )
+
+    return onSnapshot(q,
+      (snapshot) => {
+        const documents = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+
+        callback(documents)
+      },
+      (error) => {
+        console.error('Store users subscription error:', error)
+      }
+    )
+  }
+
+  async setUserActive(userId, active) {
+    return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.USERS, userId, { active })
+  }
+
   async deleteDraft(draftId) {
     return runTransaction(db, async (tx) => {
-      const draftRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
+      const draftRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
       const draftSnap = await tx.get(draftRef)
 
       if (!draftSnap.exists()) {
@@ -918,7 +1000,7 @@ export class FirestoreService {
   }
 
   subscribeToDrafts(callback) {
-    const collectionRef = collection(db, FIRESTORE_CONFIG.COLLECTIONS.DRAFTS)
+    const collectionRef = this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS)
 
     return onSnapshot(collectionRef,
       (snapshot) => {
@@ -959,7 +1041,7 @@ export class FirestoreService {
       const targetCollection = transactionData.statut === FIRESTORE_CONFIG.STATUS.PENDING
         ? FIRESTORE_CONFIG.COLLECTIONS.DRAFTS
         : FIRESTORE_CONFIG.COLLECTIONS.HISTORY
-      const transactionRef = doc(collection(db, targetCollection))
+      const transactionRef = doc(this.collectionRef(targetCollection))
       const now = serverTimestamp()
       const transactionPayload = {
         ...transactionData,
@@ -1039,7 +1121,7 @@ export class FirestoreService {
   async validateTransaction(draftId, customStatus = 'Validée', selectedPaymentMethod = null) {
     try {
       // 1. Récupérer la transaction draft directement par ID
-      const draftDocRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
+      const draftDocRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
       const draftDoc = await getDoc(draftDocRef)
 
       if (!draftDoc.exists()) {
@@ -1092,7 +1174,7 @@ export class FirestoreService {
           updatedAt: now
         }
 
-        const historyRef = doc(collection(db, FIRESTORE_CONFIG.COLLECTIONS.HISTORY))
+        const historyRef = doc(this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.HISTORY))
         tx.set(historyRef, historyData)
         tx.delete(draftDocRef)
         tx.set(balanceRef, {

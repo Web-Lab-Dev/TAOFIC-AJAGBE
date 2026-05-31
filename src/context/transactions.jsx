@@ -15,7 +15,7 @@ export const useTransactions = () => {
 }
 
 export const TransactionsProvider = ({ children }) => {
-  const { currentUser: user, loading: authLoading } = useContext(AuthContext)
+  const { currentUser: user, userProfile, activeStore, loading: authLoading } = useContext(AuthContext)
 
   // États pour les deux collections Firestore
   const [pendingTransactions, setPendingTransactions] = useState([])
@@ -32,7 +32,7 @@ export const TransactionsProvider = ({ children }) => {
     }
 
     // Si pas d'utilisateur connecté, ne pas essayer de charger depuis Firestore
-    if (!user) {
+    if (!user || !userProfile?.storeId) {
       setPendingTransactions([])
       setCompletedTransactions([])
       setLoading(false)
@@ -120,7 +120,7 @@ export const TransactionsProvider = ({ children }) => {
         unsubscribeHistory()
       }
     }
-  }, [user, authLoading])
+  }, [user, userProfile?.storeId, authLoading])
 
   const addTransaction = useCallback(async (transactionData) => {
     try {
@@ -128,7 +128,10 @@ export const TransactionsProvider = ({ children }) => {
       const transaction = {
         ...transactionData,
         statut: transactionData.statut || 'Non Terminées',
-        userEmail: user?.email || 'Utilisateur inconnu' // Ajouter l'email de l'utilisateur connecté
+        storeId: userProfile?.storeId,
+        storeName: activeStore?.name || userProfile?.storeName,
+        userId: user?.uid,
+        userEmail: user?.email || 'Utilisateur inconnu'
       }
 
       await firestoreService.addTransaction(transaction)
@@ -138,7 +141,7 @@ export const TransactionsProvider = ({ children }) => {
       setError(error.message)
       throw error
     }
-  }, [user])
+  }, [activeStore?.name, user, userProfile?.storeId, userProfile?.storeName])
 
   const updateTransaction = useCallback(async (id, updates) => {
     try {

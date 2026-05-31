@@ -6,7 +6,7 @@ import { AuthContext } from './AuthContext'
 export const ClientsContext = createContext()
 
 export function ClientsProvider({ children }) {
-  const { currentUser: user, loading: authLoading } = useContext(AuthContext)
+  const { currentUser: user, userProfile, activeStore, loading: authLoading } = useContext(AuthContext)
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -19,7 +19,7 @@ export function ClientsProvider({ children }) {
     }
 
     // Si pas d'utilisateur connecté, ne pas essayer de charger depuis Firestore
-    if (!user) {
+    if (!user || !userProfile?.storeId) {
       setClients([])
       setLoading(false)
       return
@@ -90,12 +90,18 @@ export function ClientsProvider({ children }) {
         clearTimeout(loadingTimeout)
       }
     }
-  }, [user, authLoading])
+  }, [user, userProfile?.storeId, authLoading])
 
   const addClient = async (newClient) => {
     try {
       setError(null)
-      await firestoreService.addClient(newClient)
+      await firestoreService.addClient({
+        ...newClient,
+        registeredBy: user?.uid,
+        registeredByEmail: user?.email,
+        registeredStoreId: userProfile?.storeId,
+        registeredStoreName: activeStore?.name || userProfile?.storeName
+      })
       // La mise à jour de l'état se fera automatiquement via onSnapshot
     } catch (error) {
       console.error('Client creation error:', error)

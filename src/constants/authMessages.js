@@ -45,7 +45,9 @@ export const AUTH_PLACEHOLDERS = {
   CURRENT_PASSWORD: 'Mot de passe actuel',
   NEW_PASSWORD: 'Nouveau mot de passe',
   CONFIRM_PASSWORD: 'Confirmer le mot de passe',
-  FULL_NAME: 'Nom complet'
+  FULL_NAME: 'Nom complet',
+  CASHIER_NAME: 'Nom de la caissière',
+  CASHIER_EMAIL: 'Email de la caissière'
 }
 
 export const AUTH_LABELS = {
@@ -74,15 +76,16 @@ export const AUTH_LABELS = {
 }
 
 export const AUTH_ROLES = {
-  ADMIN: 'admin',
-  EMPLOYEE: 'employee',
-  USER: 'user'
+  STORE_ADMIN: 'store_admin',
+  CASHIER: 'cashier',
+  ADMIN: 'store_admin',
+  EMPLOYEE: 'cashier',
+  USER: 'cashier'
 }
 
 export const AUTH_ROLE_LABELS = {
-  [AUTH_ROLES.ADMIN]: 'Administrateur',
-  [AUTH_ROLES.EMPLOYEE]: 'Employé',
-  [AUTH_ROLES.USER]: 'Utilisateur'
+  [AUTH_ROLES.STORE_ADMIN]: 'Compte boutique',
+  [AUTH_ROLES.CASHIER]: 'Caissière'
 }
 
 // Configurations

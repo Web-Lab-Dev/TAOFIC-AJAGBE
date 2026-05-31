@@ -32,6 +32,7 @@ export const EXCEL_HEADERS = [
 ]
 
 export const TABLE_HEADERS = [
+  { key: 'registeredStoreName', label: 'Boutique', width: 'min-w-36' },
   { key: 'nom', label: 'Nom', width: 'min-w-32' },
   { key: 'prenom', label: 'Prénom', width: 'min-w-32' },
   { key: 'numeroIdentite', label: 'Numéro d\'identité', width: 'min-w-40' },
