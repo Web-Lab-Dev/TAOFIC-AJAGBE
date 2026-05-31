@@ -89,6 +89,20 @@ const TransactionTable = memo(function TransactionTable() {
         statusText = 'Validée'
       }
 
+      const confirmationMessage = [
+        'Confirmer cette transaction ?',
+        '',
+        `Client: ${getClientName(transaction.client)}`,
+        `Nature: ${transaction.type}`,
+        `Montant: ${(Number(transaction.montant) || 0).toLocaleString('fr-FR')} FCFA`,
+        `Réseau: ${transaction.reseau}`,
+        `Statut: ${statusText}`
+      ].join('\n')
+
+      if (!window.confirm(confirmationMessage)) {
+        return
+      }
+
       const success = await validateTransaction(transactionId, statusText, method)
       if (!success) {
         throw new Error('La transaction n’a pas pu être déplacée vers l’historique')
@@ -98,7 +112,7 @@ const TransactionTable = memo(function TransactionTable() {
 
       setRollbackToast({
         show: true,
-        message: `Erreur de synchronisation - operation non enregistree`,
+        message: error?.message || `Erreur de synchronisation - operation non enregistree`,
         type: 'rollback'
       })
 

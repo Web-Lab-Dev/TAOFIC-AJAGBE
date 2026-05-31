@@ -14,8 +14,7 @@ export const NETWORK_OPTIONS = ['Orange']
 // Types de transaction
 export const TRANSACTION_TYPES = [
   { value: 'Dépôt', label: 'Dépôt' },
-  { value: 'Retrait', label: 'Retrait' },
-  { value: 'Crédit', label: 'Crédit' }
+  { value: 'Retrait', label: 'Retrait' }
 ]
 
 // Méthodes de paiement

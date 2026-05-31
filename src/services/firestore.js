@@ -618,6 +618,10 @@ export class FirestoreService {
     }
 
     if (transactionData.statut === FIRESTORE_CONFIG.STATUS.VALIDATED) {
+      if (transactionData.type === 'Crédit') {
+        throw new Error('Les credits doivent etre rembourses via une methode de paiement')
+      }
+
       if (transactionData.type === 'Depot' || transactionData.type === 'Dépôt') {
         return this.applyLiquidityDelta(
           this.adjustBalanceValue(balances, network, 'stock', -amount),
@@ -636,14 +640,55 @@ export class FirestoreService {
     return balances
   }
 
-  applySettlementImpact(balances, amount, paymentMethod) {
-    const targetNetwork = this.mapPaymentMethodToNetwork(paymentMethod)
+  reverseInitialTransactionImpact(balances, transactionData) {
+    const amount = Number(transactionData.montant) || 0
+    const network = transactionData.reseau
 
-    if (targetNetwork === 'Liquidite') {
-      return this.applyLiquidityDelta(balances, amount)
+    if (transactionData.statut === FIRESTORE_CONFIG.STATUS.PENDING) {
+      if (transactionData.type === 'Depot' || transactionData.type === 'Dépôt' || transactionData.type === 'Crédit') {
+        return this.adjustBalanceValue(balances, network, 'stock', amount)
+      }
+
+      if (transactionData.type === 'Retrait') {
+        return this.adjustBalanceValue(balances, network, 'stock', -amount)
+      }
     }
 
-    return this.adjustBalanceValue(balances, targetNetwork, 'stock', amount)
+    return balances
+  }
+
+  applySettlementImpact(balances, transactionData, paymentMethod) {
+    const amount = Number(transactionData.montant) || 0
+    const targetNetwork = this.mapPaymentMethodToNetwork(paymentMethod)
+    const delta = transactionData.type === 'Retrait' ? -amount : amount
+
+    if (targetNetwork === 'Liquidite') {
+      return this.applyLiquidityDelta(balances, delta)
+    }
+
+    return this.adjustBalanceValue(balances, targetNetwork, 'stock', delta)
+  }
+
+  getSettlementActionFromStatus(status) {
+    if (status?.startsWith('Payé par ')) return 'payerPar'
+    if (status?.startsWith('Remboursé par ')) return 'rembourser'
+    if (status?.startsWith('Encaissé par ')) return 'encaisser'
+    return null
+  }
+
+  validateSettlementAction(transactionType, action) {
+    const allowedActions = {
+      'Retrait': 'payerPar',
+      'Crédit': 'rembourser',
+      'Dépôt': 'encaisser',
+      'Depot': 'encaisser'
+    }
+
+    if (!action || allowedActions[transactionType] === action) {
+      return
+    }
+
+    throw new Error(`Action ${action} non autorisee pour ${transactionType}`)
   }
 
   async setNetworkBalances(balances) {
@@ -812,11 +857,64 @@ export class FirestoreService {
   }
 
   async updateDraft(draftId, updates) {
-    return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId, updates)
+    return runTransaction(db, async (tx) => {
+      const draftRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
+      const draftSnap = await tx.get(draftRef)
+
+      if (!draftSnap.exists()) {
+        throw new Error('Transaction introuvable')
+      }
+
+      const currentDraft = draftSnap.data()
+      const nextDraft = {
+        ...currentDraft,
+        ...updates,
+        statut: FIRESTORE_CONFIG.STATUS.PENDING
+      }
+      const balanceRef = this.getNetworkBalanceDocRef()
+      const balanceSnap = await tx.get(balanceRef)
+      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
+      const restoredBalances = this.reverseInitialTransactionImpact(currentBalances, currentDraft)
+      const nextBalances = this.applyInitialTransactionImpact(restoredBalances, nextDraft)
+      const now = serverTimestamp()
+
+      tx.update(draftRef, {
+        ...updates,
+        statut: FIRESTORE_CONFIG.STATUS.PENDING,
+        updatedAt: now
+      })
+      tx.set(balanceRef, {
+        balances: nextBalances,
+        updatedAt: now
+      }, { merge: true })
+
+      return { id: draftId, ...nextDraft }
+    })
   }
 
   async deleteDraft(draftId) {
-    return this.deleteDocument(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
+    return runTransaction(db, async (tx) => {
+      const draftRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
+      const draftSnap = await tx.get(draftRef)
+
+      if (!draftSnap.exists()) {
+        return false
+      }
+
+      const balanceRef = this.getNetworkBalanceDocRef()
+      const balanceSnap = await tx.get(balanceRef)
+      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
+      const nextBalances = this.reverseInitialTransactionImpact(currentBalances, draftSnap.data())
+      const now = serverTimestamp()
+
+      tx.delete(draftRef)
+      tx.set(balanceRef, {
+        balances: nextBalances,
+        updatedAt: now
+      }, { merge: true })
+
+      return true
+    })
   }
 
   subscribeToDrafts(callback) {
@@ -967,6 +1065,7 @@ export class FirestoreService {
         }
       }
 
+      const settlementAction = this.getSettlementActionFromStatus(customStatus)
       const effectiveNetworkMapped = effectivePaymentMethod ? this.mapPaymentMethodToNetwork(effectivePaymentMethod) : transactionData.reseau
       return await runTransaction(db, async (tx) => {
         const lockedDraftDoc = await tx.get(draftDocRef)
@@ -976,11 +1075,12 @@ export class FirestoreService {
         }
 
         const lockedTransactionData = lockedDraftDoc.data()
+        this.validateSettlementAction(lockedTransactionData.type, settlementAction)
         const balanceRef = this.getNetworkBalanceDocRef()
         const balanceSnap = await tx.get(balanceRef)
         const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
         const nextBalances = effectivePaymentMethod
-          ? this.applySettlementImpact(currentBalances, Number(lockedTransactionData.montant) || 0, effectivePaymentMethod)
+          ? this.applySettlementImpact(currentBalances, lockedTransactionData, effectivePaymentMethod)
           : currentBalances
         const now = serverTimestamp()
         const historyData = {

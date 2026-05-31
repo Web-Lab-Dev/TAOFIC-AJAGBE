@@ -12,7 +12,7 @@ import logger from '../../utils/logger.js'
 function TransactionForm({ clients }) {
   const { toasts, showToast, removeToast } = useToast()
   const { addTransaction, editingTransaction, clearEditTransaction, updateTransaction } = useTransactions()
-  const { validateAmount, getStock, getFormattedStock } = useSimpleNetworkData()
+  const { validateAmount, getStock, getLiquidite, getFormattedStock } = useSimpleNetworkData()
   const [selectedClient, setSelectedClient] = useState(null)
   const [amount, setAmount] = useState('')
   const [network, setNetwork] = useState('Orange')
@@ -108,10 +108,18 @@ function TransactionForm({ clients }) {
 
     const stockValidation = validateAmount(network, amount, transactionType)
     const basicFormValid = validateTransactionForm(selectedClient, amount, transactionType)
+    const amountValue = parseFloat(amount) || 0
+    const liquidityAvailable = getLiquidite()
+    const directValidation = {
+      isValid: transactionType !== 'Retrait' || amountValue <= liquidityAvailable,
+      reason: transactionType === 'Retrait' && amountValue > liquidityAvailable
+        ? `Liquidité insuffisante. Disponible: ${liquidityAvailable.toLocaleString('fr-FR')} FCFA`
+        : ''
+    }
 
     // Utiliser la nouvelle logique de validation
     const hasStock = stockValidation.isValid && isNetworkValid
-    const context = { hasStock, amount: parseFloat(amount) || 0 }
+    const context = { hasStock, amount: amountValue }
 
     const nonTermineeValidation = validateTransactionAction(transactionType, 'nonTerminee', context)
     const validateValidation = validateTransactionAction(transactionType, 'valider', context)
@@ -130,16 +138,17 @@ function TransactionForm({ clients }) {
       networkValidation,
       actionStates: {
         canMarkAsNonTermine: nonTermineeValidation.allowed && networkValidation.isValid,
-        canValidate: validateValidation.allowed && networkValidation.isValid,
+        canValidate: validateValidation.allowed && networkValidation.isValid && directValidation.isValid,
         nonTermineeReason: adaptReason(nonTermineeValidation.reason || ''),
-        validateReason: adaptReason(validateValidation.reason || '')
+        validateReason: adaptReason(directValidation.reason || validateValidation.reason || '')
       }
     }
-  }, [selectedClient, amount, transactionType, network, validateAmount])
+  }, [selectedClient, amount, transactionType, network, validateAmount, getLiquidite])
 
   const handleSubmit = useCallback(async (statut) => {
-    if (!formValidation.isFormValid || isSubmitting) {
+    if (!formValidation.isFormValid || isSubmitting || (statut === 'Validée' && !formValidation.actionStates.canValidate)) {
       if (!formValidation.isFormValid) showToast(MESSAGES.ERRORS.FORM_INCOMPLETE, 'error')
+      else if (statut === 'Validée' && !formValidation.actionStates.canValidate) showToast(formValidation.actionStates.validateReason, 'error')
       return
     }
 
@@ -156,13 +165,30 @@ function TransactionForm({ clients }) {
       return
     }
 
+    const amountValue = parseFloat(amount)
+    const clientName = `${selectedClient.prenom || ''} ${selectedClient.nom || ''}`.trim()
+    const confirmationMessage = [
+      'Confirmer cette transaction ?',
+      '',
+      `Client: ${clientName}`,
+      `Nature: ${transactionType}`,
+      `Montant: ${amountValue.toLocaleString('fr-FR')} FCFA`,
+      `Réseau: ${network}`,
+      `Statut: ${statut}`
+    ].join('\n')
+
+    if (!window.confirm(confirmationMessage)) {
+      setIsSubmitting(false)
+      return
+    }
+
     const transactionData = {
       client: selectedClient,
       clientId: selectedClient.id,
       type: transactionType,
       reseau: network,
       code: clientCode,
-      montant: parseFloat(amount),
+      montant: amountValue,
       statut: statut
     }
 
@@ -179,7 +205,7 @@ function TransactionForm({ clients }) {
         )
       }
     } catch (error) {
-      showToast('Erreur lors de la sauvegarde de la transaction', 'error')
+      showToast(error?.message || 'Erreur lors de la sauvegarde de la transaction', 'error')
       logger.user.error('Transaction save', error)
       return
     } finally {
@@ -191,7 +217,7 @@ function TransactionForm({ clients }) {
     setAmount('')
     setNetwork('Orange')
     setTransactionType('')
-  }, [formValidation.isFormValid, isSubmitting, selectedClient, network, amount, transactionType, editingTransaction, updateTransaction, clearEditTransaction, addTransaction, showToast])
+  }, [formValidation.isFormValid, formValidation.actionStates.canValidate, formValidation.actionStates.validateReason, isSubmitting, selectedClient, network, amount, transactionType, editingTransaction, updateTransaction, clearEditTransaction, addTransaction, showToast])
 
   const handleCancel = useCallback(() => {
     clearEditTransaction()
