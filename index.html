@@ -20,6 +20,54 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/pwa-512x512.png">
 
     <!-- PWA sera configuré automatiquement par Vite PWA -->
+    <script>
+      (function () {
+        var recoveryKey = 'taofic_asset_recovery_v1'
+
+        window.addEventListener('error', function (event) {
+          var target = event.target
+          var isStylesheet = target && target.tagName === 'LINK' && target.rel === 'stylesheet'
+
+          if (!isStylesheet || sessionStorage.getItem(recoveryKey)) {
+            return
+          }
+
+          sessionStorage.setItem(recoveryKey, '1')
+
+          var unregisterServiceWorkers = 'serviceWorker' in navigator
+            ? navigator.serviceWorker.getRegistrations().then(function (registrations) {
+              return Promise.all(registrations.map(function (registration) {
+                return registration.unregister()
+              }))
+            })
+            : Promise.resolve()
+
+          var clearCaches = 'caches' in window
+            ? caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) {
+                return caches.delete(key)
+              }))
+            })
+            : Promise.resolve()
+
+          Promise.all([unregisterServiceWorkers, clearCaches]).finally(function () {
+            var separator = window.location.search ? '&' : '?'
+            window.location.replace(
+              window.location.pathname +
+              window.location.search +
+              separator +
+              'cache_refresh=' +
+              Date.now() +
+              window.location.hash
+            )
+          })
+        }, true)
+
+        window.addEventListener('load', function () {
+          sessionStorage.removeItem(recoveryKey)
+        })
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
