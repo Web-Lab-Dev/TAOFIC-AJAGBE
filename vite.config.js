@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 /**
- * Configuration Vite pour TAOFIC AJAGBE CRM
+ * Configuration Vite pour AKAYIS CRM
  * - React avec SWC pour compilation rapide
  * - Tailwind CSS v4 intégré
  * - PWA avec Service Worker automatique
@@ -95,13 +95,13 @@ export default defineConfig({
         ]
       },
       // Assets à inclure dans le cache
-      includeAssets: ['*.ico', '*.svg', '*.png', '*.jpg', 'bg-*.png'],
+      includeAssets: ['*.ico', '*.svg', '*.png', '*.jpg', 'akayis-*.png', 'akayis-*.svg'],
 
       // Manifest PWA - métadonnées de l'application
       manifest: {
-        name: 'TAOFIC AJAGBE CRM',
-        short_name: 'TAOFIC CRM',
-        description: 'Application CRM pour la gestion des clients et transactions de TAOFIC AJAGBE',
+        name: 'AKAYIS CRM',
+        short_name: 'AKAYIS CRM',
+        description: 'Application CRM pour la gestion des clients et transactions de AKAYIS',
         theme_color: '#3b82f6', // Couleur de la barre d'adresse mobile
         background_color: '#ffffff',
         display: 'standalone', // Affichage en plein écran (comme une app native)

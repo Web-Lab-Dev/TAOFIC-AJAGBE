@@ -2,13 +2,18 @@ function AuthSidebar({ isSignUp, onToggle }) {
   return (
     <div className={`h-full min-h-[500px] flex flex-col items-center justify-center text-white p-8 md:p-12 relative overflow-hidden ${
       isSignUp
-        ? 'bg-gradient-to-br from-blue-500 to-blue-700'
-        : 'bg-gradient-to-br from-purple-500 to-purple-700'
+        ? 'bg-gradient-to-br from-[#2d5ea5] to-[#173e78]'
+        : 'bg-gradient-to-br from-[#f08a00] to-[#2d5ea5]'
     }`}>
       <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full transform translate-x-16 -translate-y-16"></div>
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full transform -translate-x-12 translate-y-12"></div>
 
       <div className="text-center z-10">
+        <img
+          src="/akayis-mark.svg"
+          alt="AKAYIS"
+          className="mx-auto mb-6 h-28 w-28 rounded-full bg-white p-3 shadow-lg"
+        />
         {isSignUp ? (
           <>
             <h2 className="text-4xl font-bold mb-6">Bon retour</h2>
@@ -57,7 +62,7 @@ function AuthSidebar({ isSignUp, onToggle }) {
               />
             </svg>
           </div>
-          <p className="text-sm opacity-75">TAOFIC AJAGBE</p>
+          <p className="text-sm opacity-75">AKAYIS</p>
         </div>
       </div>
     </div>

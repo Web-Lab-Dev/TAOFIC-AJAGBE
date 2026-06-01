@@ -34,7 +34,7 @@ function AppContent() {
 
 function App() {
   useEffect(() => {
-    document.title = 'TAOFIC AJAGBE CRM'
+    document.title = 'AKAYIS CRM'
   }, [])
 
   return (

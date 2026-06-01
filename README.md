@@ -1,6 +1,6 @@
-# TAOFIC AJAGBE CRM
+# AKAYIS CRM
 
-Application CRM complète pour la gestion des clients et transactions de TAOFIC AJAGBE.
+Application CRM complète pour la gestion des clients et transactions de AKAYIS.
 
 ## 🚀 Fonctionnalités
 
@@ -41,7 +41,7 @@ L'application peut être installée sur n'importe quel appareil :
 1. **Cloner le projet**
 ```bash
 git clone <votre-repo>
-cd taofic-ajagbe-crm
+cd akayis-crm
 ```
 
 2. **Installer les dépendances**
@@ -101,10 +101,12 @@ npm run preview
 ## 📂 Structure du projet
 
 ```
-taofic-ajagbe-crm/
+akayis-crm/
 ├── public/              # Assets statiques
-│   ├── pwa-*.png       # Icônes PWA
-│   └── bg-*.png        # Images de fond thèmes
+│   ├── pwa-*.png       # Icônes PWA AKAYIS
+│   ├── akayis-logo.*   # Logo complet AKAYIS
+│   ├── akayis-mark.svg # Marque/icône AKAYIS
+│   └── akayis-bg.*     # Image de fond thème AKAYIS
 ├── src/
 │   ├── components/     # Composants React
 │   ├── config/         # Configuration (Firebase)
@@ -149,4 +151,4 @@ taofic-ajagbe-crm/
 
 ## 📄 Licence
 
-Propriété de TAOFIC AJAGBE
+Propriété de AKAYIS

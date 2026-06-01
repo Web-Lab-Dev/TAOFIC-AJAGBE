@@ -1,6 +1,6 @@
 # Adaptation nouveau client
 
-Cette copie vient du depot GitHub source `Web-Lab-Dev/Moalim-Telecom`.
+Cette copie vient du depot GitHub source `Web-Lab-Dev/AKAYIS`.
 
 ## Stack du projet
 
@@ -50,8 +50,10 @@ Les variables Firebase ne doivent pas etre committees dans `netlify.toml` ou `ve
 - `index.html` : titre, description, nom PWA Apple.
 - `vite.config.js` : nom PWA, short name, description, cache/service worker.
 - `README.md` : documentation client.
-- `public/pwa-*.png` : icones PWA.
-- `public/bg-*.png` : images de fond/theme si besoin.
+- `public/pwa-*.png` : icones PWA AKAYIS.
+- `public/akayis-logo.*` : logo complet AKAYIS.
+- `public/akayis-mark.svg` : marque/icône AKAYIS.
+- `public/akayis-bg.*` : image de fond/theme AKAYIS.
 - `src/components/Layout.jsx` : nom visible dans l'application.
 - `src/components/auth/AuthSidebar.jsx` : nom visible cote authentification.
 - `src/constants/themes.js` : cle de stockage du theme.
@@ -63,18 +65,18 @@ Les variables Firebase ne doivent pas etre committees dans `netlify.toml` ou `ve
 
 ## Points sensibles
 
-- Ne jamais reutiliser les anciennes cles `moalim_*` pour un nouveau client.
+- Ne jamais reutiliser les anciennes cles d'un autre client.
 - Creer un nouveau projet Firebase par client.
 - Revoir `firestore.rules` avant production.
 - Remplacer les variables Firebase dans Vercel/Netlify, pas seulement dans `.env`.
 - Adapter les reseaux partout, car ils sont utilises dans les formulaires, tableaux, graphiques et exports.
 
-## References Moalim detectees
+## Verification des references client
 
 Lancer :
 
 ```bash
-rg -n "Moalim|moalim|MOALIM|Telecom|telecom" .
+rg -n "ancien_nom|ancienne_marque|ancien_domaine" .
 ```
 
 Puis remplacer au minimum les occurrences dans :
