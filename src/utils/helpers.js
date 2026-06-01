@@ -53,6 +53,35 @@ export const formatDateToFrench = (date = new Date()) => {
   )
 }
 
+const toDateValue = (value) => {
+  if (!value) return null
+  if (typeof value?.toDate === 'function') return value.toDate()
+  if (value instanceof Date) return value
+  return parsefrenchDate(value)
+}
+
+const hasTimePart = (value) => typeof value === 'string' && /\d{1,2}:\d{2}/.test(value)
+
+export const formatTransactionDateTime = (transaction = {}) => {
+  const preferredValue = hasTimePart(transaction.date)
+    ? transaction.date
+    : transaction.createdAt || transaction.validatedAt || transaction.updatedAt || transaction.date || transaction.dateTime
+
+  const date = toDateValue(preferredValue)
+
+  if (!date || isNaN(date.getTime())) {
+    return '-'
+  }
+
+  return date.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 /**
  * Parse une date au format français "DD/MM/YYYY HH:mm"
  * Retourne un objet Date valide ou la date actuelle en cas d'erreur

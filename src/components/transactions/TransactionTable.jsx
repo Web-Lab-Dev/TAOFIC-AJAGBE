@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTransactions } from '../../context/transactions.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import { PAYMENT_METHODS } from '../../utils/constants.js'
-import { getClientName, formatTime } from '../../utils/helpers.js'
+import { getClientName, formatTransactionDateTime } from '../../utils/helpers.js'
 import { TransactionRowSkeleton } from '../ui/LoadingSkeleton.jsx'
 import OptimisticToast from '../ui/OptimisticToast.jsx'
 import logger from '../../utils/logger.js'
@@ -167,7 +167,7 @@ const TransactionTable = memo(function TransactionTable() {
             <thead>
               <tr className={themeClasses.tableHeader}>
                 <th className={`border ${themeClasses.tableHeader.split(' ')[1]} px-4 py-3 text-left text-base font-medium ${themeClasses.text}`}>
-                  Heure
+                  Date & heure
                 </th>
                 <th className={`border ${themeClasses.tableHeader.split(' ')[1]} px-4 py-3 text-left text-base font-medium ${themeClasses.text}`}>
                   Client
@@ -210,7 +210,7 @@ const TransactionTable = memo(function TransactionTable() {
                       className={`${styles.bgColor}`}
                     >
                       <td className={`border border-green-300 px-4 py-3 text-base ${styles.textColor}`}>
-                        {formatTime(transaction.date)}
+                        {formatTransactionDateTime(transaction)}
                       </td>
                       <td className={`border border-green-300 px-4 py-3 text-base font-medium ${styles.textColor}`}>
                         {getClientName(transaction.client)}

@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { withErrorHandling } from '../utils/errorHandler'
+import { formatDateToFrench } from '../utils/helpers'
 import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
 import { CLIENT_ID, getFirestoreCollectionPath } from '../config/clientIsolation'
@@ -950,7 +951,7 @@ export class FirestoreService {
     return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, {
       ...transactionData,
       statut: FIRESTORE_CONFIG.STATUS.PENDING,
-      date: new Date().toLocaleDateString('fr-FR')
+      date: formatDateToFrench()
     })
   }
 
@@ -1044,7 +1045,7 @@ export class FirestoreService {
   async addToHistory(transactionData) {
     return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, {
       ...transactionData,
-      date: new Date().toLocaleDateString('fr-FR')
+      date: formatDateToFrench()
     })
   }
 
@@ -1063,7 +1064,7 @@ export class FirestoreService {
       const now = serverTimestamp()
       const transactionPayload = {
         ...transactionData,
-        date: new Date().toLocaleDateString('fr-FR'),
+        date: formatDateToFrench(),
         createdAt: now,
         updatedAt: now
       }

@@ -1,6 +1,6 @@
 import { useTransactions } from '../../context/transactions.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
-import { getClientName } from '../../utils/helpers.js'
+import { getClientName, formatTransactionDateTime } from '../../utils/helpers.js'
 
 function HistoriqueTable({ transactions = [] }) {
   const { getTransactionStyles } = useTransactions()
@@ -55,7 +55,7 @@ function HistoriqueTable({ transactions = [] }) {
                     className={`border-b border-gray-100 ${styles.bgColor} ${styles.textColor}`}
                   >
                     <td className="border border-green-300 px-4 py-3 text-base">
-                      {transaction.date || transaction.dateTime || '-'}
+                      {formatTransactionDateTime(transaction)}
                     </td>
                     <td className="border border-green-300 px-4 py-3 text-base">
                       {getClientName(transaction.client)}
@@ -70,7 +70,7 @@ function HistoriqueTable({ transactions = [] }) {
                       {transaction.code || '-'}
                     </td>
                     <td className="border border-green-300 px-4 py-3 text-base font-medium">
-                      {transaction.montant ? `${transaction.montant.toLocaleString()} FCFA` : 
+                      {transaction.montant ? `${(Number(transaction.montant) || 0).toLocaleString('fr-FR')} FCFA` :
                        transaction.amount ? `${transaction.amount} FCFA` : '-'}
                     </td>
                     <td className="border border-green-300 px-4 py-3 text-base">
