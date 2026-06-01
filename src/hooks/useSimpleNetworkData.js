@@ -12,6 +12,11 @@ export const useSimpleNetworkData = () => {
   // Interface de compatibilité pour le formulaire
   const validateAmount = (network, amount, transactionType) => {
     const numericAmount = parseFloat(amount) || 0
+    const normalizedType = String(transactionType || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
 
     if (numericAmount <= 0) {
       return {
@@ -20,8 +25,9 @@ export const useSimpleNetworkData = () => {
       }
     }
 
-    // Pour les dépôts et crédits, vérifier le stock disponible
-    if (transactionType === 'Dépôt' || transactionType === 'Crédit') {
+    // Pour les dépôts, vérifier uniquement le stock du réseau.
+    // Les retraits sont contrôlés avec la liquidité dans TransactionForm.
+    if (normalizedType === 'depot' || normalizedType === 'credit') {
       const networkStock = getStock(network)
 
       if (numericAmount > networkStock) {

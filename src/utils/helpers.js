@@ -210,19 +210,26 @@ export const getAvailableActions = (transactionType) => {
  */
 export const validateTransactionAction = (transactionType, action, context = {}) => {
   const { hasStock = true } = context
+  const normalizedType = String(transactionType || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  const isDeposit = normalizedType === 'depot'
+  const isWithdrawal = normalizedType === 'retrait'
+  const isCredit = normalizedType === 'credit'
 
   // Règles de validation par action
   switch (action) {
     case 'valider':
       // Les crédits ne peuvent jamais être validés directement
-      if (transactionType === 'Crédit') {
+      if (isCredit) {
         return {
           allowed: false,
           reason: 'Les crédits doivent être remboursés via une méthode de paiement'
         }
       }
-      // Pour dépôts et retraits, vérifier le stock si nécessaire
-      if ((transactionType === 'Dépôt') && !hasStock) {
+      if (isDeposit && !hasStock) {
         return {
           allowed: false,
           reason: 'Stock insuffisant pour valider cette transaction'
@@ -232,7 +239,7 @@ export const validateTransactionAction = (transactionType, action, context = {})
 
     case 'nonTerminee':
       // Les crédits et dépôts nécessitent du stock
-      if ((transactionType === 'Crédit' || transactionType === 'Dépôt') && !hasStock) {
+      if ((isCredit || isDeposit) && !hasStock) {
         return {
           allowed: false,
           reason: 'Stock insuffisant pour cette transaction'
@@ -244,8 +251,11 @@ export const validateTransactionAction = (transactionType, action, context = {})
     case 'payerPar':
     case 'rembourser':
     case 'encaisser': {
-      // Ces actions sont toujours possibles si le type de transaction correspond
-      const availableActions = getAvailableActions(transactionType)
+      const availableActions = {
+        payerPar: isWithdrawal,
+        rembourser: isCredit,
+        encaisser: isDeposit
+      }
       return {
         allowed: availableActions[action] || false,
         reason: availableActions[action] ? '' : `Action non disponible pour ${transactionType}`

@@ -21,10 +21,6 @@ service cloud.firestore {
       return hasProfile() && profile().storeId == storeId;
     }
 
-    function isStoreAdmin(storeId) {
-      return isStoreMember(storeId) && profile().role == 'store_admin';
-    }
-
     function validClient(data) {
       return data.keys().hasAll(['nom', 'prenom', 'registeredStoreId', 'registeredStoreName']) &&
              data.nom is string && data.nom.size() >= 2 && data.nom.size() <= 50 &&
@@ -38,19 +34,41 @@ service cloud.firestore {
 
     function validTransaction(data) {
       return data.keys().hasAll(['type', 'montant', 'clientId']) &&
-             data.type in ['Dépôt', 'Retrait', 'Crédit'] &&
+             data.type in ['Dépôt', 'Depot', 'Retrait', 'Crédit', 'Credit', 'DÃ©pÃ´t', 'CrÃ©dit'] &&
              data.montant is number && data.montant > 0 && data.montant <= 1000000 &&
              data.clientId is string && data.clientId.size() > 0;
     }
 
     function validStatus(status) {
-      return status in ['Non Terminées', 'Validée', 'Remboursée', 'Annulée'] ||
+      return status in [
+        'Non Terminées',
+        'Non Terminees',
+        'Non TerminÃ©es',
+        'Validée',
+        'Validee',
+        'ValidÃ©e',
+        'Remboursée',
+        'Remboursee',
+        'RemboursÃ©e',
+        'Annulée',
+        'Annulee',
+        'AnnulÃ©e'
+      ] ||
              status.matches('^(Payé|Remboursé|Encaissé) par .+$');
+    }
+
+    function isPendingStatus(status) {
+      return status in ['Non Terminées', 'Non Terminees', 'Non TerminÃ©es'];
     }
 
     match /stores/{storeId} {
       allow read: if isStoreMember(storeId);
-      allow write: if false;
+      allow create: if signedIn() &&
+        request.resource.data.adminUid == request.auth.uid &&
+        request.resource.data.active == true &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() >= 2;
+      allow update, delete: if false;
     }
 
     match /users/{userId} {
@@ -59,20 +77,18 @@ service cloud.firestore {
         profile().storeId == resource.data.storeId
       );
 
-      allow update: if hasProfile() && (
-        (
-          request.auth.uid == userId &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin'])
-        ) ||
-        (
-          isStoreAdmin(resource.data.storeId) &&
-          request.resource.data.storeId == resource.data.storeId &&
-          request.resource.data.role == resource.data.role &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active', 'updatedAt'])
-        )
-      );
+      allow update: if hasProfile() &&
+        request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin']);
 
-      allow create, delete: if false;
+      allow create: if signedIn() &&
+        request.auth.uid == userId &&
+        request.resource.data.role == 'store_admin' &&
+        request.resource.data.active == true &&
+        request.resource.data.storeId is string &&
+        request.resource.data.storeName is string;
+
+      allow delete: if false;
     }
 
     match /globalClients/{clientId} {
@@ -100,7 +116,7 @@ service cloud.firestore {
         allow read: if isStoreMember(storeId);
         allow create: if isStoreMember(storeId) &&
           validTransaction(request.resource.data) &&
-          request.resource.data.statut == 'Non Terminées';
+          isPendingStatus(request.resource.data.statut);
         allow update: if isStoreMember(storeId) &&
           validTransaction(request.resource.data);
         allow delete: if isStoreMember(storeId);
@@ -111,7 +127,7 @@ service cloud.firestore {
         allow create: if isStoreMember(storeId) &&
           validTransaction(request.resource.data) &&
           validStatus(request.resource.data.statut) &&
-          request.resource.data.statut != 'Non Terminées';
+          !isPendingStatus(request.resource.data.statut);
         allow update: if isStoreMember(storeId) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'updatedAt', 'notes']) &&
           validStatus(request.resource.data.statut);
@@ -122,7 +138,6 @@ service cloud.firestore {
         allow read: if isStoreMember(storeId);
         allow create, update: if isStoreMember(storeId) &&
           balanceId == 'current' &&
-          request.resource.data.keys().hasAll(['balances', 'updatedAt']) &&
           request.resource.data.balances is map;
         allow delete: if false;
       }
@@ -132,7 +147,7 @@ service cloud.firestore {
       }
 
       match /auditLogs/{logId} {
-        allow read: if isStoreAdmin(storeId);
+        allow read: if isStoreMember(storeId);
         allow write: if false;
       }
     }

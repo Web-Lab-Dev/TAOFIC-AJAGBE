@@ -48,16 +48,20 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
     }
   }
 
-  const saveAmount = useCallback(() => {
+  const saveAmount = useCallback(async () => {
     const newAmount = parseFloat(editValue) || 0
 
-    if (isLiquiditeCard) {
-      updateLiquidity(newAmount)
-    } else {
-      updateStock(network, newAmount)
-    }
+    try {
+      if (isLiquiditeCard) {
+        await updateLiquidity(newAmount)
+      } else {
+        await updateStock(network, newAmount)
+      }
 
-    setIsEditing(false)
+      setIsEditing(false)
+    } catch (error) {
+      window.alert(error?.message || 'Erreur lors de la sauvegarde du solde')
+    }
   }, [editValue, isLiquiditeCard, network, updateStock, updateLiquidity])
 
   const handleDoubleClick = useCallback(() => {

@@ -83,7 +83,8 @@ export function NetworkConfigProvider({ children }) {
 
   // Mettre à jour un réseau (stock OU liquidité)
   const updateNetwork = useCallback((network, type, amount) => {
-    setNetworkData(prev => {
+    const nextAmount = Math.max(0, Number(amount) || 0)
+    const applyLocalUpdate = () => setNetworkData(prev => {
       const newData = { ...prev }
 
       if (!newData[network]) {
@@ -92,18 +93,26 @@ export function NetworkConfigProvider({ children }) {
 
       newData[network] = {
         ...newData[network],
-        [type]: Math.max(0, amount) // Pas de négatif
+        [type]: nextAmount
       }
 
       return newData
     })
 
     if (user) {
-      firestoreService.setNetworkBalance(network, type, amount)
+      return firestoreService.setNetworkBalance(network, type, nextAmount)
+        .then((balances) => {
+          setNetworkData(balances)
+          return balances
+        })
         .catch((error) => {
           console.error('Erreur lors de la sauvegarde du solde reseau:', error)
+          throw error
         })
     }
+
+    applyLocalUpdate()
+    return Promise.resolve()
   }, [user])
 
   // Réinitialiser

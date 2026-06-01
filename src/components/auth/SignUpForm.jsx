@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useFormValidation } from '../../hooks/useFormValidation'
 import { AUTH_LABELS, AUTH_PLACEHOLDERS } from '../../constants/authMessages'
 import { AUTH_STYLES, THEME_VARIANTS } from '../../constants/authStyles'
-import { formatUserName } from '../../utils/authHelpers'
 
 function SignUpForm({ onToggle }) {
   const { signup } = useAuth()
@@ -19,7 +18,7 @@ function SignUpForm({ onToggle }) {
     handleSubmit: handleFormSubmit,
     shouldShowErrors
   } = useFormValidation(
-    { name: '', email: '', password: '', confirmPassword: '' },
+    { storeName: '', email: '', password: '' },
     {},
     { validateOnChange: false, validateOnBlur: true }
   )
@@ -28,8 +27,7 @@ function SignUpForm({ onToggle }) {
     e.preventDefault()
 
     const result = await handleFormSubmit(async (formValues) => {
-      const formattedName = formatUserName(formValues.name)
-      await signup(formValues.email, formValues.password, formattedName)
+      await signup(formValues.email, formValues.password, formValues.storeName)
       navigate('/profil')
     })
 
@@ -38,10 +36,9 @@ function SignUpForm({ onToggle }) {
     }
   }
 
-  const nameProps = getFieldProps('name')
+  const storeNameProps = getFieldProps('storeName')
   const emailProps = getFieldProps('email')
   const passwordProps = getFieldProps('password')
-  const confirmPasswordProps = getFieldProps('confirmPassword')
 
   return (
     <div className="w-full">
@@ -60,14 +57,14 @@ function SignUpForm({ onToggle }) {
         <div>
           <input
             type="text"
-            placeholder={AUTH_PLACEHOLDERS.FULL_NAME}
-            {...nameProps}
-            className={`${THEME_VARIANTS.secondary.input} ${hasFieldError('name') ? 'border border-red-300' : ''}`}
+            placeholder={AUTH_PLACEHOLDERS.STORE_NAME}
+            {...storeNameProps}
+            className={`${THEME_VARIANTS.secondary.input} ${hasFieldError('storeName') ? 'border border-red-300' : ''}`}
             required
-            aria-label={AUTH_PLACEHOLDERS.FULL_NAME}
+            aria-label={AUTH_PLACEHOLDERS.STORE_NAME}
           />
-          {hasFieldError('name') && (
-            <p className="mt-1 text-sm text-red-600">{getFieldError('name')}</p>
+          {hasFieldError('storeName') && (
+            <p className="mt-1 text-sm text-red-600">{getFieldError('storeName')}</p>
           )}
         </div>
 
@@ -96,20 +93,6 @@ function SignUpForm({ onToggle }) {
           />
           {hasFieldError('password') && (
             <p className="mt-1 text-sm text-red-600">{getFieldError('password')}</p>
-          )}
-        </div>
-
-        <div>
-          <input
-            type="password"
-            placeholder={AUTH_PLACEHOLDERS.CONFIRM_PASSWORD}
-            {...confirmPasswordProps}
-            className={`${THEME_VARIANTS.secondary.input} ${hasFieldError('confirmPassword') ? 'border border-red-300' : ''}`}
-            required
-            aria-label={AUTH_PLACEHOLDERS.CONFIRM_PASSWORD}
-          />
-          {hasFieldError('confirmPassword') && (
-            <p className="mt-1 text-sm text-red-600">{getFieldError('confirmPassword')}</p>
           )}
         </div>
 

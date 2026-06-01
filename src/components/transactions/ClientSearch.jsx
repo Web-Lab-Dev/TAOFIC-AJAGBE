@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 
-function ClientSearch({ clients, onClientSelect, selectedClient }) {
+function ClientSearch({ clients, onClientSelect, selectedClient, onManualCodeChange, resetToken = 0 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -24,35 +24,41 @@ function ClientSearch({ clients, onClientSelect, selectedClient }) {
       const nom = client.nom?.toLowerCase() || ''
       const prenom = client.prenom?.toLowerCase() || ''
       const orange = client.orange?.toLowerCase() || ''
+      const numeroPersonnel = client.numeroPersonnel?.toLowerCase() || ''
 
       return nom.includes(term) ||
              prenom.includes(term) ||
-             orange.includes(term)
+             orange.includes(term) ||
+             numeroPersonnel.includes(term)
     }).slice(0, 10)
   }, [clients, debouncedSearchTerm])
 
   const handleInputChange = useCallback((e) => {
-    setSearchTerm(e.target.value)
+    const nextValue = e.target.value
+    setSearchTerm(nextValue)
+    if (selectedClient) {
+      onClientSelect(null)
+    }
+    onManualCodeChange?.(nextValue.trim())
     setIsDropdownOpen(true)
-  }, [])
+  }, [onClientSelect, onManualCodeChange, selectedClient])
 
   const handleClientSelect = (client) => {
     setSearchTerm(`${client.nom} ${client.prenom}`)
+    onManualCodeChange?.('')
     setIsDropdownOpen(false)
     onClientSelect(client)
   }
 
-  // Reset search when client is cleared from parent
   useEffect(() => {
-    if (!selectedClient) {
-      setSearchTerm('')
-      setIsDropdownOpen(false)
-    }
-  }, [selectedClient])
+    setSearchTerm('')
+    setDebouncedSearchTerm('')
+    setIsDropdownOpen(false)
+  }, [resetToken])
 
   const formatClientDisplay = (client) => {
     const accounts = []
-    if (client.orange) accounts.push(`Orange: ${client.orange}`)
+    if (client.orange) accounts.push(`Code agent: ${client.orange}`)
     
     return `${client.nom} ${client.prenom} | ${accounts.join(' | ')}`
   }
@@ -61,7 +67,7 @@ function ClientSearch({ clients, onClientSelect, selectedClient }) {
     <div className="relative">
       <input
         type="text"
-        placeholder="Rechercher par nom, prénom ou code compte..."
+        placeholder="Rechercher un client ou saisir le numéro/code agent..."
         value={searchTerm}
         onChange={handleInputChange}
         onFocus={() => searchTerm && setIsDropdownOpen(true)}
@@ -86,6 +92,28 @@ function ClientSearch({ clients, onClientSelect, selectedClient }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {isDropdownOpen && debouncedSearchTerm.trim() && filteredClients.length === 0 && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg">
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              onClientSelect(null)
+              onManualCodeChange?.(debouncedSearchTerm.trim())
+              setIsDropdownOpen(false)
+            }}
+            className="w-full px-3 py-3 text-left hover:bg-gray-100"
+          >
+            <div className="text-sm font-semibold text-gray-800">
+              Utiliser ce code sans client enregistré
+            </div>
+            <div className="text-sm text-gray-600">
+              Code agent: {debouncedSearchTerm.trim()}
+            </div>
+          </button>
+        </div>
       )}
     </div>
   )

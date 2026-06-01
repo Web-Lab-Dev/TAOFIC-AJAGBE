@@ -49,6 +49,9 @@ export const formatDate = (dateString, options = {}) => {
   if (!dateString) return 'Non disponible'
 
   try {
+    const dateValue = typeof dateString?.toDate === 'function'
+      ? dateString.toDate()
+      : dateString
     const defaultOptions = {
       year: 'numeric',
       month: 'long',
@@ -57,7 +60,10 @@ export const formatDate = (dateString, options = {}) => {
       minute: '2-digit'
     }
 
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    const date = new Date(dateValue)
+    if (isNaN(date.getTime())) return 'Non disponible'
+
+    return date.toLocaleDateString('fr-FR', {
       ...defaultOptions,
       ...options
     })
@@ -71,7 +77,11 @@ export const getDaysFromDate = (dateString) => {
   if (!dateString) return 0
 
   try {
-    const date = new Date(dateString)
+    const dateValue = typeof dateString?.toDate === 'function'
+      ? dateString.toDate()
+      : dateString
+    const date = new Date(dateValue)
+    if (isNaN(date.getTime())) return 0
     const now = new Date()
     const diffTime = Math.abs(now - date)
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
@@ -206,7 +216,7 @@ export const createLoadingState = () => {
 export const getDefaultUserProfile = (email) => ({
   name: email ? email.split('@')[0] : 'Utilisateur',
   email: email || '',
-  role: 'employee',
+  role: 'store_admin',
   createdAt: serverTimestamp(),
   lastLogin: serverTimestamp()
 })

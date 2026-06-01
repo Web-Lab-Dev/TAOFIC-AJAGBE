@@ -28,6 +28,8 @@ export default defineConfig({
       workbox: {
         // Fichiers à mettre en cache automatiquement
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp}'],
+        navigateFallback: '/index.html',
+        navigateFallbackAllowlist: [/^\/(?!__).*/],
 
         // Nettoyer les anciens caches à chaque déploiement
         cleanupOutdatedCaches: true,

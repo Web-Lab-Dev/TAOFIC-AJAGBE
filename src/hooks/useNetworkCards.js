@@ -26,22 +26,20 @@ export const useNetworkCards = () => {
   }
 
   // Fonction pour éditer le stock d'un réseau
-  const updateStock = (network, amount) => {
-    updateNetwork(network, 'stock', amount)
-  }
+  const updateStock = (network, amount) => updateNetwork(network, 'stock', amount)
 
   // === FONCTIONS SELON LE CAHIER DE CHARGES ===
 
   // Ajouter au stock d'un réseau (+)
   const addToStock = (network, amount) => {
     const currentStock = networkData[network]?.stock || 0
-    updateNetwork(network, 'stock', currentStock + amount)
+    return updateNetwork(network, 'stock', currentStock + amount)
   }
 
   // Retirer du stock d'un réseau (-)
   const removeFromStock = (network, amount) => {
     const currentStock = networkData[network]?.stock || 0
-    updateNetwork(network, 'stock', Math.max(0, currentStock - amount))
+    return updateNetwork(network, 'stock', Math.max(0, currentStock - amount))
   }
 
   // Ajouter à la liquidité centrale (+)
@@ -52,8 +50,9 @@ export const useNetworkCards = () => {
     const firstNetwork = Object.keys(networkData)[0]
     if (firstNetwork) {
       const currentNetworkLiquidity = networkData[firstNetwork]?.liquidite || 0
-      updateNetwork(firstNetwork, 'liquidite', currentNetworkLiquidity + amount)
+      return updateNetwork(firstNetwork, 'liquidite', currentNetworkLiquidity + amount)
     }
+    return Promise.resolve()
   }
 
   // Retirer de la liquidité centrale (-)
@@ -61,16 +60,20 @@ export const useNetworkCards = () => {
     // Retirer de la liquidité en commençant par le réseau qui a le plus de liquidité
     let remainingToRemove = amount
 
+    const updates = []
+
     for (const [network, data] of Object.entries(networkData)) {
       if (remainingToRemove <= 0) break
 
       const networkLiquidity = data.liquidite || 0
       if (networkLiquidity > 0) {
         const toRemoveFromThis = Math.min(networkLiquidity, remainingToRemove)
-        updateNetwork(network, 'liquidite', networkLiquidity - toRemoveFromThis)
+        updates.push(updateNetwork(network, 'liquidite', networkLiquidity - toRemoveFromThis))
         remainingToRemove -= toRemoveFromThis
       }
     }
+
+    return Promise.all(updates)
   }
 
   // Obtenir le stock d'un réseau (pour validation formulaire)
@@ -100,8 +103,9 @@ export const useNetworkCards = () => {
     if (firstNetwork) {
       const currentNetworkLiquidity = networkData[firstNetwork]?.liquidite || 0
       const newNetworkLiquidity = Math.max(0, currentNetworkLiquidity + difference)
-      updateNetwork(firstNetwork, 'liquidite', newNetworkLiquidity)
+      return updateNetwork(firstNetwork, 'liquidite', newNetworkLiquidity)
     }
+    return Promise.resolve()
   }
 
   // Formater un montant pour affichage

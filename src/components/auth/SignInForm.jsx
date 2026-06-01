@@ -6,7 +6,7 @@ import { AUTH_LABELS, AUTH_PLACEHOLDERS } from '../../constants/authMessages'
 import { AUTH_STYLES, THEME_VARIANTS } from '../../constants/authStyles'
 import ForgotPasswordModal from './ForgotPasswordModal'
 
-function SignInForm() {
+function SignInForm({ onToggle }) {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   const { signin } = useAuth()
@@ -107,9 +107,21 @@ function SignInForm() {
         </button>
       </form>
 
-      <p className={`${AUTH_STYLES.text.body} mt-8 text-center`}>
-        Les comptes caissières sont créés depuis l’espace boutique.
-      </p>
+      <div className="mt-8 text-center">
+        <p className={AUTH_STYLES.text.body}>
+          Nouvelle boutique ?{' '}
+          <button
+            onClick={onToggle}
+            className={THEME_VARIANTS.primary.link}
+            aria-label="Créer un compte boutique"
+          >
+            Créer un compte boutique
+          </button>
+        </p>
+        <p className={`${AUTH_STYLES.text.body} mt-3`}>
+          Chaque boutique utilise son propre compte pour travailler.
+        </p>
+      </div>
 
       <ForgotPasswordModal
         isOpen={showForgotPassword}

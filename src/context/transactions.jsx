@@ -130,6 +130,10 @@ export const TransactionsProvider = ({ children }) => {
         statut: transactionData.statut || 'Non Terminées',
         storeId: userProfile?.storeId,
         storeName: activeStore?.name || userProfile?.storeName,
+        role: userProfile?.role,
+        operatorId: user?.uid,
+        operatorName: userProfile?.name || user?.displayName || user?.email,
+        operatorEmail: user?.email || 'Utilisateur inconnu',
         userId: user?.uid,
         userEmail: user?.email || 'Utilisateur inconnu'
       }
@@ -141,7 +145,7 @@ export const TransactionsProvider = ({ children }) => {
       setError(error.message)
       throw error
     }
-  }, [activeStore?.name, user, userProfile?.storeId, userProfile?.storeName])
+  }, [activeStore?.name, user, userProfile?.name, userProfile?.role, userProfile?.storeId, userProfile?.storeName])
 
   const updateTransaction = useCallback(async (id, updates) => {
     try {

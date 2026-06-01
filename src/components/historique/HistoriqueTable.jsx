@@ -15,6 +15,7 @@ function HistoriqueTable({ transactions = [] }) {
     'Code',
     'Montant',
     'Statut',
+    'Utilisateur',
     'Email utilisateur'
   ]
 
@@ -50,7 +51,7 @@ function HistoriqueTable({ transactions = [] }) {
                 const styles = getTransactionStyles(transaction.type)
                 return (
                   <tr
-                    key={transaction.id || `transaction-${index}-${Date.now()}`}
+                    key={transaction.id || `${transaction.clientId || 'transaction'}-${transaction.date || index}-${index}`}
                     className={`border-b border-gray-100 ${styles.bgColor} ${styles.textColor}`}
                   >
                     <td className="border border-green-300 px-4 py-3 text-base">
@@ -78,7 +79,10 @@ function HistoriqueTable({ transactions = [] }) {
                       </span>
                     </td>
                     <td className="border border-green-300 px-4 py-3 text-base">
-                      {transaction.userEmail || '-'}
+                      {transaction.operatorName || transaction.userName || '-'}
+                    </td>
+                    <td className="border border-green-300 px-4 py-3 text-base">
+                      {transaction.operatorEmail || transaction.userEmail || '-'}
                     </td>
                   </tr>
                 )

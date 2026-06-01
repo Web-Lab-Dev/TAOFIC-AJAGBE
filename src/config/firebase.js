@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
 import { getFirestore, connectFirestoreEmulator, enableMultiTabIndexedDbPersistence } from 'firebase/firestore'
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
 import { setLogLevel } from 'firebase/app'
 
 // Désactiver les logs Firebase en production pour éviter le spam dans la console
@@ -54,7 +53,6 @@ const createFirebaseConfig = () => {
 let app
 let auth
 let db
-let functions
 
 try {
   const firebaseConfig = createFirebaseConfig()
@@ -65,7 +63,6 @@ try {
 
   // Init Firestore - base de données temps réel
   db = getFirestore(app)
-  functions = getFunctions(app, import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1')
 
   // Configuration dev : utiliser les émulateurs Firebase si activés
   const isDev = import.meta.env.DEV
@@ -75,7 +72,6 @@ try {
     try {
       connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
       connectFirestoreEmulator(db, 'localhost', 8080)
-      connectFunctionsEmulator(functions, 'localhost', 5001)
     } catch {
       // Ignorer si les émulateurs ne sont pas lancés
     }
@@ -106,5 +102,5 @@ export const firebaseInfo = {
   useEmulators: import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
 }
 
-export { auth, db, functions }
+export { auth, db }
 export default app

@@ -3,51 +3,41 @@ import { useMemo } from 'react'
 import { useAllTransactions } from '../../hooks/useAllTransactions.js'
 import { useTodayTransactions } from '../../hooks/useTodayTransactions.js'
 
-function RemboursementChart() {
+const normalizeType = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+
+function TransactionsTodayChart() {
   const allTransactions = useAllTransactions()
   const todayTransactions = useTodayTransactions(allTransactions)
 
-  // Mémoriser les calculs pour optimiser les performances
-  const { rembourseCount, nonRembourseCount } = useMemo(() => {
-    // Crédits créés aujourd'hui qui sont encore "Non Terminées" (en cours)
-    const todayPendingCredits = todayTransactions.filter(transaction => (
-      transaction.type === "Crédit" &&
-      transaction.statut === "Non Terminées"
-    ))
-
-    // Crédits créés aujourd'hui qui ont été remboursés (dans l'historique)
-    const todayReimbursedCredits = todayTransactions.filter(transaction => (
-      transaction.type === "Crédit" &&
-      transaction.statut && transaction.statut.startsWith("Remboursé")
-    ))
-
-    return {
-      rembourseCount: todayReimbursedCredits.length,
-      nonRembourseCount: todayPendingCredits.length
-    }
+  const { depositCount, withdrawalCount } = useMemo(() => {
+    return todayTransactions.reduce((counts, transaction) => {
+      const type = normalizeType(transaction.type)
+      if (type === 'depot') counts.depositCount += 1
+      if (type === 'retrait') counts.withdrawalCount += 1
+      return counts
+    }, { depositCount: 0, withdrawalCount: 0 })
   }, [todayTransactions])
 
-
-  // Données pour le diagramme circulaire
   const data = []
 
-  if (rembourseCount > 0) {
+  if (depositCount > 0) {
     data.push({
-      name: 'Remboursés',
-      value: rembourseCount,
+      name: 'Dépôts',
+      value: depositCount,
       color: '#10B981'
     })
   }
 
-  if (nonRembourseCount > 0) {
+  if (withdrawalCount > 0) {
     data.push({
-      name: 'Non remboursés',
-      value: nonRembourseCount,
-      color: '#EF4444'
+      name: 'Retraits',
+      value: withdrawalCount,
+      color: '#3B82F6'
     })
   }
-
-  const COLORS = ['#10B981', '#EF4444']
 
   const CustomLegend = () => {
     return (
@@ -62,7 +52,7 @@ function RemboursementChart() {
               <span className="text-gray-700">{entry.name}</span>
             </div>
             <span className="text-gray-600 text-xs ml-2">
-              {entry.value} crédit{entry.value > 1 ? 's' : ''}
+              {entry.value} transaction{entry.value > 1 ? 's' : ''}
             </span>
           </div>
         ))}
@@ -72,14 +62,14 @@ function RemboursementChart() {
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload
-      const total = rembourseCount + nonRembourseCount
-      const percentage = total > 0 ? ((data.value / total) * 100).toFixed(1) : 0
+      const item = payload[0].payload
+      const total = depositCount + withdrawalCount
+      const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0
       return (
         <div className="bg-gray-900 border border-gray-600 rounded-lg p-3 shadow-lg">
-          <p className="text-white font-semibold">{data.name}</p>
+          <p className="text-white font-semibold">{item.name}</p>
           <p className="text-gray-300">
-            <span className="text-blue-400">{data.value}</span> crédit{data.value > 1 ? 's' : ''}
+            <span className="text-blue-400">{item.value}</span> transaction{item.value > 1 ? 's' : ''}
           </p>
           <p className="text-gray-400 text-sm">
             {percentage}% du total
@@ -97,14 +87,13 @@ function RemboursementChart() {
           <div className="h-4 w-4 bg-emerald-500 rounded-sm"></div>
         </div>
         <h3 className="text-emerald-800 text-lg font-semibold">
-          Taux de remboursement (aujourd'hui)
+          Transactions du jour
         </h3>
       </div>
 
-      {/* Afficher un message si aucune donnée */}
-      {rembourseCount === 0 && nonRembourseCount === 0 ? (
+      {depositCount === 0 && withdrawalCount === 0 ? (
         <div className="flex items-center justify-center h-32">
-          <p className="text-emerald-500 text-sm">Aucun crédit aujourd'hui</p>
+          <p className="text-emerald-500 text-sm">Aucune transaction aujourd'hui</p>
         </div>
       ) : (
         <div className="flex items-center justify-between" style={{ height: 'calc(100% - 60px)' }}>
@@ -126,7 +115,7 @@ function RemboursementChart() {
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
-          <div className="w-40%">
+          <div className="w-[40%]">
             <CustomLegend />
           </div>
         </div>
@@ -135,4 +124,4 @@ function RemboursementChart() {
   )
 }
 
-export default RemboursementChart
+export default TransactionsTodayChart

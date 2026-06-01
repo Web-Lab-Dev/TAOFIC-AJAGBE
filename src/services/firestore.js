@@ -613,7 +613,9 @@ export class FirestoreService {
     const currentValue = Number(current[field]) || 0
 
     if (delta < 0 && currentValue + delta < 0) {
-      throw new Error(`${field === 'stock' ? 'Stock' : 'Liquidite'} insuffisant pour ${network}`)
+      const label = field === 'stock' ? 'Stock' : 'Liquidite'
+      const target = field === 'stock' ? ` pour ${network}` : ''
+      throw new Error(`${label} insuffisant${target}. Disponible: ${currentValue.toLocaleString('fr-FR')} FCFA`)
     }
 
     next[network] = {
@@ -645,43 +647,73 @@ export class FirestoreService {
     }
 
     if (remaining > 0) {
-      throw new Error('Liquidite insuffisante pour cette operation')
+      const totalLiquidity = Object.values(balances).reduce(
+        (sum, data) => sum + (Number(data?.liquidite) || 0),
+        0
+      )
+      throw new Error(`Liquidite insuffisante. Disponible: ${totalLiquidity.toLocaleString('fr-FR')} FCFA`)
     }
 
     return next
+  }
+
+  normalizeTransactionLabel(value) {
+    return String(value || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+  }
+
+  isDepositType(type) {
+    return this.normalizeTransactionLabel(type) === 'depot'
+  }
+
+  isWithdrawalType(type) {
+    return this.normalizeTransactionLabel(type) === 'retrait'
+  }
+
+  isCreditType(type) {
+    return this.normalizeTransactionLabel(type) === 'credit'
+  }
+
+  isPendingStatus(status) {
+    return this.normalizeTransactionLabel(status) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.PENDING)
+  }
+
+  isValidatedStatus(status) {
+    return this.normalizeTransactionLabel(status) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.VALIDATED)
   }
 
   applyInitialTransactionImpact(balances, transactionData) {
     const amount = Number(transactionData.montant) || 0
     const network = transactionData.reseau
 
-    if (transactionData.statut === FIRESTORE_CONFIG.STATUS.PENDING) {
-      if (transactionData.type === 'Depot' || transactionData.type === 'Dépôt' || transactionData.type === 'Crédit') {
+    if (this.isPendingStatus(transactionData.statut)) {
+      if (this.isDepositType(transactionData.type) || this.isCreditType(transactionData.type)) {
         return this.adjustBalanceValue(balances, network, 'stock', -amount)
       }
 
-      if (transactionData.type === 'Retrait') {
+      if (this.isWithdrawalType(transactionData.type)) {
         return this.adjustBalanceValue(balances, network, 'stock', amount)
       }
     }
 
-    if (transactionData.statut === FIRESTORE_CONFIG.STATUS.VALIDATED) {
-      if (transactionData.type === 'Crédit') {
+    if (this.isValidatedStatus(transactionData.statut)) {
+      if (this.isCreditType(transactionData.type)) {
         throw new Error('Les credits doivent etre rembourses via une methode de paiement')
       }
 
-      if (transactionData.type === 'Depot' || transactionData.type === 'Dépôt') {
+      if (this.isDepositType(transactionData.type)) {
         return this.applyLiquidityDelta(
           this.adjustBalanceValue(balances, network, 'stock', -amount),
           amount
         )
       }
 
-      if (transactionData.type === 'Retrait') {
-        return this.applyLiquidityDelta(
-          this.adjustBalanceValue(balances, network, 'stock', amount),
-          -amount
-        )
+      if (this.isWithdrawalType(transactionData.type)) {
+        const balancesAfterCashPayment = this.applyLiquidityDelta(balances, -amount)
+        return this.adjustBalanceValue(balancesAfterCashPayment, network, 'stock', amount)
       }
     }
 
@@ -692,12 +724,12 @@ export class FirestoreService {
     const amount = Number(transactionData.montant) || 0
     const network = transactionData.reseau
 
-    if (transactionData.statut === FIRESTORE_CONFIG.STATUS.PENDING) {
-      if (transactionData.type === 'Depot' || transactionData.type === 'Dépôt' || transactionData.type === 'Crédit') {
+    if (this.isPendingStatus(transactionData.statut)) {
+      if (this.isDepositType(transactionData.type) || this.isCreditType(transactionData.type)) {
         return this.adjustBalanceValue(balances, network, 'stock', amount)
       }
 
-      if (transactionData.type === 'Retrait') {
+      if (this.isWithdrawalType(transactionData.type)) {
         return this.adjustBalanceValue(balances, network, 'stock', -amount)
       }
     }
@@ -708,7 +740,7 @@ export class FirestoreService {
   applySettlementImpact(balances, transactionData, paymentMethod) {
     const amount = Number(transactionData.montant) || 0
     const targetNetwork = this.mapPaymentMethodToNetwork(paymentMethod)
-    const delta = transactionData.type === 'Retrait' ? -amount : amount
+    const delta = this.isWithdrawalType(transactionData.type) ? -amount : amount
 
     if (targetNetwork === 'Liquidite') {
       return this.applyLiquidityDelta(balances, delta)
@@ -725,14 +757,12 @@ export class FirestoreService {
   }
 
   validateSettlementAction(transactionType, action) {
-    const allowedActions = {
-      'Retrait': 'payerPar',
-      'Crédit': 'rembourser',
-      'Dépôt': 'encaisser',
-      'Depot': 'encaisser'
-    }
+    let expectedAction = null
+    if (this.isWithdrawalType(transactionType)) expectedAction = 'payerPar'
+    if (this.isCreditType(transactionType)) expectedAction = 'rembourser'
+    if (this.isDepositType(transactionType)) expectedAction = 'encaisser'
 
-    if (!action || allowedActions[transactionType] === action) {
+    if (!action || expectedAction === action) {
       return
     }
 
@@ -947,31 +977,6 @@ export class FirestoreService {
 
       return { id: draftId, ...nextDraft }
     })
-  }
-
-  subscribeToStoreUsers(storeId, callback) {
-    const q = query(
-      this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.USERS),
-      where('storeId', '==', storeId)
-    )
-
-    return onSnapshot(q,
-      (snapshot) => {
-        const documents = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-
-        callback(documents)
-      },
-      (error) => {
-        console.error('Store users subscription error:', error)
-      }
-    )
-  }
-
-  async setUserActive(userId, active) {
-    return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.USERS, userId, { active })
   }
 
   async deleteDraft(draftId) {

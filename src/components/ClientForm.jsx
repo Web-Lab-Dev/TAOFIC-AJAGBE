@@ -149,7 +149,7 @@ function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' 
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Orange
+            Numéro agent / Code agent
           </label>
           <input
             type="text"

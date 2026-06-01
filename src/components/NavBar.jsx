@@ -2,15 +2,12 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { NAV_ITEMS } from '../constants/navigation'
 import { useTheme } from '../context/ThemeContext.jsx'
-import { useAuth } from '../context/AuthContext.jsx'
 import PWAInstallButton from './PWAInstallButton'
 
 function NavBar() {
   const navigate = useNavigate()
   const { themeClasses } = useTheme()
-  const { isStoreAdmin } = useAuth()
   const [isSticky, setIsSticky] = useState(false)
-  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isStoreAdmin)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -37,7 +34,7 @@ function NavBar() {
         <div className="hidden md:flex justify-between items-center">
           <div className="flex-1"></div>
           <div className="flex justify-center space-x-1">
-            {visibleItems.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -64,7 +61,7 @@ function NavBar() {
             defaultValue=""
           >
             <option value="" disabled>Sélectionner une page</option>
-            {visibleItems.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <option key={item.path} value={item.path}>
                 {item.name}
               </option>

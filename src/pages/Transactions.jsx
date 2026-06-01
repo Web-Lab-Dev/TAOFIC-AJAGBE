@@ -14,7 +14,6 @@ function Transactions() {
         </h1>
 
         <div className="space-y-8">
-          {/* Formulaire de transaction */}
           <ErrorBoundary>
             <TransactionForm clients={clients} />
           </ErrorBoundary>

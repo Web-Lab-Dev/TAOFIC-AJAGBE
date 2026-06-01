@@ -8,7 +8,7 @@ import CAChart from '../components/dashboard/Charts/CAChart'
 import NetworkChart from '../components/dashboard/Charts/NetworkChart'
 import AgentsChart from '../components/dashboard/Charts/AgentsChart'
 import LoyaltyChart from '../components/dashboard/Charts/LoyaltyChart'
-import RemboursementChart from '../components/dashboard/RemboursementChart'
+import TransactionsTodayChart from '../components/dashboard/TransactionsTodayChart'
 import LastClientsTable from '../components/dashboard/LastClientsTable'
 
 function Dashboard() {
@@ -67,7 +67,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <AgentsChart />
         <LoyaltyChart />
-        <RemboursementChart />
+        <TransactionsTodayChart />
       </div>
 
       {/* Tableau des derniers clients */}

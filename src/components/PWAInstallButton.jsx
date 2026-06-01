@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'
 
 const PWAInstallButton = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -6,45 +6,36 @@ const PWAInstallButton = () => {
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
-      console.log('PWA: beforeinstallprompt détecté');
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallButton(true);
-    };
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setShowInstallButton(true)
+    }
 
     const handleAppInstalled = () => {
-      console.log('PWA: Application installée avec succès');
-      setShowInstallButton(false);
-      setDeferredPrompt(null);
-    };
+      setShowInstallButton(false)
+      setDeferredPrompt(null)
+    }
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  }, [])
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-
-      if (outcome === 'accepted') {
-        console.log('PWA: Installation acceptée');
-      } else {
-        console.log('PWA: Installation refusée');
-      }
-
-      setDeferredPrompt(null);
-      setShowInstallButton(false);
+      deferredPrompt.prompt()
+      await deferredPrompt.userChoice
+      setDeferredPrompt(null)
+      setShowInstallButton(false)
     }
-  };
+  }
 
   if (!showInstallButton) {
-    return null;
+    return null
   }
 
   return (
@@ -69,6 +60,6 @@ const PWAInstallButton = () => {
       Installer l'app
     </button>
   );
-};
+}
 
-export default PWAInstallButton;
+export default PWAInstallButton

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import {
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
@@ -8,9 +9,8 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth'
-import { httpsCallable } from 'firebase/functions'
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db, functions } from '../config/firebase'
+import { auth, db } from '../config/firebase'
 import { getAuthErrorMessage } from '../utils/authHelpers'
 import { AUTH_ROLES } from '../constants/authMessages'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
@@ -19,6 +19,18 @@ import { firestoreService } from '../services/firestore'
 const AuthContext = createContext()
 
 export { AuthContext }
+
+const createStoreId = (storeName, uid) => {
+  const slug = String(storeName || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return `${slug || 'boutique'}-${uid.slice(0, 6)}`
+}
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -35,8 +47,55 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const signup = useCallback(async () => {
-    throw new Error('La création de compte public est désactivée. Connectez-vous au compte boutique pour créer une caissière.')
+  const signup = useCallback(async (email, password, storeName) => {
+    try {
+      setError('')
+      setLoading(true)
+
+      const normalizedStoreName = String(storeName || '').trim()
+      if (!normalizedStoreName) {
+        throw new Error('Le nom de la boutique est obligatoire')
+      }
+      const storeDisplayName = normalizedStoreName
+
+      const result = await createUserWithEmailAndPassword(auth, email, password)
+      const user = result.user
+      const storeId = createStoreId(normalizedStoreName, user.uid)
+      const now = serverTimestamp()
+      const storePayload = {
+        name: normalizedStoreName,
+        email,
+        active: true,
+        adminUid: user.uid,
+        createdAt: now,
+        updatedAt: now
+      }
+      const profilePayload = {
+        name: storeDisplayName,
+        email,
+        role: AUTH_ROLES.STORE_ADMIN,
+        active: true,
+        storeId,
+        storeName: normalizedStoreName,
+        createdAt: now,
+        updatedAt: now,
+        lastLogin: now
+      }
+
+      await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.STORES, storeId), storePayload)
+      await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid), profilePayload)
+      setUserProfile(profilePayload)
+      setActiveStore({ id: storeId, name: normalizedStoreName, active: true })
+      firestoreService.setActiveStore({ id: storeId, name: normalizedStoreName, active: true })
+
+      return result
+    } catch (error) {
+      const errorMessage = getAuthErrorMessage(error.code, error.message)
+      setError(errorMessage)
+      setLoading(false)
+      console.error('Signup error:', error)
+      throw error
+    }
   }, [])
 
   const signin = useCallback(async (email, password) => {
@@ -143,22 +202,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, [])
 
-  const createCashierAccount = useCallback(async ({ name, email }) => {
-    if (userProfile?.role !== AUTH_ROLES.STORE_ADMIN || !userProfile?.storeId) {
-      throw new Error('Seul le compte boutique peut créer une caissière')
-    }
-
-    const createCashier = httpsCallable(functions, 'createCashierAccount')
-    const result = await createCashier({
-      name,
-      email,
-      storeId: userProfile.storeId
-    })
-
-    return result.data
-  }, [userProfile])
-
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true)
@@ -208,8 +251,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     resetPassword,
     changePassword,
-    getUserProfile,
-    createCashierAccount
+    getUserProfile
   }), [
     currentUser,
     userProfile,
@@ -221,8 +263,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     resetPassword,
     changePassword,
-    getUserProfile,
-    createCashierAccount
+    getUserProfile
   ])
 
   return (

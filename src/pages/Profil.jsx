@@ -17,7 +17,7 @@ function Profil() {
   const [loading, setLoading] = useState(false)
 
   // Utiliser les données Firebase Auth comme fallback
-  const displayName = userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Utilisateur'
+  const displayName = activeStore?.name || userProfile?.storeName || userProfile?.name || currentUser?.email?.split('@')[0] || 'Boutique'
   const displayEmail = userProfile?.email || currentUser?.email || 'Non renseigné'
   const userId = currentUser?.uid || 'Non disponible'
   const isEmailVerified = currentUser?.emailVerified || false
@@ -91,7 +91,7 @@ function Profil() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nom complet
+              Nom de la boutique
             </label>
             <div className="p-3 bg-gray-50 rounded-md border">
               {displayName}

@@ -9,11 +9,19 @@ import { NETWORK_OPTIONS, TRANSACTION_TYPES, NETWORK_CODES, MESSAGES } from '../
 import { validateTransactionForm, validateTransactionAction } from '../../utils/helpers.js'
 import logger from '../../utils/logger.js'
 
+const normalizeLabel = (value) => String(value || '')
+  .trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+
 function TransactionForm({ clients }) {
   const { toasts, showToast, removeToast } = useToast()
   const { addTransaction, editingTransaction, clearEditTransaction, updateTransaction } = useTransactions()
   const { validateAmount, getStock, getLiquidite, getFormattedStock } = useSimpleNetworkData()
   const [selectedClient, setSelectedClient] = useState(null)
+  const [manualAgentCode, setManualAgentCode] = useState('')
+  const [clientSearchResetToken, setClientSearchResetToken] = useState(0)
   const [amount, setAmount] = useState('')
   const [network, setNetwork] = useState('Orange')
   const [transactionType, setTransactionType] = useState('')
@@ -62,6 +70,7 @@ function TransactionForm({ clients }) {
 
   // Fonction pour vérifier si le client a des réseaux disponibles
   const getClientAvailableNetworks = (client) => {
+    if (client?.isManual) return NETWORK_OPTIONS
     if (!client) return []
 
     return NETWORK_OPTIONS.filter(option => {
@@ -72,6 +81,7 @@ function TransactionForm({ clients }) {
 
   // Fonction pour vérifier si la combinaison client/réseau est valide
   const isClientNetworkValid = (client, selectedNetwork) => {
+    if (client?.isManual) return Boolean(client.orange?.trim())
     if (!client || !selectedNetwork) return false
 
     const networkKey = selectedNetwork.toLowerCase()
@@ -80,7 +90,16 @@ function TransactionForm({ clients }) {
 
   // Validation complète du formulaire et des boutons d'action
   const formValidation = useMemo(() => {
-    if (!selectedClient || !amount || !transactionType || !network) {
+    const manualCode = manualAgentCode.trim()
+    const transactionClient = selectedClient || (manualCode ? {
+      id: `manual-${network}-${manualCode}`,
+      nom: 'Client',
+      prenom: 'Non enregistré',
+      orange: manualCode,
+      isManual: true
+    } : null)
+
+    if (!transactionClient || !amount || !transactionType || !network) {
       return {
         isFormValid: false,
         stockValidation: { isValid: true, message: '' },
@@ -95,8 +114,8 @@ function TransactionForm({ clients }) {
     }
 
     // Validation de la combinaison client/réseau
-    const isNetworkValid = isClientNetworkValid(selectedClient, network)
-    const availableNetworks = getClientAvailableNetworks(selectedClient)
+    const isNetworkValid = isClientNetworkValid(transactionClient, network)
+    const availableNetworks = getClientAvailableNetworks(transactionClient)
 
     const networkValidation = {
       isValid: isNetworkValid,
@@ -107,12 +126,14 @@ function TransactionForm({ clients }) {
     }
 
     const stockValidation = validateAmount(network, amount, transactionType)
-    const basicFormValid = validateTransactionForm(selectedClient, amount, transactionType)
+    const basicFormValid = validateTransactionForm(transactionClient, amount, transactionType)
     const amountValue = parseFloat(amount) || 0
     const liquidityAvailable = getLiquidite()
+    const normalizedType = normalizeLabel(transactionType)
+    const isWithdrawal = normalizedType === 'retrait'
     const directValidation = {
-      isValid: transactionType !== 'Retrait' || amountValue <= liquidityAvailable,
-      reason: transactionType === 'Retrait' && amountValue > liquidityAvailable
+      isValid: !isWithdrawal || amountValue <= liquidityAvailable,
+      reason: isWithdrawal && amountValue > liquidityAvailable
         ? `Liquidité insuffisante. Disponible: ${liquidityAvailable.toLocaleString('fr-FR')} FCFA`
         : ''
     }
@@ -143,30 +164,46 @@ function TransactionForm({ clients }) {
         validateReason: adaptReason(directValidation.reason || validateValidation.reason || '')
       }
     }
-  }, [selectedClient, amount, transactionType, network, validateAmount, getLiquidite])
+  }, [selectedClient, manualAgentCode, amount, transactionType, network, validateAmount, getLiquidite])
 
   const handleSubmit = useCallback(async (statut) => {
-    if (!formValidation.isFormValid || isSubmitting || (statut === 'Validée' && !formValidation.actionStates.canValidate)) {
+    const isDirectValidation = normalizeLabel(statut) === 'validee'
+    if (!formValidation.isFormValid || isSubmitting || (isDirectValidation && !formValidation.actionStates.canValidate)) {
       if (!formValidation.isFormValid) showToast(MESSAGES.ERRORS.FORM_INCOMPLETE, 'error')
-      else if (statut === 'Validée' && !formValidation.actionStates.canValidate) showToast(formValidation.actionStates.validateReason, 'error')
+      else if (isDirectValidation && !formValidation.actionStates.canValidate) showToast(formValidation.actionStates.validateReason, 'error')
       return
     }
 
     setIsSubmitting(true)
 
     // Récupérer le code spécifique du client pour le réseau sélectionné
+    const manualCode = manualAgentCode.trim()
+    const transactionClient = selectedClient || (manualCode ? {
+      id: `manual-${network}-${manualCode}`,
+      nom: 'Client',
+      prenom: 'Non enregistré',
+      orange: manualCode,
+      isManual: true
+    } : null)
+
+    if (!transactionClient) {
+      showToast('Veuillez sélectionner un client ou saisir un numéro/code agent', 'error')
+      setIsSubmitting(false)
+      return
+    }
+
     const networkKey = network.toLowerCase()
-    const clientCode = selectedClient[networkKey]?.trim() || NETWORK_CODES[network] || '000000'
+    const clientCode = transactionClient[networkKey]?.trim() || NETWORK_CODES[network] || '000000'
 
     // Vérifier que le client a bien un code pour ce réseau
-    if (!selectedClient[networkKey]?.trim()) {
-      showToast(`${selectedClient.nom} ${selectedClient.prenom} n'a pas de code ${network}`, 'error')
+    if (!transactionClient[networkKey]?.trim()) {
+      showToast(`${transactionClient.nom} ${transactionClient.prenom} n'a pas de code ${network}`, 'error')
       setIsSubmitting(false)
       return
     }
 
     const amountValue = parseFloat(amount)
-    const clientName = `${selectedClient.prenom || ''} ${selectedClient.nom || ''}`.trim()
+    const clientName = `${transactionClient.prenom || ''} ${transactionClient.nom || ''}`.trim()
     const confirmationMessage = [
       'Confirmer cette transaction ?',
       '',
@@ -183,8 +220,8 @@ function TransactionForm({ clients }) {
     }
 
     const transactionData = {
-      client: selectedClient,
-      clientId: selectedClient.id,
+      client: transactionClient,
+      clientId: transactionClient.id,
       type: transactionType,
       reseau: network,
       code: clientCode,
@@ -200,7 +237,7 @@ function TransactionForm({ clients }) {
       } else {
         await addTransaction(transactionData)
         showToast(
-          statut === 'Validée' ? MESSAGES.SUCCESS.TRANSACTION_VALIDATED : MESSAGES.SUCCESS.TRANSACTION_SAVED,
+          isDirectValidation ? MESSAGES.SUCCESS.TRANSACTION_VALIDATED : MESSAGES.SUCCESS.TRANSACTION_SAVED,
           'success'
         )
       }
@@ -214,15 +251,19 @@ function TransactionForm({ clients }) {
 
     // Reset form
     setSelectedClient(null)
+    setManualAgentCode('')
+    setClientSearchResetToken(prev => prev + 1)
     setAmount('')
     setNetwork('Orange')
     setTransactionType('')
-  }, [formValidation.isFormValid, formValidation.actionStates.canValidate, formValidation.actionStates.validateReason, isSubmitting, selectedClient, network, amount, transactionType, editingTransaction, updateTransaction, clearEditTransaction, addTransaction, showToast])
+  }, [formValidation.isFormValid, formValidation.actionStates.canValidate, formValidation.actionStates.validateReason, isSubmitting, selectedClient, manualAgentCode, network, amount, transactionType, editingTransaction, updateTransaction, clearEditTransaction, addTransaction, showToast])
 
   const handleCancel = useCallback(() => {
     clearEditTransaction()
     // Reset form
     setSelectedClient(null)
+    setManualAgentCode('')
+    setClientSearchResetToken(prev => prev + 1)
     setAmount('')
     setNetwork('Orange')
     setTransactionType('')
@@ -245,11 +286,18 @@ function TransactionForm({ clients }) {
             clients={clients} 
             onClientSelect={setSelectedClient}
             selectedClient={selectedClient}
+            onManualCodeChange={setManualAgentCode}
+            resetToken={clientSearchResetToken}
           />
         </div>
 
         {/* Affichage des informations du client sélectionné */}
-        <ClientInfoDisplay client={selectedClient} />
+        <ClientInfoDisplay client={selectedClient || (manualAgentCode.trim() ? {
+          nom: 'Client',
+          prenom: 'Non enregistré',
+          orange: manualAgentCode.trim(),
+          isManual: true
+        } : null)} />
 
         {/* Montant */}
         <div>
@@ -269,7 +317,7 @@ function TransactionForm({ clients }) {
           />
 
           {/* Indicateur de stock disponible avec alertes */}
-          {network && (transactionType === 'Dépôt' || transactionType === 'Crédit') && (
+          {network && ['depot', 'credit'].includes(normalizeLabel(transactionType)) && (
             <div className="mt-2 space-y-1">
               <div className="text-sm text-gray-600">
                 Stock disponible pour {network}: <span className="font-semibold">{getFormattedStock(network)} FCFA</span>
@@ -345,7 +393,7 @@ function TransactionForm({ clients }) {
           </select>
 
           {/* Message d'erreur de validation réseau */}
-          {!formValidation.networkValidation.isValid && selectedClient && (
+          {!formValidation.networkValidation.isValid && (selectedClient || manualAgentCode.trim()) && (
             <div className="mt-2 space-y-2">
               <div className="text-sm text-red-600">
                 {formValidation.networkValidation.message}
@@ -359,7 +407,7 @@ function TransactionForm({ clients }) {
               )}
 
               {/* Message d'aide si aucun réseau disponible */}
-              {getClientAvailableNetworks(selectedClient).length === 0 && (
+              {selectedClient && getClientAvailableNetworks(selectedClient).length === 0 && (
                 <div className="text-sm text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
                   ⚠️ Ce client n'a aucun code réseau configuré.
                   <br />
@@ -376,9 +424,9 @@ function TransactionForm({ clients }) {
             Nature :
           </label>
           <div className={`border-4 border-gray-300 rounded p-4 transition-colors ${
-            transactionType === 'Dépôt' ? 'bg-green-50' :
-            transactionType === 'Retrait' ? 'bg-blue-50' :
-            transactionType === 'Crédit' ? 'bg-red-50' :
+            normalizeLabel(transactionType) === 'depot' ? 'bg-green-50' :
+            normalizeLabel(transactionType) === 'retrait' ? 'bg-blue-50' :
+            normalizeLabel(transactionType) === 'credit' ? 'bg-red-50' :
             'bg-white'
           }`}>
           <div className="flex flex-wrap gap-8 md:flex-row flex-col">

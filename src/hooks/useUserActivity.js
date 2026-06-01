@@ -1,6 +1,13 @@
 import { useMemo } from 'react'
 import { useAllTransactions } from './useAllTransactions'
 
+const toDate = (value) => {
+  if (!value) return null
+  const dateValue = typeof value?.toDate === 'function' ? value.toDate() : value
+  const date = new Date(dateValue)
+  return isNaN(date.getTime()) ? null : date
+}
+
 /**
  * Hook pour calculer les vraies statistiques d'activité de l'utilisateur
  * @param {Object} currentUser - Utilisateur actuel de Firebase Auth
@@ -28,9 +35,9 @@ export const useUserActivity = (currentUser, userProfile) => {
     const creationTime = userProfile?.createdAt || currentUser?.metadata?.creationTime
     let daysSinceRegistration = 0
 
-    if (creationTime) {
+    const creationDate = toDate(creationTime)
+    if (creationDate) {
       try {
-        const creationDate = new Date(creationTime)
         const diffTime = Math.abs(now - creationDate)
         daysSinceRegistration = Math.floor(diffTime / (1000 * 60 * 60 * 24))
       } catch {
@@ -68,9 +75,9 @@ export const useUserActivity = (currentUser, userProfile) => {
     let accountStatus = 'Inactif'
     const lastActivity = userProfile?.lastLogin || currentUser?.metadata?.lastSignInTime
 
-    if (lastActivity) {
+    const lastActivityDate = toDate(lastActivity)
+    if (lastActivityDate) {
       try {
-        const lastActivityDate = new Date(lastActivity)
         const daysSinceLastActivity = Math.floor((now - lastActivityDate) / (1000 * 60 * 60 * 24))
 
         if (daysSinceLastActivity <= 1) {

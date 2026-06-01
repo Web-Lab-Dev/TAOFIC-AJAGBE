@@ -8,7 +8,7 @@ function LastClientsTable({ clients = [] }) {
     'Nom',
     'Prénom',
     'Numéro personnel',
-    'Orange',
+    'Code agent',
     'Localité',
     'Commercial',
     'Date d\'ajout'
@@ -67,7 +67,7 @@ function LastClientsTable({ clients = [] }) {
             ) : (
               lastClients.map((client, index) => (
                 <tr
-                  key={client.id || `client-${index}-${Date.now()}`}
+                  key={client.id || `${client.nom || 'client'}-${client.prenom || ''}-${index}`}
                   className={`border-b border-gray-50 hover:bg-blue-50 transition-colors duration-150 ${
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                   }`}
