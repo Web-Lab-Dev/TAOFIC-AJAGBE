@@ -76,6 +76,14 @@ export class FirestoreService {
     return this.activeStore
   }
 
+  requireActiveStore() {
+    if (!this.activeStore?.id) {
+      throw new Error('Boutique active introuvable. Veuillez vous reconnecter.')
+    }
+
+    return this.activeStore
+  }
+
   resolveCollectionPath(collectionName) {
     if (
       collectionName === FIRESTORE_CONFIG.COLLECTIONS.USERS ||
@@ -592,6 +600,7 @@ export class FirestoreService {
   }
 
   getNetworkBalanceDocRef() {
+    this.requireActiveStore()
     return this.docRef(FIRESTORE_CONFIG.COLLECTIONS.NETWORK_BALANCES, CURRENT_BALANCE_DOC_ID)
   }
 
@@ -884,7 +893,7 @@ export class FirestoreService {
 
   // CLIENTS
   async getClients() {
-    const activeStore = this.getActiveStore()
+    const activeStore = this.requireActiveStore()
     return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
       where: [{
         field: 'registeredStoreId',
@@ -895,7 +904,7 @@ export class FirestoreService {
   }
 
   async addClient(clientData) {
-    const activeStore = this.getActiveStore()
+    const activeStore = this.requireActiveStore()
 
     return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
       ...clientData,
@@ -906,7 +915,7 @@ export class FirestoreService {
   }
 
   async updateClient(clientId, updates) {
-    const activeStore = this.getActiveStore()
+    const activeStore = this.requireActiveStore()
     return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, clientId, {
       ...updates,
       registeredStoreId: updates.registeredStoreId || activeStore.id,
@@ -921,7 +930,7 @@ export class FirestoreService {
   subscribeToClients(callback) {
     // Version simplifiée qui bypasse le système complexe
     const collectionRef = this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
-    const activeStore = this.getActiveStore()
+    const activeStore = this.requireActiveStore()
     const clientsQuery = query(
       collectionRef,
       where('registeredStoreId', '==', activeStore.id)
@@ -1054,6 +1063,8 @@ export class FirestoreService {
   }
 
   async addTransaction(transactionData) {
+    this.requireActiveStore()
+
     return runTransaction(db, async (tx) => {
       const balanceRef = this.getNetworkBalanceDocRef()
       const balanceSnap = await tx.get(balanceRef)
@@ -1141,6 +1152,8 @@ export class FirestoreService {
   // VALIDATION DE TRANSACTION (Drafts → History)
   async validateTransaction(draftId, customStatus = 'Validée', selectedPaymentMethod = null) {
     try {
+      this.requireActiveStore()
+
       // 1. Récupérer la transaction draft directement par ID
       const draftDocRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
       const draftDoc = await getDoc(draftDocRef)

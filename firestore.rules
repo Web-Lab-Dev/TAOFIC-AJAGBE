@@ -39,6 +39,11 @@ service cloud.firestore {
              data.clientId is string && data.clientId.size() > 0;
     }
 
+    function validStoreScopedTransaction(data, storeId) {
+      return validTransaction(data) &&
+        (!data.keys().hasAny(['storeId']) || data.storeId == storeId);
+    }
+
     function validStatus(status) {
       return status in [
         'Non Terminées',
@@ -117,17 +122,17 @@ service cloud.firestore {
       match /drafts/{draftId} {
         allow read: if isStoreMember(storeId);
         allow create: if isStoreMember(storeId) &&
-          validTransaction(request.resource.data) &&
+          validStoreScopedTransaction(request.resource.data, storeId) &&
           isPendingStatus(request.resource.data.statut);
         allow update: if isStoreMember(storeId) &&
-          validTransaction(request.resource.data);
+          validStoreScopedTransaction(request.resource.data, storeId);
         allow delete: if isStoreMember(storeId);
       }
 
       match /history/{historyId} {
         allow read: if isStoreMember(storeId);
         allow create: if isStoreMember(storeId) &&
-          validTransaction(request.resource.data) &&
+          validStoreScopedTransaction(request.resource.data, storeId) &&
           validStatus(request.resource.data.statut) &&
           !isPendingStatus(request.resource.data.statut);
         allow update: if isStoreMember(storeId) &&
