@@ -4,6 +4,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { readFile } from 'node:fs/promises'
 
 const execute = process.argv.includes('--execute')
+const confirmedDeleteAll = process.argv.includes('--confirm-delete-all')
+const allowDeleteAll = process.env.AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS === 'true'
 const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
 
 initializeApp({
@@ -16,6 +18,16 @@ const auth = getAuth()
 const db = getFirestore()
 const users = []
 let nextPageToken
+
+if (execute && (!confirmedDeleteAll || !allowDeleteAll)) {
+  throw new Error(
+    [
+      'Suppression bloquee: cette commande supprime TOUS les comptes Auth du projet.',
+      'Pour confirmer volontairement, relancez avec --execute --confirm-delete-all',
+      'et la variable AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS=true.'
+    ].join(' ')
+  )
+}
 
 do {
   const page = await auth.listUsers(1000, nextPageToken)
@@ -43,5 +55,7 @@ if (execute) {
 }
 
 if (!execute) {
-  console.log('Relancez avec --execute pour supprimer réellement Auth + profils Firestore.')
+  console.log(
+    'Dry-run uniquement. Pour une suppression totale volontaire, il faut --execute --confirm-delete-all et AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS=true.'
+  )
 }
