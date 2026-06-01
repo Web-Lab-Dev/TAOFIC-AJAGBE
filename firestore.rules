@@ -72,10 +72,8 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if hasProfile() && (
-        request.auth.uid == userId ||
-        profile().storeId == resource.data.storeId
-      );
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow read: if hasProfile() && profile().storeId == resource.data.storeId;
 
       allow update: if hasProfile() &&
         request.auth.uid == userId &&

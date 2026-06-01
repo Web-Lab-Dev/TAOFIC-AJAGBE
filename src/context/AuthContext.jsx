@@ -6,10 +6,11 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   updatePassword,
+  deleteUser,
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth'
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { auth, db } from '../config/firebase'
 import { getAuthErrorMessage } from '../utils/authHelpers'
 import { AUTH_ROLES } from '../constants/authMessages'
@@ -82,14 +83,26 @@ export const AuthProvider = ({ children }) => {
         lastLogin: now
       }
 
-      await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.STORES, storeId), storePayload)
-      await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid), profilePayload)
+      const batch = writeBatch(db)
+      batch.set(doc(db, FIRESTORE_CONFIG.COLLECTIONS.STORES, storeId), storePayload)
+      batch.set(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid), profilePayload)
+      await batch.commit()
+
       setUserProfile(profilePayload)
       setActiveStore({ id: storeId, name: normalizedStoreName, active: true })
       firestoreService.setActiveStore({ id: storeId, name: normalizedStoreName, active: true })
 
       return result
     } catch (error) {
+      const createdUser = auth.currentUser
+      if (createdUser && error?.code?.startsWith('permission-denied')) {
+        try {
+          await deleteUser(createdUser)
+        } catch (deleteError) {
+          console.error('Could not rollback orphan auth user:', deleteError)
+        }
+      }
+
       const errorMessage = getAuthErrorMessage(error.code, error.message)
       setError(errorMessage)
       setLoading(false)
