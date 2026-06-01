@@ -84,10 +84,10 @@ export const formatTransactionDateTime = (transaction = {}) => {
 
 /**
  * Parse une date au format français "DD/MM/YYYY HH:mm"
- * Retourne un objet Date valide ou la date actuelle en cas d'erreur
+ * Retourne un objet Date valide ou null en cas d'erreur
  */
 export const parsefrenchDate = (dateString) => {
-  if (!dateString) return new Date()
+  if (!dateString) return null
   
   try {
     // Format français: "15/09/2025 14:30"
@@ -131,7 +131,7 @@ export const parsefrenchDate = (dateString) => {
     return date
   } catch (error) {
     console.warn('Error parsing date:', dateString, error.message)
-    return new Date()
+    return null
   }
 }
 
@@ -150,6 +150,7 @@ export const normalizeDate = (dateString) => {
 
     // Utiliser parsefrenchDate qui gère tous les formats
     const date = parsefrenchDate(dateString)
+    if (!date) return null
     // Normaliser en supprimant l'heure
     return new Date(date.getFullYear(), date.getMonth(), date.getDate())
   } catch {
@@ -164,6 +165,7 @@ export const normalizeDate = (dateString) => {
 export const isTransactionFromToday = (transaction) => {
   const today = new Date()
   const transactionDate = parsefrenchDate(transaction.date)
+  if (!transactionDate) return false
   
   return (
     transactionDate.getDate() === today.getDate() &&
@@ -185,6 +187,7 @@ export const getTransactionStyles = (type) => {
 export const formatTime = (dateString) => {
   try {
     const date = parsefrenchDate(dateString)
+    if (!date) return '--:--'
     return date.toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit'
@@ -330,6 +333,7 @@ export const matchesDateFilter = (transaction, filter, todayOnly = false) => {
   if (filter.from || filter.to) {
     // Normaliser la date de transaction (supprimer l'heure)
     const transactionDateFull = parsefrenchDate(transaction.date)
+    if (!transactionDateFull) return false
     const transactionDate = new Date(transactionDateFull.getFullYear(), transactionDateFull.getMonth(), transactionDateFull.getDate())
 
     const fromDate = normalizeDate(filter.from)

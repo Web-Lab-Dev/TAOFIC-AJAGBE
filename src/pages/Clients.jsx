@@ -27,12 +27,17 @@ function Clients() {
     setEditingClient(null)
   }
 
-  const handleImportClients = (importedClients) => {
+  const handleImportClients = async (importedClients) => {
     // Ajouter chaque client importé sans l'ID généré automatiquement
-    importedClients.forEach(clientData => {
+    const results = await Promise.allSettled(importedClients.map(clientData => {
       const { id: _id, ...clientWithoutId } = clientData
-      addClient(clientWithoutId)
-    })
+      return addClient(clientWithoutId)
+    }))
+
+    const failedCount = results.filter(result => result.status === 'rejected').length
+    if (failedCount > 0) {
+      throw new Error(`${failedCount} client(s) non importé(s)`)
+    }
   }
 
   if (editingClient) {

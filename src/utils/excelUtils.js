@@ -1,10 +1,10 @@
-import * as XLSX from 'xlsx'
 import { EXCEL_HEADERS } from '../constants'
 import { CLIENT_ID } from '../config/clientIsolation'
 
 // Fonction pour exporter les clients vers XLSM
-export const exportClientsToXLSM = (clients, filename = `clients_${CLIENT_ID}`) => {
+export const exportClientsToXLSM = async (clients, filename = `clients_${CLIENT_ID}`) => {
   try {
+    const XLSX = await import('xlsx')
 
     // Convertir les clients en tableau de données
     const data = clients.map(client => [
@@ -57,8 +57,9 @@ export const importClientsFromXLSM = (file) => {
     try {
       const reader = new FileReader()
       
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
+          const XLSX = await import('xlsx')
           const data = new Uint8Array(e.target.result)
           const workbook = XLSX.read(data, { type: 'array' })
           

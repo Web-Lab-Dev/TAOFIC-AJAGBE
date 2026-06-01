@@ -28,8 +28,9 @@
         window.addEventListener('error', function (event) {
           var target = event.target
           var isStylesheet = target && target.tagName === 'LINK' && target.rel === 'stylesheet'
+          var isScript = target && target.tagName === 'SCRIPT' && target.src
 
-          if (!isStylesheet || sessionStorage.getItem(recoveryKey)) {
+          if ((!isStylesheet && !isScript) || sessionStorage.getItem(recoveryKey)) {
             return
           }
 

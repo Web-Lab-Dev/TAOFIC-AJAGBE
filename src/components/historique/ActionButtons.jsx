@@ -1,5 +1,4 @@
 import { useRef } from 'react'
-import * as XLSX from 'xlsx'
 import { useTransactions } from '../../context/transactions.jsx'
 import { EXPORT_CONFIG, MESSAGES } from '../../utils/constants.js'
 import { createExportData, generateExportFilename } from '../../utils/helpers.js'
@@ -9,13 +8,14 @@ function ActionButtons({ filteredTransactions = [], resetFilters }) {
   const fileInputRef = useRef(null)
 
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (filteredTransactions.length === 0) {
       alert(MESSAGES.ERRORS.NO_EXPORT_DATA)
       return
     }
 
     const exportData = createExportData(filteredTransactions)
+    const XLSX = await import('xlsx')
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(exportData)
@@ -36,8 +36,9 @@ function ActionButtons({ filteredTransactions = [], resetFilters }) {
     if (!file) return
 
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import('xlsx')
         const data = new Uint8Array(e.target.result)
         const workbook = XLSX.read(data, { type: 'array' })
         
@@ -48,14 +49,17 @@ function ActionButtons({ filteredTransactions = [], resetFilters }) {
         // Convertir en JSON
         const jsonData = XLSX.utils.sheet_to_json(worksheet)
         
-        let importedCount = 0
+        const imports = []
+        const importBatchId = Date.now()
         
         // Traiter chaque ligne
-        jsonData.forEach(row => {
+        jsonData.forEach((row, index) => {
           // Mapper les données importées vers le format de transaction
           if (row['Client'] && row['Type'] && row['Montant (FCFA)']) {
+            const clientName = String(row['Client'] || '').trim()
             const transaction = {
-              client: row['Client'],
+              client: clientName,
+              clientId: `import-${importBatchId}-${index}`,
               type: row['Type'],
               reseau: row['Réseau'] || 'Orange',
               code: row['Code'] || '000000',
@@ -64,11 +68,18 @@ function ActionButtons({ filteredTransactions = [], resetFilters }) {
               userEmail: row['Email utilisateur'] || ''
             }
             
-            addTransaction(transaction)
-            importedCount++
+            imports.push(addTransaction(transaction))
           }
         })
-        
+
+        const results = await Promise.allSettled(imports)
+        const importedCount = results.filter(result => result.status === 'fulfilled').length
+        const failedCount = results.length - importedCount
+
+        if (failedCount > 0) {
+          throw new Error(`${failedCount} transaction(s) non importée(s)`)
+        }
+
         alert(MESSAGES.SUCCESS.IMPORT_SUCCESS(importedCount))
         
         // Réinitialiser les filtres pour voir les nouvelles transactions

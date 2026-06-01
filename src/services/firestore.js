@@ -415,7 +415,7 @@ export class FirestoreService {
    * Écouter les changements d'une collection en temps réel avec optimisations
    */
   subscribeToCollection(collectionName, callback, queryOptions = {}) {
-    return withErrorHandling(async () => {
+    try {
       const subscriptionKey = `${collectionName}_${JSON.stringify(queryOptions)}`
 
       // Vérifier si on a déjà un listener pour cette requête exacte
@@ -498,7 +498,16 @@ export class FirestoreService {
 
       // Retourner une fonction pour se désabonner
       return () => this.unsubscribeCallback(subscriptionKey, callback)
-    }, `subscribeToCollection(${collectionName})`)
+    } catch (error) {
+      this.metrics.errors++
+      console.error(`Error in subscribeToCollection(${collectionName}):`, error)
+
+      if (callback?.onError) {
+        callback.onError(error)
+      }
+
+      return () => {}
+    }
   }
 
   /**

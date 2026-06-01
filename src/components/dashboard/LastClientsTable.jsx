@@ -18,6 +18,7 @@ function LastClientsTable({ clients = [] }) {
     // Si le client a une date d'ajout, l'utiliser avec le bon parseur, sinon date actuelle
     if (client.dateAjout) {
       const date = parsefrenchDate(client.dateAjout)
+      if (!date) return '-'
       return date.toLocaleDateString('fr-FR')
     }
     return new Date().toLocaleDateString('fr-FR')

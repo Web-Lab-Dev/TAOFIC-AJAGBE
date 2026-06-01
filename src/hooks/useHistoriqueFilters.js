@@ -8,7 +8,7 @@ export const useHistoriqueFilters = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [appliedDateFilter, setAppliedDateFilter] = useState({ from: '', to: '' })
   const [appliedSearchTerm, setAppliedSearchTerm] = useState('')
-  const [showTodayOnly, setShowTodayOnly] = useState(true)
+  const [showTodayOnly, setShowTodayOnly] = useState(false)
 
 
   // Transactions filtrées avec useMemo pour optimiser les performances
@@ -50,7 +50,7 @@ export const useHistoriqueFilters = () => {
     setSearchTerm('')
     setAppliedDateFilter({ from: '', to: '' })
     setAppliedSearchTerm('')
-    setShowTodayOnly(true)
+    setShowTodayOnly(false)
   }
 
   return {

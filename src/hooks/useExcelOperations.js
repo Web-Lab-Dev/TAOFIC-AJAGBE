@@ -5,8 +5,8 @@ export const useExcelOperations = (onImportSuccess, onShowNotification) => {
   const [isImporting, setIsImporting] = useState(false)
   const fileInputRef = useRef(null)
 
-  const handleExport = (clients) => {
-    const result = exportClientsToXLSM(clients)
+  const handleExport = async (clients) => {
+    const result = await exportClientsToXLSM(clients)
     if (result.success) {
       onShowNotification(`Export réussi ! ${result.count} clients exportés.`, 'success')
     } else {
@@ -32,7 +32,7 @@ export const useExcelOperations = (onImportSuccess, onShowNotification) => {
     try {
       const result = await importClientsFromXLSM(file)
       if (result.success) {
-        onImportSuccess(result.clients)
+        await onImportSuccess(result.clients)
         onShowNotification(`Import réussi ! ${result.count} clients importés.`, 'success')
       } else {
         onShowNotification(`Erreur lors de l'import : ${result.error}`, 'error')

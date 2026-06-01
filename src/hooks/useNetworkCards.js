@@ -95,17 +95,13 @@ export const useNetworkCards = () => {
     const currentTotal = totalLiquidite
     const difference = newTotalAmount - currentTotal
 
-    if (difference === 0) return // Aucun changement
+    if (difference === 0) return Promise.resolve() // Aucun changement
 
-    // Distribuer la différence sur le premier réseau disponible
-    // (comme pour addToLiquidity)
-    const firstNetwork = Object.keys(networkData)[0]
-    if (firstNetwork) {
-      const currentNetworkLiquidity = networkData[firstNetwork]?.liquidite || 0
-      const newNetworkLiquidity = Math.max(0, currentNetworkLiquidity + difference)
-      return updateNetwork(firstNetwork, 'liquidite', newNetworkLiquidity)
+    if (difference > 0) {
+      return addToLiquidity(difference)
     }
-    return Promise.resolve()
+
+    return removeFromLiquidity(Math.abs(difference))
   }
 
   // Formater un montant pour affichage
