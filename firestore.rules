@@ -95,8 +95,7 @@ service cloud.firestore {
     }
 
     match /globalClients/{clientId} {
-      allow read: if hasProfile() &&
-        resource.data.registeredStoreId == profile().storeId;
+      allow read: if hasProfile();
 
       allow create: if hasProfile() &&
         validClient(request.resource.data) &&
@@ -104,15 +103,9 @@ service cloud.firestore {
 
       allow update: if hasProfile() &&
         validClient(request.resource.data) &&
-        resource.data.registeredStoreId == profile().storeId &&
-        request.resource.data.registeredStoreId == profile().storeId &&
-        (
-          request.resource.data.registeredStoreId == resource.data.registeredStoreId ||
-          !resource.data.keys().hasAny(['registeredStoreId'])
-        );
+        request.resource.data.registeredStoreId == resource.data.registeredStoreId;
 
-      allow delete: if hasProfile() &&
-        resource.data.registeredStoreId == profile().storeId;
+      allow delete: if hasProfile();
     }
 
     match /clients/{storeId} {

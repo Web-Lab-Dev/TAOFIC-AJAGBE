@@ -893,14 +893,8 @@ export class FirestoreService {
 
   // CLIENTS
   async getClients() {
-    const activeStore = this.requireActiveStore()
-    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
-      where: [{
-        field: 'registeredStoreId',
-        operator: '==',
-        value: activeStore.id
-      }]
-    })
+    this.requireActiveStore()
+    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
   }
 
   async addClient(clientData) {
@@ -915,12 +909,8 @@ export class FirestoreService {
   }
 
   async updateClient(clientId, updates) {
-    const activeStore = this.requireActiveStore()
-    return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, clientId, {
-      ...updates,
-      registeredStoreId: updates.registeredStoreId || activeStore.id,
-      registeredStoreName: updates.registeredStoreName || activeStore.name
-    })
+    this.requireActiveStore()
+    return this.updateDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, clientId, updates)
   }
 
   async deleteClient(clientId) {
@@ -929,14 +919,10 @@ export class FirestoreService {
 
   subscribeToClients(callback) {
     // Version simplifiée qui bypasse le système complexe
+    this.requireActiveStore()
     const collectionRef = this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
-    const activeStore = this.requireActiveStore()
-    const clientsQuery = query(
-      collectionRef,
-      where('registeredStoreId', '==', activeStore.id)
-    )
 
-    return onSnapshot(clientsQuery,
+    return onSnapshot(collectionRef,
       (snapshot) => {
         try {
           const documents = snapshot.docs.map(doc => ({
