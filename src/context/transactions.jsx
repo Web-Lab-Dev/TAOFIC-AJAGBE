@@ -32,7 +32,7 @@ export const TransactionsProvider = ({ children }) => {
     }
 
     // Si pas d'utilisateur connecté, ne pas essayer de charger depuis Firestore
-    if (!user || !userProfile?.storeId) {
+    if (!user || !userProfile?.storeId || activeStore?.id !== userProfile.storeId) {
       setPendingTransactions([])
       setCompletedTransactions([])
       setLoading(false)
@@ -120,7 +120,7 @@ export const TransactionsProvider = ({ children }) => {
         unsubscribeHistory()
       }
     }
-  }, [user, userProfile?.storeId, authLoading])
+  }, [user, userProfile?.storeId, activeStore?.id, authLoading])
 
   const addTransaction = useCallback(async (transactionData) => {
     try {

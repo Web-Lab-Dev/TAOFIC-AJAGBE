@@ -6,6 +6,7 @@ import { ThemeProvider } from './context/ThemeContext.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { NetworkConfigProvider } from './context/NetworkConfigContext.jsx'
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx'
+import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Clients from './pages/Clients'
@@ -43,7 +44,9 @@ function App() {
           <NetworkConfigProvider>
             <ClientsProvider>
               <TransactionsProvider>
-                <AppContent />
+                <ErrorBoundary>
+                  <AppContent />
+                </ErrorBoundary>
               </TransactionsProvider>
             </ClientsProvider>
           </NetworkConfigProvider>

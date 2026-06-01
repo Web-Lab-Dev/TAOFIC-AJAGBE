@@ -79,7 +79,7 @@ class ErrorBoundary extends Component {
               </div>
 
               {/* Détails de l'erreur (mode développement) */}
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <details className="mt-6 text-left">
                   <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-800">
                     Détails de l'erreur (développement)

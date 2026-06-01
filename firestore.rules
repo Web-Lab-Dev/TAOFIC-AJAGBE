@@ -29,7 +29,7 @@ service cloud.firestore {
              data.registeredStoreName is string &&
              (!data.keys().hasAny(['numeroPersonnel']) ||
               data.numeroPersonnel == '' ||
-              data.numeroPersonnel.matches('^[0-9+\\-\\s()]{8,15}$'));
+              data.numeroPersonnel.matches('^[0-9+\\-\\s()/]{8,120}$'));
     }
 
     function validTransaction(data) {
@@ -90,7 +90,8 @@ service cloud.firestore {
     }
 
     match /globalClients/{clientId} {
-      allow read: if hasProfile();
+      allow read: if hasProfile() &&
+        resource.data.registeredStoreId == profile().storeId;
 
       allow create: if hasProfile() &&
         validClient(request.resource.data) &&
@@ -98,12 +99,15 @@ service cloud.firestore {
 
       allow update: if hasProfile() &&
         validClient(request.resource.data) &&
+        resource.data.registeredStoreId == profile().storeId &&
+        request.resource.data.registeredStoreId == profile().storeId &&
         (
           request.resource.data.registeredStoreId == resource.data.registeredStoreId ||
           !resource.data.keys().hasAny(['registeredStoreId'])
         );
 
-      allow delete: if hasProfile();
+      allow delete: if hasProfile() &&
+        resource.data.registeredStoreId == profile().storeId;
     }
 
     match /clients/{storeId} {

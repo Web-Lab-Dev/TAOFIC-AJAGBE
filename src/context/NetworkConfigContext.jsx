@@ -52,13 +52,13 @@ const saveNetworkDataToStorage = (data) => {
 }
 
 export function NetworkConfigProvider({ children }) {
-  const { currentUser: user, userProfile, loading: authLoading } = useContext(AuthContext)
+  const { currentUser: user, userProfile, activeStore, loading: authLoading } = useContext(AuthContext)
   const [networkData, setNetworkData] = useState(() => loadNetworkDataFromStorage())
 
   useEffect(() => {
     if (authLoading) return undefined
 
-    if (!user || !userProfile?.storeId) {
+    if (!user || !userProfile?.storeId || activeStore?.id !== userProfile.storeId) {
       setNetworkData(loadNetworkDataFromStorage())
       return undefined
     }
@@ -74,7 +74,7 @@ export function NetworkConfigProvider({ children }) {
     })
 
     return unsubscribe
-  }, [user, userProfile?.storeId, authLoading])
+  }, [user, userProfile?.storeId, activeStore?.id, authLoading])
 
   // Sauvegarde locale de secours pour l'affichage hors ligne.
   useEffect(() => {

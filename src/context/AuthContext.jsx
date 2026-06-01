@@ -88,9 +88,10 @@ export const AuthProvider = ({ children }) => {
       batch.set(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid), profilePayload)
       await batch.commit()
 
+      const store = { id: storeId, name: normalizedStoreName, active: true }
+      firestoreService.setActiveStore(store)
+      setActiveStore(store)
       setUserProfile(profilePayload)
-      setActiveStore({ id: storeId, name: normalizedStoreName, active: true })
-      firestoreService.setActiveStore({ id: storeId, name: normalizedStoreName, active: true })
 
       return result
     } catch (error) {
@@ -222,21 +223,23 @@ export const AuthProvider = ({ children }) => {
 
       if (user) {
         const profile = await getUserProfile(user.uid)
-        setUserProfile(profile)
         if (profile) {
-          await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid), {
-            lastLogin: serverTimestamp()
-          }, { merge: true })
           const store = await getStoreProfile(profile)
           if (!store?.active) {
             setError('Boutique inactive')
+            setUserProfile(profile)
             setActiveStore(null)
             firestoreService.setActiveStore(null)
           } else {
-            setActiveStore(store)
             firestoreService.setActiveStore(store)
+            setActiveStore(store)
+            setUserProfile(profile)
+            await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid), {
+              lastLogin: serverTimestamp()
+            }, { merge: true })
           }
         } else {
+          setUserProfile(null)
           setActiveStore(null)
           firestoreService.setActiveStore(null)
         }

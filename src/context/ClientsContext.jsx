@@ -19,7 +19,7 @@ export function ClientsProvider({ children }) {
     }
 
     // Si pas d'utilisateur connecté, ne pas essayer de charger depuis Firestore
-    if (!user || !userProfile?.storeId) {
+    if (!user || !userProfile?.storeId || activeStore?.id !== userProfile.storeId) {
       setClients([])
       setLoading(false)
       return
@@ -90,7 +90,7 @@ export function ClientsProvider({ children }) {
         clearTimeout(loadingTimeout)
       }
     }
-  }, [user, userProfile?.storeId, authLoading])
+  }, [user, userProfile?.storeId, activeStore?.id, authLoading])
 
   const addClient = async (newClient) => {
     try {

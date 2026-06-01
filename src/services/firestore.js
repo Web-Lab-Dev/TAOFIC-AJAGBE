@@ -36,10 +36,7 @@ const DEFAULT_NETWORK_BALANCES = {
 
 export class FirestoreService {
   constructor() {
-    this.activeStore = {
-      id: CLIENT_ID,
-      name: 'Boutique principale'
-    }
+    this.activeStore = null
     this.listeners = new Map()
     this.connectionPool = new Map() // Pool de connexions pour optimiser les listeners
     this.metrics = {
@@ -54,11 +51,18 @@ export class FirestoreService {
   }
 
   setActiveStore(store = {}) {
-    store = store || {}
+    if (!store) {
+      if (this.activeStore) {
+        this.unsubscribeAll()
+      }
+      this.activeStore = null
+      return
+    }
+
     const nextStoreId = store.id || store.storeId || CLIENT_ID
     const nextStoreName = store.name || store.storeName || 'Boutique principale'
 
-    if (this.activeStore.id !== nextStoreId) {
+    if (this.activeStore?.id !== nextStoreId) {
       this.unsubscribeAll()
     }
 
@@ -880,7 +884,14 @@ export class FirestoreService {
 
   // CLIENTS
   async getClients() {
-    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
+    const activeStore = this.getActiveStore()
+    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
+      where: [{
+        field: 'registeredStoreId',
+        operator: '==',
+        value: activeStore.id
+      }]
+    })
   }
 
   async addClient(clientData) {
@@ -910,8 +921,13 @@ export class FirestoreService {
   subscribeToClients(callback) {
     // Version simplifiée qui bypasse le système complexe
     const collectionRef = this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
+    const activeStore = this.getActiveStore()
+    const clientsQuery = query(
+      collectionRef,
+      where('registeredStoreId', '==', activeStore.id)
+    )
 
-    return onSnapshot(collectionRef,
+    return onSnapshot(clientsQuery,
       (snapshot) => {
         try {
           const documents = snapshot.docs.map(doc => ({

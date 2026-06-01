@@ -222,7 +222,7 @@ const TransactionTable = memo(function TransactionTable() {
                         {transaction.reseau} ({transaction.code})
                       </td>
                       <td className={`border border-green-300 px-4 py-3 text-base font-medium ${styles.textColor}`}>
-                        {transaction.montant.toLocaleString()} FCFA
+                        {(Number(transaction.montant) || 0).toLocaleString('fr-FR')} FCFA
                       </td>
                       <td className="border border-green-300 px-4 py-3 text-base">
                         <div className="flex gap-2 justify-center">

@@ -49,7 +49,7 @@ export const FIRESTORE_CONFIG = {
     CLIENT: {
       NAME_MIN_LENGTH: 2,
       NAME_MAX_LENGTH: 50,
-      PHONE_REGEX: /^[0-9+\-\s()]{8,15}$/,
+      PHONE_REGEX: /^[0-9+\-\s()/]{8,120}$/,
       REQUIRED_FIELDS: ['nom', 'prenom']
     },
     TRANSACTION: {
