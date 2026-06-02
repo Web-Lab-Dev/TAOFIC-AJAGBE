@@ -7,7 +7,7 @@ function AuthPage() {
   const [isSignUp, setIsSignUp] = useState(false)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 flex items-center justify-center p-3 sm:p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-3 sm:p-4">
       <div className="bg-white rounded-xl shadow-2xl overflow-hidden w-full max-w-5xl">
         <div className="flex flex-col lg:flex-row">
           {/* Formulaire de connexion/inscription */}
