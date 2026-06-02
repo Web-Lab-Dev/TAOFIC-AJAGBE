@@ -46,12 +46,15 @@ function Layout({ children }) {
         <div className="absolute inset-0 bg-black/20"></div>
 
         {/* Contenu du header */}
-        <div className="relative z-10 w-full px-4 py-8 flex items-center justify-center">
-          <img
-            src="/akayis-logo.svg"
-            alt="AKAYIS"
-            className="h-32 w-auto max-w-[92vw] rounded bg-white/95 px-6 py-4 shadow-xl"
-          />
+        <div className="relative z-10 w-full px-4 py-12 flex items-center justify-center">
+          <h1
+            className="text-4xl font-bold text-center text-white"
+            style={{
+              textShadow: '0 3px 12px rgba(0, 0, 0, 0.8), 0 2px 6px rgba(0, 0, 0, 0.6)'
+            }}
+          >
+            AKAYIS
+          </h1>
         </div>
       </header>
 
