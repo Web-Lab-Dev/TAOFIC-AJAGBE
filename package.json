@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:local": "vite --host 127.0.0.1 --port 5173",
-    "build": "vite build",
+    "build": "vite build && node scripts/compatCss.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:stores": "node scripts/seedStores.mjs",

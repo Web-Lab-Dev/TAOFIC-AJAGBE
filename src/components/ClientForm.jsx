@@ -1,23 +1,41 @@
 import { useState, useEffect } from 'react'
 import { useToast } from '../hooks/useToast'
+import { getStorageKey } from '../config/clientIsolation'
 import Toast from './Toast'
+
+const EMPTY_CLIENT_FORM = {
+  nom: '',
+  prenom: '',
+  numeroIdentite: '',
+  numeroPersonnel: '',
+  orange: '',
+  moov: '',
+  telecel: '',
+  coris: '',
+  sank: '',
+  localite: '',
+  agentCommercial: ''
+}
+
+const CLIENT_FORM_DRAFT_KEY = getStorageKey('client_form_draft')
+
+const readClientFormDraft = () => {
+  if (typeof window === 'undefined') return EMPTY_CLIENT_FORM
+
+  try {
+    const draft = window.localStorage.getItem(CLIENT_FORM_DRAFT_KEY)
+    return draft ? { ...EMPTY_CLIENT_FORM, ...JSON.parse(draft) } : EMPTY_CLIENT_FORM
+  } catch {
+    return EMPTY_CLIENT_FORM
+  }
+}
+
+const hasFormDraft = (data) => Object.values(data).some(value => String(value || '').trim())
 
 function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' }) {
   const { toasts, showToast, removeToast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formData, setFormData] = useState({
-    nom: '',
-    prenom: '',
-    numeroIdentite: '',
-    numeroPersonnel: '',
-    orange: '',
-    moov: '',
-    telecel: '',
-    coris: '',
-    sank: '',
-    localite: '',
-    agentCommercial: ''
-  })
+  const [formData, setFormData] = useState(() => initialData ? EMPTY_CLIENT_FORM : readClientFormDraft())
 
   // Charger les données initiales si on modifie
   useEffect(() => {
@@ -37,6 +55,20 @@ function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' 
       })
     }
   }, [initialData])
+
+  useEffect(() => {
+    if (initialData || typeof window === 'undefined') return
+
+    try {
+      if (hasFormDraft(formData)) {
+        window.localStorage.setItem(CLIENT_FORM_DRAFT_KEY, JSON.stringify(formData))
+      } else {
+        window.localStorage.removeItem(CLIENT_FORM_DRAFT_KEY)
+      }
+    } catch {
+      // Le brouillon est une aide UX; l'enregistrement principal reste prioritaire.
+    }
+  }, [formData, initialData])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -62,19 +94,8 @@ function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' 
 
       // Reset du formulaire seulement si on n'est pas en mode modification
       if (!initialData) {
-        setFormData({
-          nom: '',
-          prenom: '',
-          numeroIdentite: '',
-          numeroPersonnel: '',
-          orange: '',
-          moov: '',
-          telecel: '',
-          coris: '',
-          sank: '',
-          localite: '',
-          agentCommercial: ''
-        })
+        window.localStorage.removeItem(CLIENT_FORM_DRAFT_KEY)
+        setFormData(EMPTY_CLIENT_FORM)
       }
     } catch (error) {
       console.error('Erreur formulaire client:', error)
