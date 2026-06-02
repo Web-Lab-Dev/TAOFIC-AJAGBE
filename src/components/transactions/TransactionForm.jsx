@@ -170,7 +170,13 @@ function TransactionForm({ clients }) {
   const handleSubmit = useCallback(async (statut) => {
     const isDirectValidation = normalizeLabel(statut) === 'validee'
     if (!formValidation.isFormValid || isSubmitting || (isDirectValidation && !formValidation.actionStates.canValidate)) {
-      if (!formValidation.isFormValid) showToast(MESSAGES.ERRORS.FORM_INCOMPLETE, 'error')
+      if (!formValidation.isFormValid) {
+        const reason = formValidation.stockValidation.message ||
+          formValidation.networkValidation.message ||
+          (isDirectValidation ? formValidation.actionStates.validateReason : formValidation.actionStates.nonTermineeReason) ||
+          MESSAGES.ERRORS.FORM_INCOMPLETE
+        showToast(reason, 'error')
+      }
       else if (isDirectValidation && !formValidation.actionStates.canValidate) showToast(formValidation.actionStates.validateReason, 'error')
       return
     }
@@ -239,7 +245,21 @@ function TransactionForm({ clients }) {
       }
     })
     setIsSubmitting(false)
-  }, [formValidation.isFormValid, formValidation.actionStates.canValidate, formValidation.actionStates.validateReason, isSubmitting, selectedClient, manualAgentCode, network, amount, transactionType, showToast])
+  }, [
+    formValidation.isFormValid,
+    formValidation.stockValidation.message,
+    formValidation.networkValidation.message,
+    formValidation.actionStates.canValidate,
+    formValidation.actionStates.validateReason,
+    formValidation.actionStates.nonTermineeReason,
+    isSubmitting,
+    selectedClient,
+    manualAgentCode,
+    network,
+    amount,
+    transactionType,
+    showToast
+  ])
 
   const confirmPendingSubmit = useCallback(async () => {
     if (!pendingConfirmation) return

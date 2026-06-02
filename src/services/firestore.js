@@ -18,7 +18,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { withErrorHandling } from '../utils/errorHandler'
+import { getUserFriendlyMessage, withErrorHandling } from '../utils/errorHandler'
 import { formatDateToFrench } from '../utils/helpers'
 import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
@@ -1061,31 +1061,38 @@ export class FirestoreService {
   async addTransaction(transactionData) {
     this.requireActiveStore()
 
-    return runTransaction(db, async (tx) => {
-      const balanceRef = this.getNetworkBalanceDocRef()
-      const balanceSnap = await tx.get(balanceRef)
-      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-      const nextBalances = this.applyInitialTransactionImpact(currentBalances, transactionData)
-      const targetCollection = transactionData.statut === FIRESTORE_CONFIG.STATUS.PENDING
-        ? FIRESTORE_CONFIG.COLLECTIONS.DRAFTS
-        : FIRESTORE_CONFIG.COLLECTIONS.HISTORY
-      const transactionRef = doc(this.collectionRef(targetCollection))
-      const now = serverTimestamp()
-      const transactionPayload = {
-        ...transactionData,
-        date: formatDateToFrench(),
-        createdAt: now,
-        updatedAt: now
-      }
+    try {
+      return await runTransaction(db, async (tx) => {
+        const balanceRef = this.getNetworkBalanceDocRef()
+        const balanceSnap = await tx.get(balanceRef)
+        const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
+        const nextBalances = this.applyInitialTransactionImpact(currentBalances, transactionData)
+        const targetCollection = this.isPendingStatus(transactionData.statut)
+          ? FIRESTORE_CONFIG.COLLECTIONS.DRAFTS
+          : FIRESTORE_CONFIG.COLLECTIONS.HISTORY
+        const transactionRef = doc(this.collectionRef(targetCollection))
+        const now = serverTimestamp()
+        const transactionPayload = {
+          ...transactionData,
+          date: formatDateToFrench(),
+          createdAt: now,
+          updatedAt: now
+        }
 
-      tx.set(transactionRef, transactionPayload)
-      tx.set(balanceRef, {
-        balances: nextBalances,
-        updatedAt: now
-      }, { merge: true })
+        tx.set(transactionRef, transactionPayload)
+        tx.set(balanceRef, {
+          balances: nextBalances,
+          updatedAt: now
+        }, { merge: true })
 
-      return { id: transactionRef.id, ...transactionPayload }
-    })
+        return { id: transactionRef.id, ...transactionPayload }
+      })
+    } catch (error) {
+      const friendlyMessage = getUserFriendlyMessage(error)
+      const enhancedError = new Error(friendlyMessage)
+      enhancedError.originalError = error
+      throw enhancedError
+    }
   }
 
   async deleteFromHistory(historyId) {
@@ -1216,7 +1223,10 @@ export class FirestoreService {
       })
     } catch (error) {
       console.error('Transaction validation error:', error)
-      throw error
+      const friendlyMessage = getUserFriendlyMessage(error)
+      const enhancedError = new Error(friendlyMessage)
+      enhancedError.originalError = error
+      throw enhancedError
     }
   }
 
