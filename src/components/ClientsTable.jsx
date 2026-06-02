@@ -34,7 +34,7 @@ function ClientsTable({ clients, onDelete, onEdit, onImportClients }) {
       />
 
       {/* Boutons d'action en haut */}
-      <div className="flex justify-between mb-6">
+      <div className="flex flex-wrap justify-between gap-3 mb-6">
         <button 
           onClick={handleImportClick}
           disabled={isImporting}
@@ -54,7 +54,7 @@ function ClientsTable({ clients, onDelete, onEdit, onImportClients }) {
       <div className="flex flex-wrap gap-4 mb-6">
         <input
           type="text"
-          placeholder="Rechercher par nom..."
+          placeholder="Rechercher nom, téléphone, code, agent..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="flex-1 min-w-64 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-green-500"
@@ -68,9 +68,6 @@ function ClientsTable({ clients, onDelete, onEdit, onImportClients }) {
             <option key={month} value={month}>{month}</option>
           ))}
         </select>
-        <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
-          Filtrer
-        </button>
       </div>
 
       {/* Tableau */}

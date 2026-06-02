@@ -7,6 +7,7 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
   const { updateStock, updateLiquidity } = useNetworkCards()
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
   const isLiquiditeCard = network === 'Liquidite'
   const displayAmount = isLiquiditeCard ? liquiditeAmount : stockAmount
@@ -59,13 +60,15 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
       }
 
       setIsEditing(false)
+      setErrorMessage('')
     } catch (error) {
-      window.alert(error?.message || 'Erreur lors de la sauvegarde du solde')
+      setErrorMessage(error?.message || 'Erreur lors de la sauvegarde du solde')
     }
   }, [editValue, isLiquiditeCard, network, updateStock, updateLiquidity])
 
-  const handleDoubleClick = useCallback(() => {
+  const startEditing = useCallback(() => {
     setIsEditing(true)
+    setErrorMessage('')
     setEditValue(displayAmount.toString())
   }, [displayAmount])
 
@@ -103,8 +106,6 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
         flex min-h-[68px] items-center justify-between gap-4 rounded-lg
         bg-white/95 px-4 py-3 shadow-sm ${status.ring}
       `}
-      title="Double-cliquez le montant pour le modifier"
-      onDoubleClick={handleDoubleClick}
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
@@ -130,27 +131,47 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
 
       <div className="shrink-0 text-right">
         {isEditing ? (
-          <input
-            type="number"
-            value={editValue}
-            onChange={handleInputChange}
-            onKeyDown={handleInputKeyDown}
-            onBlur={handleInputBlur}
-            className={`w-28 border-b-2 bg-transparent text-right text-xl font-black text-slate-950 outline-none ${
-              isValidAmount(editValue) ? 'border-slate-400' : 'border-red-500'
-            }`}
-            autoFocus
-            min="0"
-            step="1000"
-            placeholder="Montant"
-          />
+          <div className="flex items-center justify-end gap-2">
+            <input
+              type="number"
+              value={editValue}
+              onChange={handleInputChange}
+              onKeyDown={handleInputKeyDown}
+              onBlur={handleInputBlur}
+              className={`w-28 border-b-2 bg-transparent text-right text-xl font-black text-slate-950 outline-none ${
+                isValidAmount(editValue) ? 'border-slate-400' : 'border-red-500'
+              }`}
+              autoFocus
+              min="0"
+              step="1000"
+              placeholder="Montant"
+            />
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={saveAmount}
+              className="rounded bg-blue-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-blue-700"
+            >
+              OK
+            </button>
+          </div>
         ) : (
-          <p className="text-2xl font-black leading-none text-slate-950">
-            {amount}
-          </p>
+          <div className="flex items-center justify-end gap-3">
+            <p className="text-2xl font-black leading-none text-slate-950">
+              {amount}
+            </p>
+            <button
+              type="button"
+              onClick={startEditing}
+              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700"
+              aria-label={`Modifier ${config.name}`}
+            >
+              Modifier
+            </button>
+          </div>
         )}
-        <p className="mt-1 text-[10px] font-medium text-slate-400">
-          Double-clic
+        <p className={`mt-1 text-[10px] font-medium ${errorMessage ? 'text-red-500' : 'text-slate-400'}`}>
+          {errorMessage || 'Solde modifiable'}
         </p>
       </div>
     </div>

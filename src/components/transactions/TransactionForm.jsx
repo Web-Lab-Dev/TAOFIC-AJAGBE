@@ -26,6 +26,7 @@ function TransactionForm({ clients }) {
   const [network, setNetwork] = useState('Orange')
   const [transactionType, setTransactionType] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pendingConfirmation, setPendingConfirmation] = useState(null)
 
 
   // Remplir le formulaire si une transaction est en cours d'édition
@@ -214,10 +215,7 @@ function TransactionForm({ clients }) {
       `Statut: ${statut}`
     ].join('\n')
 
-    if (!window.confirm(confirmationMessage)) {
-      setIsSubmitting(false)
-      return
-    }
+    void confirmationMessage
 
     const transactionData = {
       client: transactionClient,
@@ -229,34 +227,56 @@ function TransactionForm({ clients }) {
       statut: statut
     }
 
+    setPendingConfirmation({
+      transactionData,
+      isDirectValidation,
+      details: {
+        clientName,
+        type: transactionType,
+        amount: amountValue.toLocaleString('fr-FR'),
+        network,
+        statut
+      }
+    })
+    setIsSubmitting(false)
+  }, [formValidation.isFormValid, formValidation.actionStates.canValidate, formValidation.actionStates.validateReason, isSubmitting, selectedClient, manualAgentCode, network, amount, transactionType, showToast])
+
+  const confirmPendingSubmit = useCallback(async () => {
+    if (!pendingConfirmation) return
+
+    setIsSubmitting(true)
+
     try {
       if (editingTransaction) {
-        await updateTransaction(editingTransaction.id, transactionData)
+        await updateTransaction(editingTransaction.id, pendingConfirmation.transactionData)
         clearEditTransaction()
         showToast(MESSAGES.SUCCESS.TRANSACTION_MODIFIED, 'success')
       } else {
-        await addTransaction(transactionData)
+        await addTransaction(pendingConfirmation.transactionData)
         showToast(
-          isDirectValidation ? MESSAGES.SUCCESS.TRANSACTION_VALIDATED : MESSAGES.SUCCESS.TRANSACTION_SAVED,
+          pendingConfirmation.isDirectValidation ? MESSAGES.SUCCESS.TRANSACTION_VALIDATED : MESSAGES.SUCCESS.TRANSACTION_SAVED,
           'success'
         )
       }
+
+      setSelectedClient(null)
+      setManualAgentCode('')
+      setClientSearchResetToken(prev => prev + 1)
+      setAmount('')
+      setNetwork('Orange')
+      setTransactionType('')
+      setPendingConfirmation(null)
     } catch (error) {
       showToast(error?.message || 'Erreur lors de la sauvegarde de la transaction', 'error')
       logger.user.error('Transaction save', error)
-      return
     } finally {
       setIsSubmitting(false)
     }
+  }, [pendingConfirmation, editingTransaction, updateTransaction, clearEditTransaction, showToast, addTransaction])
 
-    // Reset form
-    setSelectedClient(null)
-    setManualAgentCode('')
-    setClientSearchResetToken(prev => prev + 1)
-    setAmount('')
-    setNetwork('Orange')
-    setTransactionType('')
-  }, [formValidation.isFormValid, formValidation.actionStates.canValidate, formValidation.actionStates.validateReason, isSubmitting, selectedClient, manualAgentCode, network, amount, transactionType, editingTransaction, updateTransaction, clearEditTransaction, addTransaction, showToast])
+  const cancelPendingSubmit = useCallback(() => {
+    setPendingConfirmation(null)
+  }, [])
 
   const handleCancel = useCallback(() => {
     clearEditTransaction()
@@ -269,6 +289,13 @@ function TransactionForm({ clients }) {
     setTransactionType('')
     showToast(MESSAGES.SUCCESS.MODIFICATION_CANCELLED, 'info')
   }, [clearEditTransaction, showToast])
+
+  const nonTermineeDisabledReason = !formValidation.isFormValid || !formValidation.actionStates.canMarkAsNonTermine
+    ? formValidation.actionStates.nonTermineeReason
+    : ''
+  const validateDisabledReason = !formValidation.isFormValid || !formValidation.actionStates.canValidate
+    ? formValidation.actionStates.validateReason
+    : ''
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -453,7 +480,13 @@ function TransactionForm({ clients }) {
         </div>
 
         {/* Boutons d'action */}
-        <div className="flex gap-4 pt-4">
+        {(nonTermineeDisabledReason || validateDisabledReason) && (
+          <div className="rounded border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+            {validateDisabledReason || nonTermineeDisabledReason}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-4 pt-4">
           {editingTransaction ? (
             <>
               <button
@@ -488,9 +521,9 @@ function TransactionForm({ clients }) {
                   isSubmitting
                     ? 'Traitement en cours...'
                     : !formValidation.isFormValid
-                    ? formValidation.actionStates.nonTermineeReason
+                    ? nonTermineeDisabledReason
                     : !formValidation.actionStates.canMarkAsNonTermine
-                    ? formValidation.actionStates.nonTermineeReason
+                    ? nonTermineeDisabledReason
                     : 'Marquer la transaction comme non terminée'
                 }
               >
@@ -509,9 +542,9 @@ function TransactionForm({ clients }) {
                   isSubmitting
                     ? 'Validation en cours...'
                     : !formValidation.isFormValid
-                    ? formValidation.actionStates.validateReason
+                    ? validateDisabledReason
                     : !formValidation.actionStates.canValidate
-                    ? formValidation.actionStates.validateReason
+                    ? validateDisabledReason
                     : 'Valider la transaction immédiatement'
                 }
               >
@@ -521,6 +554,39 @@ function TransactionForm({ clients }) {
           )}
         </div>
       </div>
+
+      {pendingConfirmation && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900">Confirmer la transaction</h3>
+            <div className="mt-4 space-y-2 text-sm text-gray-700">
+              <p><span className="font-semibold">Client:</span> {pendingConfirmation.details.clientName}</p>
+              <p><span className="font-semibold">Nature:</span> {pendingConfirmation.details.type}</p>
+              <p><span className="font-semibold">Montant:</span> {pendingConfirmation.details.amount} FCFA</p>
+              <p><span className="font-semibold">Réseau:</span> {pendingConfirmation.details.network}</p>
+              <p><span className="font-semibold">Statut:</span> {pendingConfirmation.details.statut}</p>
+            </div>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={cancelPendingSubmit}
+                disabled={isSubmitting}
+                className="rounded border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmPendingSubmit}
+                disabled={isSubmitting}
+                className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {isSubmitting ? 'Sauvegarde...' : 'Confirmer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toasts */}
       <div className="fixed top-0 right-0 z-50 space-y-2 p-4">

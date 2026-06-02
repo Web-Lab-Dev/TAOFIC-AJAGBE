@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { NAV_ITEMS } from '../constants/navigation'
 import { useTheme } from '../context/ThemeContext.jsx'
 import PWAInstallButton from './PWAInstallButton'
 
 function NavBar() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { themeClasses } = useTheme()
   const [isSticky, setIsSticky] = useState(false)
 
@@ -54,11 +55,11 @@ function NavBar() {
         </div>
 
         {/* Navigation mobile */}
-        <div className="md:hidden">
+        <div className="md:hidden flex items-center gap-2 py-2">
           <select
-            className={`w-full py-3 px-4 ${themeClasses.navbar} text-white border-none focus:outline-none`}
+            className={`min-w-0 flex-1 py-3 px-4 ${themeClasses.navbar} text-white border border-white/20 rounded focus:outline-none`}
             onChange={(e) => navigate(e.target.value)}
-            defaultValue=""
+            value={location.pathname}
           >
             <option value="" disabled>Sélectionner une page</option>
             {NAV_ITEMS.map((item) => (
@@ -67,6 +68,9 @@ function NavBar() {
               </option>
             ))}
           </select>
+          <div className="shrink-0">
+            <PWAInstallButton />
+          </div>
         </div>
       </div>
     </nav>

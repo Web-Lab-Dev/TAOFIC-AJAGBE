@@ -1,6 +1,6 @@
 function AuthSidebar({ isSignUp, onToggle }) {
   return (
-    <div className={`h-full min-h-[500px] flex flex-col items-center justify-center text-white p-8 md:p-12 relative overflow-hidden ${
+    <div className={`h-full min-h-[220px] lg:min-h-[500px] flex flex-col items-center justify-center text-white p-6 sm:p-8 lg:p-12 relative overflow-hidden ${
       isSignUp
         ? 'bg-gradient-to-br from-[#2d5ea5] to-[#173e78]'
         : 'bg-gradient-to-br from-[#f08a00] to-[#2d5ea5]'
@@ -12,32 +12,32 @@ function AuthSidebar({ isSignUp, onToggle }) {
         <img
           src="/akayis-mark.svg"
           alt="AKAYIS"
-          className="mx-auto mb-6 h-28 w-28 rounded-full bg-white p-3 shadow-lg"
+          className="mx-auto mb-4 lg:mb-6 h-20 w-20 lg:h-28 lg:w-28 rounded-full bg-white p-2 lg:p-3 shadow-lg"
         />
         {isSignUp ? (
           <>
-            <h2 className="text-4xl font-bold mb-6">Bon retour</h2>
-            <p className="text-lg mb-8 opacity-90 leading-relaxed">
+            <h2 className="text-2xl lg:text-4xl font-bold mb-3 lg:mb-6">Bon retour</h2>
+            <p className="text-sm lg:text-lg mb-5 lg:mb-8 opacity-90 leading-relaxed">
               Une boutique existe déjà ?<br />
               Connectez-vous avec ses accès
             </p>
             <button
               onClick={onToggle}
-              className="border-2 border-white text-white font-semibold py-3 px-8 rounded-full hover:bg-white hover:text-blue-600 transition-all duration-300"
+              className="border-2 border-white text-white font-semibold py-2.5 lg:py-3 px-6 lg:px-8 rounded-full hover:bg-white hover:text-blue-600 transition-all duration-300"
             >
               SE CONNECTER
             </button>
           </>
         ) : (
           <>
-            <h2 className="text-4xl font-bold mb-6">Bienvenue</h2>
-            <p className="text-lg mb-8 opacity-90 leading-relaxed">
+            <h2 className="text-2xl lg:text-4xl font-bold mb-3 lg:mb-6">Bienvenue</h2>
+            <p className="text-sm lg:text-lg mb-5 lg:mb-8 opacity-90 leading-relaxed">
               Créez un compte boutique,<br />
               puis gérez vos opérations
             </p>
             <button
               onClick={onToggle}
-              className="border-2 border-white text-white font-semibold py-3 px-8 rounded-full hover:bg-white hover:text-purple-600 transition-all duration-300"
+              className="border-2 border-white text-white font-semibold py-2.5 lg:py-3 px-6 lg:px-8 rounded-full hover:bg-white hover:text-blue-600 transition-all duration-300"
             >
               CRÉER UNE BOUTIQUE
             </button>
@@ -45,7 +45,7 @@ function AuthSidebar({ isSignUp, onToggle }) {
         )}
       </div>
 
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+      <div className="hidden lg:block absolute bottom-8 left-1/2 transform -translate-x-1/2">
         <div className="text-center">
           <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center mb-2">
             <svg
