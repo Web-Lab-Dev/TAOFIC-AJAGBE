@@ -54,7 +54,7 @@ export const FIRESTORE_CONFIG = {
     },
     TRANSACTION: {
       AMOUNT_MIN: 0.01,
-      AMOUNT_MAX: 1000000,
+      AMOUNT_MAX: 100000000,
       REQUIRED_FIELDS: ['type', 'montant', 'clientId']
     }
   },
