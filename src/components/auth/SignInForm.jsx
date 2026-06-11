@@ -8,8 +8,9 @@ import ForgotPasswordModal from './ForgotPasswordModal'
 
 function SignInForm({ onToggle }) {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
-  const { signin } = useAuth()
+  const { signin, error: authError } = useAuth()
   const navigate = useNavigate()
 
   // Utilisation du hook de validation de formulaire
@@ -51,9 +52,9 @@ function SignInForm({ onToggle }) {
         <p className={AUTH_STYLES.text.subtitle}>ou utilisez votre email et mot de passe</p>
       </div>
 
-      {shouldShowErrors && (errors.submit || errors.email || errors.password) && (
+      {(shouldShowErrors || authError) && (errors.submit || errors.email || errors.password || authError) && (
         <div className={`${AUTH_STYLES.message.error} mb-4`}>
-          {errors.submit || errors.email || errors.password}
+          {errors.submit || errors.email || errors.password || authError}
         </div>
       )}
 
@@ -73,14 +74,55 @@ function SignInForm({ onToggle }) {
         </div>
 
         <div>
-          <input
-            type="password"
-            placeholder={AUTH_PLACEHOLDERS.PASSWORD}
-            {...passwordProps}
-            className={`${THEME_VARIANTS.primary.input} ${hasFieldError('password') ? 'border border-red-300' : ''}`}
-            required
-            aria-label={AUTH_PLACEHOLDERS.PASSWORD}
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder={AUTH_PLACEHOLDERS.PASSWORD}
+              {...passwordProps}
+              className={`${THEME_VARIANTS.primary.input} pr-12 ${hasFieldError('password') ? 'border border-red-300' : ''}`}
+              required
+              aria-label={AUTH_PLACEHOLDERS.PASSWORD}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(current => !current)}
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-500 transition-colors hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? (
+                <svg
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20C7 20 2.73 16.89 1 12a18.45 18.45 0 0 1 5.06-6.06" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c5 0 9.27 3.11 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                  <path d="M14.12 14.12a3 3 0 0 1-4.24-4.24" />
+                  <path d="M1 1l22 22" />
+                </svg>
+              ) : (
+                <svg
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
+          </div>
           {hasFieldError('password') && (
             <p className="mt-1 text-sm text-red-600">{getFieldError('password')}</p>
           )}
