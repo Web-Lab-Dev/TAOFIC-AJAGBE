@@ -174,7 +174,7 @@ La règle ne valide que `balances is map` : aucun schéma de réseaux/champs, au
 **Test préalable obligatoire :** émulateur, écrire `networkBalances/current` avec un réseau arbitraire et un montant incohérent ; vérifier l'acceptation actuelle, puis le refus après schéma.
 **Correction envisagée :** valider le schéma complet (allowlist de réseaux, champs `stock`/`liquidite` numériques), réserver l'édition manuelle à un rôle explicite, journaliser toute correction. Cf. décision D4.
 **Dépendances :** aucune bloquante ; indépendant des Lots 1-2.
-**Lot recommandé :** Lot 3
+**Lot recommandé :** Lot 3A
 
 ---
 ### [MASTER-SEC-007] Valeurs UTF-8 corrompues dans les règles (types/statuts)
@@ -195,7 +195,7 @@ Les règles acceptent en écriture des valeurs à encodage corrompu en plus des 
 **Test préalable obligatoire :** émulateur, tenter d'écrire un document avec `type: 'DÃ©pÃ´t'` / `statut: 'ValidÃ©e'` et vérifier l'acceptation. **Avant nettoyage**, vérifier qu'aucun document de production existant ne porte déjà ces valeurs (sinon leurs `update` seraient bloqués).
 **Correction envisagée :** retirer les valeurs corrompues après confirmation des données existantes, et garantir un déploiement des règles en UTF-8. Lot isolé et testé.
 **Dépendances :** dépend de la décision D7 (existe-t-il des données corrompues ?).
-**Lot recommandé :** Lot 3 (encodage)
+**Lot recommandé :** Lot 3B (encodage)
 
 ---
 ### [MASTER-SEC-008] Rollback du compte Auth orphelin limité à `permission-denied`
@@ -222,12 +222,12 @@ Le rollback ne se déclenche que pour `permission-denied`.
 
 ---
 ### [MASTER-SEC-009] Scripts Firebase Admin pouvant cibler la production
-**Sévérité :** ÉLEVÉ (`deleteExistingAccounts`) / MOYEN (autres scripts)
+**Sévérité :** CRITIQUE (`deleteExistingAccounts`) / ÉLEVÉ (`createTemporaryStoreAccess`, `generatePasswordResetLink`, `updateAccountPassword`, `seedStores`) / MOYEN (`testClientLogin`) / FAIBLE (`diagnoseAccount`, lecture seule) / NUL (`compatCss`, hors périmètre Admin)
 **Confiance :** ÉLEVÉE
 **Statut :** confirmé
-**Identifiants associés :** Claude SEC-003 (un seul script) | Codex AKY-INFO-012 (tous)
-**Fichiers :** `scripts/deleteExistingAccounts.mjs:6-30` ; `scripts/seedStores.mjs` ; `scripts/updateAccountPassword.mjs` ; `package.json:12-19`
-**Symbole :** garde-fous `--execute`, `--confirm-delete-all`, `AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS`
+**Identifiants associés :** Claude SEC-003 (un seul script) | Codex AKY-INFO-012 (tous) ; réserve Codex R1/R2 (cf. CODEX_VALIDATION_OF_MASTER_AUDIT.md DOC-001)
+**Fichiers :** `scripts/createTemporaryStoreAccess.mjs` ; `scripts/deleteExistingAccounts.mjs:6-30` ; `scripts/diagnoseAccount.mjs` ; `scripts/generatePasswordResetLink.mjs` ; `scripts/seedStores.mjs` ; `scripts/updateAccountPassword.mjs` ; `scripts/testClientLogin.mjs` ; `package.json:12-19`
+**Symbole :** garde-fous `--execute`, `--confirm-delete-all`, `AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS` ; `initializeApp` Admin dans chaque script Admin
 **Preuve :**
 ```js
 scripts/deleteExistingAccounts.mjs:22-29
@@ -235,11 +235,37 @@ scripts/deleteExistingAccounts.mjs:22-29
 scripts/deleteExistingAccounts.mjs:11-15
   initializeApp({ credential: serviceAccountPath ? cert(...) : applicationDefault() })
 ```
-`deleteExistingAccounts` dispose déjà de 3 garde-fous. Aucun script ne vérifie que le projet ciblé est un émulateur ou un projet autorisé avant `initializeApp`.
-**Scénario concret :** un opérateur lance un script avec `GOOGLE_APPLICATION_CREDENTIALS` pointant vers production.
-**Impact :** modification/suppression de comptes sur le projet réel.
-**Test préalable obligatoire :** vérifier que `npm run accounts:delete:dry-run` ne supprime rien ; ajouter un test refusant tout `projectId` hors allowlist avant initialisation Admin.
-**Correction envisagée :** garde-fou centralisé `assertSafeFirebaseProject` (allowlist de projet / émulateur), README admin explicite, dry-run par défaut. Ne PAS supprimer le script (interdiction CLAUDE.md sans preuve complète).
+`deleteExistingAccounts` dispose déjà de 3 garde-fous (`--execute`, `--confirm-delete-all`, `AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS=true`). **Aucun autre script** ne vérifie que le projet ciblé est un émulateur ou un projet autorisé avant `initializeApp`.
+
+#### 3.1.1 Couverture exhaustive des scripts Firebase Admin (réserve Codex R1)
+
+Inventaire complet des scripts du dossier `scripts/`, classés par opération, SDK utilisé et niveau de risque. La détection repose sur l'import `firebase-admin/*` (un script qui n'importe pas `firebase-admin` n'est PAS un script Admin).
+
+| Script | npm run | SDK | Opération | Risque | Justification |
+|---|---|---|---|---|---|
+| `createTemporaryStoreAccess.mjs` | `account:create-temp-access` | firebase-admin | Crée/réinitialise un compte Auth (`updateUser`/`createUser`) et écrit `users/{uid}` avec le `storeId` d'une boutique source (lignes 48-77) | **ÉLEVÉ** | Contournement de l'isolation boutique : octroie un accès `store_admin` à une boutique tierce, sans aucune journalisation applicative. |
+| `deleteExistingAccounts.mjs` | `accounts:delete` / `accounts:delete:dry-run` | firebase-admin | Supprime **TOUS** les comptes Auth du projet et leurs profils `users/{uid}` (lignes 40-47) | **CRITIQUE** | Destruction de masse irréversible. Atténué (non éliminé) par 3 garde-fous : `--execute` + `--confirm-delete-all` + `AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS=true` (lignes 22-29). |
+| `diagnoseAccount.mjs` | `account:diagnose` | firebase-admin | Lit un profil Auth puis `users/{uid}` et `stores/{storeId}` (lignes 45-117) | **FAIBLE** | Lecture seule, aucune écriture. Expose néanmoins des informations de compte/boutique sur le terminal. |
+| `generatePasswordResetLink.mjs` | `account:reset-link` | firebase-admin | Génère un lien de réinitialisation de mot de passe pour un email (ligne 24) | **ÉLEVÉ** | Prise de contrôle de compte possible si le lien fuit ou est mal protégé. |
+| `seedStores.mjs` | `seed:stores` | firebase-admin | Crée 6 boutiques + comptes admin (`stores/{id}`, `users/{uid}`) et génère des liens de reset (lignes 23-66) | **ÉLEVÉ** | Modification de la structure de données de production ; crée des comptes admin et expose des liens de réinitialisation. |
+| `testClientLogin.mjs` | `account:test-login` | firebase (client, **PAS** Admin) | Teste une connexion `signInWithEmailAndPassword` puis lit `users`/`stores` (lignes 35-67) | **MOYEN** | N'utilise PAS le SDK Admin ; n'a que les droits d'un client authentifié. Identifiants lus via `AKAYIS_LOGIN_EMAIL`/`AKAYIS_LOGIN_PASSWORD` (env), risque d'exposition dans l'historique shell / variables d'environnement. |
+| `updateAccountPassword.mjs` | `account:update-password` | firebase-admin | Change le mot de passe d'un compte et l'active (`updateUser`, lignes 25-30) | **ÉLEVÉ** | Modification directe des identifiants d'authentification, sans audit trail applicatif. |
+| `compatCss.mjs` | (build : `build`) | — (aucun) | Post-traitement CSS post-build | **NUL** | **NON un script Admin** : aucun accès Firebase, aucun credential. Exclu explicitement du périmètre SEC-009. |
+
+Incohérence signalée : la consigne décrivait `testClientLogin.mjs` comme recevant les identifiants en argument CLI. La lecture du fichier montre qu'ils sont en réalité lus via variables d'environnement (`AKAYIS_LOGIN_EMAIL`/`AKAYIS_LOGIN_PASSWORD`) et que le script utilise le SDK **client** Firebase, non le SDK Admin. Le niveau MOYEN est conservé, justifié par l'exposition possible des identifiants via l'environnement.
+
+#### 3.1.2 Reclassification des scripts d'accès, reset et mot de passe (réserve Codex R2)
+
+Trois scripts sont reclassés explicitement en **ÉLEVÉ**, chacun justifié par un scénario d'abus concret :
+
+- **`createTemporaryStoreAccess.mjs` → ÉLEVÉ.** Scénario d'abus : un opérateur (ou un attaquant disposant des credentials Admin) fournit `AKAYIS_TARGET_EMAIL` arbitraire et le `storeId` d'une boutique source ; le script octroie un accès `store_admin` complet à cette boutique au compte cible (lignes 68-77). Aucune journalisation applicative n'est écrite : contournement direct de l'isolation boutique, sans piste d'audit.
+- **`generatePasswordResetLink.mjs` → ÉLEVÉ.** Scénario d'abus : génération d'un lien de réinitialisation pour l'email d'un compte légitime (ligne 24) ; si le lien est intercepté, mal protégé ou redirigé, il permet la prise de contrôle complète du compte ciblé.
+- **`updateAccountPassword.mjs` → ÉLEVÉ.** Scénario d'abus : modification directe du mot de passe et réactivation d'un compte (lignes 26-30) sans aucun audit trail applicatif ; un opérateur peut s'attribuer l'accès à n'importe quel compte connu par email.
+
+**Scénario concret (commun) :** un opérateur lance l'un de ces scripts avec `GOOGLE_APPLICATION_CREDENTIALS` pointant vers la production.
+**Impact :** modification/suppression de comptes, prise de contrôle de comptes ou contournement d'isolation sur le projet réel, sans piste d'audit applicative.
+**Test préalable obligatoire :** vérifier que `npm run accounts:delete:dry-run` ne supprime rien ; ajouter un test refusant tout `projectId` hors allowlist avant initialisation Admin, pour chacun des scripts Admin.
+**Correction envisagée :** garde-fou centralisé `assertSafeFirebaseProject` (allowlist de projet / émulateur) importé par TOUS les scripts Admin avant `initializeApp`, README admin explicite, dry-run par défaut là où c'est applicable. Ne PAS supprimer les scripts (interdiction CLAUDE.md sans preuve complète).
 **Dépendances :** aucune.
 **Lot recommandé :** Lot 5
 
@@ -539,10 +565,10 @@ Ces questions doivent être tranchées AVANT de corriger les findings correspond
 | **D1** | L'inscription publique d'une boutique est-elle voulue en production, ou faut-il un onboarding par invitation/Admin ? | MASTER-SEC-005, MASTER-SEC-001 | Lot 1 |
 | **D2** | `globalClients` doit-il être partagé (lecture réseau volontaire) ou strictement isolé par boutique d'enregistrement ? | MASTER-SEC-002 | Lot 1 |
 | **D3** | Une transaction historique peut-elle être supprimée, ou seulement annulée avec piste d'audit ? Faut-il une corbeille/archive ? | MASTER-SEC-003, MASTER-SEC-004 | Lot 2 |
-| **D4** | Qui peut modifier manuellement stock/liquidité, et avec quelle justification/audit ? | MASTER-SEC-006 | Lot 3 |
+| **D4** | Qui peut modifier manuellement stock/liquidité, et avec quelle justification/audit ? | MASTER-SEC-006 | Lot 3A |
 | **D5** | Le chatbot n8n est-il actif en production et autorisé à recevoir des données client/transactionnelles ? | MASTER-SEC-013 | Lot 7 |
 | **D6** | Les postes agents sont-ils personnels, partagés ou publics ? | MASTER-SEC-011 | Lot 5/7 |
-| **D7** | Existe-t-il déjà en production des documents avec types/statuts à encodage corrompu ? | MASTER-SEC-007 | Lot 3 (encodage) |
+| **D7** | Existe-t-il déjà en production des documents avec types/statuts à encodage corrompu ? | MASTER-SEC-007 | Lot 3B (encodage) |
 | **D8** | Le type `Crédit` et les réseaux masqués sont-ils prévus pour la V2 ou volontairement désactivés ? | MASTER-QUA-005 | Lot 7 |
 
 Questions complémentaires (non bloquantes) : nombre réel de boutiques en production (impacte l'urgence de SEC-001/002) ; usage de `seedStores.mjs` pour la production ; périmètre de l'export Excel de `ActionButtons.jsx` ; criticité du mode hors ligne.
@@ -556,13 +582,13 @@ Séquence directrice (conforme à CLAUDE.md : test de caractérisation avant tou
 1. **Lot 0** — Filet de sécurité : tests de caractérisation (aucun changement métier).
 2. **Lot 1** — Règles Firestore : isolation profils + `globalClients` (décisions D1, D2).
 3. **Lot 2** — Intégrité de l'historique et des opérations financières (décision D3).
-4. **Lot 3** — Schéma `networkBalances` (D4) + encodage des règles (D7).
+4. **Lot 3A** — Intégrité et concurrence de `networkBalances` (D4). **Lot 3B** — Encodage UTF-8 des règles (D7). Deux sous-lots indépendants, jamais mélangés dans un même commit.
 5. **Lot 4** — Performance et pagination de l'historique.
 6. **Lot 5** — Dette technique, scripts admin, hygiène dépendances.
 7. **Lot 6** — Code mort confirmé (preuve complète exigée) + signup orphelin + dette locale.
 8. **Lot 7** — Préparation V2 (données locales, SDK, chatbot, documentation modèle).
 
-Ordre d'exécution recommandé : **Lot 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7**. Le sous-lot encodage du Lot 3 est indépendant et peut être traité tôt une fois D7 répondue ; les Lots 1-2 ne doivent pas attendre ce nettoyage.
+Ordre d'exécution recommandé : **Lot 0 → 1 → 2 → 3A → 3B → 4 → 5 → 6 → 7**. Le Lot 3B (encodage) est indépendant sur le fond et peut être traité tôt une fois D7 répondue ; les Lots 1-2 ne doivent pas attendre ce nettoyage.
 
 ---
 
@@ -595,14 +621,26 @@ Ordre d'exécution recommandé : **Lot 0 → 1 → 2 → 3 → 4 → 5 → 6 →
 - **Risque de régression :** ÉLEVÉ (comportement financier).
 - **Décisions métier requises :** OUI (D3).
 
-### Lot 3 — Encodage et normalisation des données
-- **Objectif :** valider strictement le schéma `networkBalances` (sous-lot A) ; nettoyer les valeurs UTF-8 corrompues des règles (sous-lot B).
-- **Findings concernés :** MASTER-SEC-006 (A), MASTER-SEC-007 (B).
-- **Prérequis :** Lot 0 ; décisions D4 (A) et D7 (B, vérification des données existantes).
-- **Critères de succès mesurables :** A — une map `balances` hors schéma/allowlist est refusée par les règles ; B — les valeurs corrompues retirées des règles sans bloquer l'`update` de documents existants.
+### Lot 3A — Intégrité et concurrence de `networkBalances` (schéma + écritures concurrentes)
+- **Objectif :** garantir la cohérence des soldes réseau, à la fois par un schéma strict côté règles et en cas d'écriture concurrente.
+- **Findings concernés :** MASTER-SEC-006 (schéma `networkBalances`, absence de rôle/audit).
+- **Prérequis :** Lot 2 terminé ; décision D4.
+- **Critères de succès mesurables :** une map `balances` hors schéma/allowlist est refusée par les règles ; test avec deux onglets/clients simultanés écrivant `networkBalances/current` vérifiant l'absence de conflit ou de perte d'écriture (cohérence transactionnelle).
 - **Complexité :** M
-- **Risque de régression :** MOYEN à ÉLEVÉ (le sous-lot B peut bloquer des documents existants si données corrompues présentes).
-- **Décisions métier requises :** OUI (D4, D7).
+- **Risque de régression :** MOYEN (logique financière).
+- **Décisions métier requises :** NON (technique pur — la modalité d'édition manuelle relève de D4, mais l'intégrité/concurrence est purement technique).
+- **Rollback :** `git revert` atomique du commit dédié.
+
+### Lot 3B — Encodage UTF-8 et normalisation des valeurs historiques
+- **Objectif :** nettoyer les valeurs corrompues dans `firestore.rules` (`DÃ©pÃ´t`, `CrÃ©dit`, `ValidÃ©e`, etc.) et standardiser les valeurs de type/statut.
+- **Findings concernés :** MASTER-SEC-007 (Claude SEC-005/006, Codex AKY-MOY-007).
+- **Prérequis :** Lot 3A terminé (indépendant sur le fond, mais séquentialisé pour la revue) ; décision D7.
+- **Critères de succès mesurables :** aucune valeur corrompue dans `firestore.rules` ; tests émulateur validant les types/statuts propres et le refus des valeurs corrompues, sans bloquer l'`update` de documents existants.
+- **Complexité :** S
+- **Risque de régression :** FAIBLE (clarification de règles, pas de changement de logique).
+- **Décisions métier requises :** NON (sauf si des données corrompues existent en production — incertitude à documenter avant action, cf. D7).
+- **Rollback :** `git revert` atomique du commit dédié.
+- **Note importante :** vérifier si des données portant ces valeurs corrompues existent en production AVANT de modifier les règles (sinon leurs `update` seraient bloqués). L'incertitude sur l'état réel de la production est documentée dans la section « Limites de l'audit ». Ne jamais mélanger Lot 3A et Lot 3B dans un même commit (rollback et risque métier distincts).
 
 ### Lot 4 — Performance et pagination
 - **Objectif :** borner les lectures de l'historique (pagination Firestore) sans casser le dashboard.
@@ -658,7 +696,7 @@ Ordre d'exécution recommandé : **Lot 0 → 1 → 2 → 3 → 4 → 5 → 6 →
 ### 8.3 Tests de régression financière (Lot 2)
 - Création de transaction validée, suppression `history` → attendu refus (après correction) ; vérifier qu'aucune trace n'est perdue.
 - Si annulation introduite : statut `Annulée` + `auditLog` + opération inverse transactionnelle ; vérifier la cohérence `networkBalances` ↔ historique.
-- Schéma `networkBalances` (Lot 3) : map hors allowlist/champ inattendu → refus.
+- Schéma `networkBalances` (Lot 3A) : map hors allowlist/champ inattendu → refus.
 
 ### 8.4 Tests de performance (Lot 4)
 - Seed émulateur avec un volume représentatif (p.ex. 10 000 documents `history`).
@@ -669,28 +707,79 @@ Ordre d'exécution recommandé : **Lot 0 → 1 → 2 → 3 → 4 → 5 → 6 →
 
 ## 9. Stratégie de retour arrière
 
-**Principe général.** Travailler par lot, un commit local atomique par changement, sur la branche `audit/pre-v2-local` (aucun `git push`, aucun déploiement). Chaque lot doit pouvoir être annulé par `git revert` du commit local correspondant. Les tests du Lot 0 servent de détecteur de régression.
+**Principe général (réserve Codex R4).**
+- Chaque lot doit être réalisé dans un ou plusieurs commits atomiques dédiés, sur la branche `audit/pre-v2-local` (aucun `git push`, aucun déploiement).
+- En cas de régression : utiliser `git revert <commit-hash>` pour annuler proprement le commit fautif.
+- **INTERDIT sans validation explicite :** `git checkout -- <fichier>`, `git restore`, `git reset --hard`. Ces commandes sont destructives et peuvent écraser du travail utilisateur non commité.
+- Avant tout rollback destructif : inspecter le diff (`git diff`), confirmer qu'aucun travail en cours ne sera perdu, et obtenir une confirmation explicite.
+- Les tests du Lot 0 servent de détecteur de régression. Ne jamais mélanger refactor et changement de comportement dans un même commit (facilite le `git revert` ciblé).
 
-**Par lot.** Un lot = un ou plusieurs commits locaux thématiques. Avant toute modification, les tests de caractérisation doivent être verts. Après modification, si un test de caractérisation devient rouge de manière non intentionnelle, annuler le commit. Ne jamais mélanger refactor et changement de comportement dans un même commit (facilite le revert ciblé).
-
-**Pour les règles Firestore (Lots 1, 2, 3).** Conserver une copie de `firestore.rules` avant modification (commit local de la version courante). Tester exclusivement contre l'émulateur (jamais de déploiement). En cas de régression, revenir au `firestore.rules` précédent par `git revert`/`git checkout` du fichier. Pour le sous-lot encodage (SEC-007), vérifier D7 avant : si des données corrompues existent, ne pas retirer les valeurs corrompues (sinon blocage des `update`) — c'est le principal scénario de rollback à anticiper.
-
-**Pour les changements de service (Lots 4, 5, 6).** Refactors (extraction `balanceCalculator.js`, simplification `getDocument`) couverts par tests : en cas d'écart, `git revert` du commit. Hygiène des dépendances : un seul changement à la fois, build local après chaque changement ; en cas d'échec de build, revert immédiat. Suppression de code mort : ne supprimer qu'après preuve complète ; restauration garantie par commit local (le fichier reste dans l'historique git).
+**Par lot (0 à 7).** Pour chaque lot :
+- **Mécanisme de rollback :** `git revert <commit-hash du lot>`.
+- **Risque résiduel :** si les données Firestore ont été modifiées, le rollback du code seul ne suffit pas à restaurer l'état des données.
+- **Pour les règles Firestore (Lots 1, 2, 3A, 3B) :** conserver la version précédente des règles dans git ; le rollback est un redéploiement de l'ancienne version, toujours via le dépôt git (jamais manuellement). Pour le Lot 3B (encodage, SEC-007), vérifier D7 avant : si des données corrompues existent, ne pas retirer les valeurs corrompues (sinon blocage des `update`) — c'est le principal scénario de rollback à anticiper.
+- **Pour les scripts Admin (Lot 5) :** aucun rollback possible si des comptes ou des données ont été supprimés — c'est pourquoi les scripts CRITIQUE/ÉLEVÉ (cf. MASTER-SEC-009) ne doivent être exécutés que sur les émulateurs.
+- **Pour les changements de service (Lots 4, 5, 6) :** refactors (extraction `balanceCalculator.js`, simplification `getDocument`) couverts par tests ; en cas d'écart, `git revert` du commit. Hygiène des dépendances : un seul changement à la fois, build local après chaque changement ; en cas d'échec, `git revert` immédiat. Suppression de code mort : ne supprimer qu'après preuve complète ; restauration garantie par `git revert` du commit (le fichier reste dans l'historique git).
 
 ---
 
 ## 10. Critères de passage à la V2 (go/no-go)
 
-1. Une suite de tests de caractérisation existe et est verte (Lot 0). **No-go sans cela.**
-2. Les règles Firestore empêchent la création de profil `users` à `storeId` arbitraire et l'accès inter-boutiques à `globalClients` et `clients/{storeId}/*`, validé par tests A/B (Lots 1).
-3. L'historique financier n'est plus supprimable silencieusement ; toute opération financière préserve une piste d'audit (Lot 2). Conforme à CLAUDE.md.
-4. Le schéma `networkBalances` est validé côté règles ; l'édition manuelle est encadrée selon D4 (Lot 3).
-5. Les valeurs UTF-8 corrompues des règles sont nettoyées OU explicitement documentées comme nécessaires (Lot 3, après D7).
-6. La lecture de l'historique est bornée/paginée sans régression dashboard (Lot 4).
-7. Les décisions métier D1-D8 sont tranchées et documentées.
-8. `firebase-admin` n'est pas importable depuis `src/` ; les scripts admin disposent d'un garde-fou projet (Lot 5).
-9. Aucune suppression de code n'a été effectuée sans preuve complète d'absence d'usage (Lot 6).
-10. Le modèle multi-tenant est documenté et aligné code/règles/docs (Lot 7).
+Chaque critère est exprimé avec une commande ou un artefact vérifiable (réserve Codex R5).
+
+**a) Tests Firestore Rules (Lots 0, 1). No-go sans cela.**
+- Commande : `firebase emulators:exec --project <project-id> "node tests/rules/globalClients.test.js"`.
+- Scénario minimal : deux boutiques A et B créées dans l'émulateur ; token Auth boutique B ; tentative de lecture d'un document `globalClients` de la boutique A → doit être refusée (`permission-denied`). Idem pour la création de profil `users/{uidB}` avec `storeId=A` et l'accès `clients/A/*`.
+- Artefact attendu : rapport de test passant (exit code 0).
+
+**b) Scripts sensibles protégés (Lot 5).**
+Liste exhaustive à vérifier, cohérente avec MASTER-SEC-009 :
+
+| Script | SDK | Sévérité | Critère de vérification |
+|---|---|---|---|
+| `createTemporaryStoreAccess.mjs` | firebase-admin | ÉLEVÉ | Documentation de risque à jour + garde-fou `assertSafeFirebaseProject` |
+| `deleteExistingAccounts.mjs` | firebase-admin | CRITIQUE | 3 garde-fous actifs (`--execute`, `--confirm-delete-all`, variable d'env) + dry-run obligatoire |
+| `diagnoseAccount.mjs` | firebase-admin | FAIBLE | Documentation à jour (lecture seule, pas d'écriture) |
+| `generatePasswordResetLink.mjs` | firebase-admin | ÉLEVÉ | Documentation de risque à jour + garde-fou `assertSafeFirebaseProject` |
+| `seedStores.mjs` | firebase-admin | ÉLEVÉ | Documentation de risque à jour + garde-fou `assertSafeFirebaseProject` |
+| `updateAccountPassword.mjs` | firebase-admin | ÉLEVÉ | Documentation de risque à jour + garde-fou `assertSafeFirebaseProject` |
+| `testClientLogin.mjs` | firebase (SDK **client**, PAS Admin) | MOYEN | Distingué des scripts Admin : utilise `signInWithEmailAndPassword`, droits limités à un compte authentifié ; identifiants via variables d'env `AKAYIS_LOGIN_EMAIL`/`AKAYIS_LOGIN_PASSWORD` |
+
+Note : `compatCss.mjs` est exclu de cet inventaire — script de post-build CSS, aucun accès Firebase, risque NUL.
+
+- Critère global : chaque script firebase-admin doit avoir une documentation de risque à jour et ne jamais être accessible via `npm run` en production sans flag de sécurité supplémentaire.
+- Artefact attendu : vérification manuelle du tableau ci-dessus + revue de `package.json` (section `scripts`).
+
+**c) Absence de `firebase-admin` dans `src/` (Lot 5).**
+- Commande exacte : `grep -r "firebase-admin" src/`.
+- Critère : sortie vide (exit code 1 de grep, aucune ligne trouvée).
+- Artefact attendu : capture de la commande avec sortie vide.
+
+**d) Tests de pagination / performance (Lot 4).**
+- Seuil minimal : tester avec un dataset de 500 documents `history` dans l'émulateur.
+- Commande : mesurer le temps de chargement initial de la page Historique avec 500 documents, avec `limit` vs sans `limit`.
+- Artefact attendu : comparaison avant/après documentée.
+
+**e) Intégrité financière / suppression journalisée (Lot 2).**
+- Critère : toute tentative de suppression d'un document `history` doit soit échouer (règle Firestore `deny`), soit écrire dans `auditLogs` avant suppression.
+- Test : tenter `deleteDoc` sur `history` dans l'émulateur → doit retourner `permission-denied`.
+- Artefact attendu : règle déployée (sur émulateur) + test passant.
+
+**f) Décisions métier D1-D8 (Lot 7).**
+- Critère : document daté et signé (ou validé par email/message) pour chacune des 8 décisions.
+- Format minimal : tableau `Décision | Réponse | Date | Validé par`.
+- Artefact attendu : fichier `docs/decisions/DECISIONS_METIER.md` complété.
+
+**g) Artefacts par lot.**
+- Lot 0 : fichier de tests de caractérisation exécutable (ex. `tests/characterization/`).
+- Lot 1 : règles Firestore déployées sur émulateur + rapport de test A/B.
+- Lot 2 : règle `history.delete` bloquée + test passant.
+- Lot 3A : test de concurrence `networkBalances` passant.
+- Lot 3B : aucune valeur corrompue dans `firestore.rules` (grep manuel).
+- Lot 4 : temps de chargement Historique mesuré avec 500 docs.
+- Lot 5 : aucune méthode métier dans `FirestoreService` (revue manuelle).
+- Lot 6 : imports vérifiés exhaustivement pour les fichiers supprimés.
+- Lot 7 : toutes les décisions D1-D8 tranchées, branche V2 créée.
 
 ---
 
@@ -707,7 +796,23 @@ Ordre d'exécution recommandé : **Lot 0 → 1 → 2 → 3 → 4 → 5 → 6 →
 
 ---
 
-## 12. Fichiers consultés
+## 12. Conditions levées après validation Codex
+
+Cette section documente les cinq réserves exprimées par Codex dans `docs/audit/consolidated/CODEX_VALIDATION_OF_MASTER_AUDIT.md` (verdict « ACCEPTABLE SOUS CONDITIONS ») et indique où elles ont été traitées dans ce document.
+
+| Réserve Codex | Description | Traitée dans |
+|---|---|---|
+| R1 — Couverture des scripts Admin | MASTER-SEC-009 ne couvrait pas tous les scripts Admin | Section 3.1 MASTER-SEC-009 / 3.1.1 (Correction 1 + 2) |
+| R2 — Reclassification sévérité scripts | `createTemporaryStoreAccess`, `generatePasswordResetLink`, `updateAccountPassword` non classifiés en ÉLEVÉ | Section 3.1 MASTER-SEC-009 / 3.1.2 (Correction 2) |
+| R3 — Lot 3 trop large | Intégrité `networkBalances` et encodage UTF-8 mélangés dans un même lot | Section 7 Lot 3A / Lot 3B (Correction 3) |
+| R4 — Stratégie de rollback insuffisante | `git checkout` cité comme mécanisme normal, rollback destructif non balisé | Section 9 (Correction 4) |
+| R5 — Critères V2 non mesurables | Critères de passage à la V2 sans commandes ni artefacts vérifiables | Section 10 (Correction 5) |
+
+Note : ces cinq réserves ont été levées par modifications documentaires dans ce même fichier. Aucune correction de code n'a été appliquée — les corrections techniques restent à réaliser dans les lots correspondants.
+
+---
+
+## 13. Fichiers consultés
 
 Rapports d'audit :
 ```
@@ -728,7 +833,13 @@ src/services/firestore.js                        (88-102 resolveCollectionPath, 
 package.json                                     (scripts + dependencies + devDependencies)
 src/utils/constants.js                           (lignes 1-103 — NETWORK_OPTIONS, TRANSACTION_TYPES)
 src/context/NetworkConfigContext.jsx             (lignes 1-80 — localStorage soldes)
-scripts/deleteExistingAccounts.mjs               (lignes 1-40 — garde-fous)
+scripts/createTemporaryStoreAccess.mjs           (lecture complète — accès temporaire boutique)
+scripts/deleteExistingAccounts.mjs               (lecture complète — garde-fous suppression de masse)
+scripts/diagnoseAccount.mjs                      (lecture complète — diagnostic lecture seule)
+scripts/generatePasswordResetLink.mjs            (lecture complète — lien de reset)
+scripts/seedStores.mjs                           (lecture complète — création boutiques + admins)
+scripts/updateAccountPassword.mjs                (lecture complète — changement de mot de passe)
+scripts/testClientLogin.mjs                      (lecture complète — SDK client, non Admin)
 ```
 
 Recherches transverses :
@@ -738,7 +849,7 @@ grep "firebase-admin" src/  → aucun résultat (confirme MASTER-SEC-010 : pas d
 
 ---
 
-## 13. Bilan de modification
+## 14. Bilan de modification
 
 | Opération | Résultat |
 |---|---|
@@ -749,6 +860,7 @@ grep "firebase-admin" src/  → aucun résultat (confirme MASTER-SEC-010 : pas d
 | Dépendances installées / mises à jour | **Non** |
 | Firebase production accédé | **Non** |
 | git commit / push / déploiement | **Non** |
+| Révision documentaire post-Codex (2026-06-17) | Corrections 1 à 6 appliquées à **ce seul fichier** pour lever les réserves R1-R5 (cf. section 12). Aucune conclusion technique modifiée, aucun finding supprimé, aucun identifiant MASTER-XXX altéré. Lecture des 7 scripts `scripts/*.mjs` Admin/client effectuée pour étayer MASTER-SEC-009. |
 
 Sortie de `git diff --stat` :
 
