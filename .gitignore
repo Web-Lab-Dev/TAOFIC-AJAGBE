@@ -52,3 +52,6 @@ Thumbs.db
 PWA-Guide.md
 PRODUCTION-READY.md
 DEV-NOTES.md
+
+# Local Claude agent memory
+.claude/agent-memory/
