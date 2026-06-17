@@ -1,4 +1,4 @@
-﻿name = "test_engineer"
+name = "test_engineer"
 description = "Ingénieur QA chargé de concevoir et exécuter les tests de caractérisation, unitaires, Firestore et E2E dans un environnement local isolé."
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"

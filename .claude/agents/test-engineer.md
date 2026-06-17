@@ -1,4 +1,4 @@
-﻿---
+---
 name: test-engineer
 description: Analyse, conçoit et exécute les tests de caractérisation, unitaires, intégration, Firestore et E2E. Utiliser avant et après toute modification sensible.
 tools: Read, Write, Edit, Glob, Grep, Bash

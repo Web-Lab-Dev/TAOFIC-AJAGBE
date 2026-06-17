@@ -1,4 +1,4 @@
-﻿---
+---
 name: code-reviewer
 description: Réalise une revue indépendante des changements. Utiliser après toute correction, refactorisation ou implémentation, avant validation finale.
 tools: Read, Glob, Grep, Bash

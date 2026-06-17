@@ -1,4 +1,4 @@
-﻿name = "code_mapper"
+name = "code_mapper"
 description = "Explorateur indépendant en lecture seule chargé de cartographier le projet, les flux métier, Firebase, les dépendances et les risques avant toute modification."
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"

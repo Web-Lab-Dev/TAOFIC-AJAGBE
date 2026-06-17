@@ -1,4 +1,4 @@
-﻿---
+---
 name: architect
 description: Conçoit les plans techniques après l’analyse du code. Utiliser avant toute refactorisation, correction sensible ou nouvelle fonctionnalité.
 tools: Read, Glob, Grep

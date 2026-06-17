@@ -1,4 +1,4 @@
-﻿name = "reviewer"
+name = "reviewer"
 description = "Reviewer indépendant en lecture seule chargé d’examiner les changements, les tests, la sécurité et les régressions avant validation."
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"

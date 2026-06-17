@@ -1,4 +1,4 @@
-﻿---
+---
 name: codebase-explorer
 description: Analyse le projet en profondeur avant toute modification. Utiliser pour cartographier les fichiers, les flux métier, Firebase, les dépendances, les tests et les risques.
 tools: Read, Glob, Grep, Bash
