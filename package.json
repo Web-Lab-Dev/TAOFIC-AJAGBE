@@ -9,6 +9,11 @@
     "build": "vite build && node scripts/compatCss.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
+    "account:diagnose": "node scripts/diagnoseAccount.mjs",
+    "account:reset-link": "node scripts/generatePasswordResetLink.mjs",
+    "account:test-login": "node --env-file=.env scripts/testClientLogin.mjs",
+    "account:update-password": "node scripts/updateAccountPassword.mjs",
+    "account:create-temp-access": "node scripts/createTemporaryStoreAccess.mjs",
     "seed:stores": "node scripts/seedStores.mjs",
     "accounts:delete:dry-run": "node scripts/deleteExistingAccounts.mjs",
     "accounts:delete": "node scripts/deleteExistingAccounts.mjs --execute"
@@ -16,6 +21,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",
     "firebase": "^12.2.1",
+    "firebase-admin": "^13.10.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.1",

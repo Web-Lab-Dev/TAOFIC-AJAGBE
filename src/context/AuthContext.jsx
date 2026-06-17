@@ -8,7 +8,9 @@ import {
   updatePassword,
   deleteUser,
   reauthenticateWithCredential,
-  EmailAuthProvider
+  EmailAuthProvider,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth'
 import { doc, setDoc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { auth, db } from '../config/firebase'
@@ -31,6 +33,48 @@ const createStoreId = (storeName, uid) => {
     .replace(/^-+|-+$/g, '')
 
   return `${slug || 'boutique'}-${uid.slice(0, 6)}`
+}
+
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
+
+const fetchUserProfile = async (uid) => {
+  const docRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, uid)
+  const docSnap = await getDoc(docRef)
+
+  if (docSnap.exists()) {
+    const profile = docSnap.data()
+    if (!profile.active || !profile.storeId) {
+      throw new Error('Compte non rattaché à une boutique active')
+    }
+    return profile
+  }
+
+  throw new Error('Compte non rattaché à une boutique')
+}
+
+const fetchStoreProfile = async (profile) => {
+  if (!profile?.storeId) {
+    throw new Error('Compte non rattaché à une boutique')
+  }
+
+  const storeRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.STORES, profile.storeId)
+  const storeSnap = await getDoc(storeRef)
+  if (!storeSnap.exists()) {
+    throw new Error('Boutique introuvable')
+  }
+
+  const storeData = storeSnap.data()
+  const store = {
+    id: profile.storeId,
+    name: storeData.name || profile.storeName || 'Boutique',
+    active: storeData.active !== false
+  }
+
+  if (!store.active) {
+    throw new Error('Boutique inactive')
+  }
+
+  return store
 }
 
 export const useAuth = () => {
@@ -59,13 +103,14 @@ export const AuthProvider = ({ children }) => {
       }
       const storeDisplayName = normalizedStoreName
 
-      const result = await createUserWithEmailAndPassword(auth, email, password)
+      const normalizedEmail = normalizeEmail(email)
+      const result = await createUserWithEmailAndPassword(auth, normalizedEmail, password)
       const user = result.user
       const storeId = createStoreId(normalizedStoreName, user.uid)
       const now = serverTimestamp()
       const storePayload = {
         name: normalizedStoreName,
-        email,
+        email: normalizedEmail,
         active: true,
         adminUid: user.uid,
         createdAt: now,
@@ -73,7 +118,7 @@ export const AuthProvider = ({ children }) => {
       }
       const profilePayload = {
         name: storeDisplayName,
-        email,
+        email: normalizedEmail,
         role: AUTH_ROLES.STORE_ADMIN,
         active: true,
         storeId,
@@ -117,7 +162,19 @@ export const AuthProvider = ({ children }) => {
       setError('')
       setLoading(true)
 
-      const result = await signInWithEmailAndPassword(auth, email, password)
+      await setPersistence(auth, browserLocalPersistence)
+      const result = await signInWithEmailAndPassword(auth, normalizeEmail(email), password)
+      const profile = await fetchUserProfile(result.user.uid)
+      const store = await fetchStoreProfile(profile)
+
+      firestoreService.setActiveStore(store)
+      setActiveStore(store)
+      setUserProfile(profile)
+      setCurrentUser(result.user)
+      await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, result.user.uid), {
+        lastLogin: serverTimestamp()
+      }, { merge: true })
+      setLoading(false)
 
       return result
     } catch (error) {
@@ -147,7 +204,7 @@ export const AuthProvider = ({ children }) => {
   const resetPassword = useCallback(async (email) => {
     try {
       setError('')
-      await sendPasswordResetEmail(auth, email)
+      await sendPasswordResetEmail(auth, normalizeEmail(email))
       return true
     } catch (error) {
       const errorMessage = getAuthErrorMessage(error.code, error.message)
@@ -180,18 +237,7 @@ export const AuthProvider = ({ children }) => {
 
   const getUserProfile = useCallback(async (uid) => {
     try {
-      const docRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, uid)
-      const docSnap = await getDoc(docRef)
-
-      if (docSnap.exists()) {
-        const profile = docSnap.data()
-        if (!profile.active || !profile.storeId) {
-          throw new Error('Compte non rattaché à une boutique active')
-        }
-        return profile
-      }
-
-      throw new Error('Compte non rattaché à une boutique')
+      return await fetchUserProfile(uid)
     } catch (error) {
       console.error('Error getting user profile:', error)
       setError(error.message || 'Compte non rattaché à une boutique')
@@ -200,19 +246,11 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const getStoreProfile = useCallback(async (profile) => {
-    if (!profile?.storeId) return null
-
-    const storeRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.STORES, profile.storeId)
-    const storeSnap = await getDoc(storeRef)
-    if (!storeSnap.exists()) {
+    try {
+      return await fetchStoreProfile(profile)
+    } catch (error) {
+      setError(error.message || 'Boutique introuvable')
       return null
-    }
-    const storeData = storeSnap.exists() ? storeSnap.data() : {}
-
-    return {
-      id: profile.storeId,
-      name: storeData.name || profile.storeName || 'Boutique',
-      active: storeData.active !== false
     }
   }, [])
 

@@ -1,0 +1,32 @@
+import { readFile } from 'node:fs/promises'
+
+const email = String(process.env.AKAYIS_LOGIN_EMAIL || process.env.npm_config_email || '').trim().toLowerCase()
+const password = String(process.env.AKAYIS_LOGIN_PASSWORD || '')
+const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+
+if (!email || !password) {
+  console.error('Usage: definir AKAYIS_LOGIN_EMAIL et AKAYIS_LOGIN_PASSWORD puis lancer npm run account:update-password')
+  process.exit(1)
+}
+
+if (!serviceAccountPath) {
+  console.error('GOOGLE_APPLICATION_CREDENTIALS doit pointer vers le JSON du service account Firebase Admin.')
+  process.exit(1)
+}
+
+const { initializeApp, cert } = await import('firebase-admin/app')
+const { getAuth } = await import('firebase-admin/auth')
+
+initializeApp({
+  credential: cert(JSON.parse(await readFile(serviceAccountPath, 'utf8')))
+})
+
+const auth = getAuth()
+const user = await auth.getUserByEmail(email)
+await auth.updateUser(user.uid, {
+  password,
+  disabled: false,
+  emailVerified: true
+})
+
+console.log(`OK - mot de passe mis a jour et compte actif pour ${email}`)

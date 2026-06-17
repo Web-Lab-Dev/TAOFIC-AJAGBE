@@ -3,10 +3,13 @@ export const AUTH_ERRORS = {
   // Erreurs Firebase Auth
   'auth/user-not-found': 'Aucun utilisateur trouvé avec cet email',
   'auth/wrong-password': 'Mot de passe incorrect',
+  'auth/invalid-credential': 'Email ou mot de passe incorrect',
+  'auth/invalid-login-credentials': 'Email ou mot de passe incorrect',
   'auth/email-already-in-use': 'Cet email est déjà utilisé',
   'auth/weak-password': 'Le mot de passe doit contenir au moins 6 caractères',
   'auth/invalid-email': 'Email invalide',
   'auth/too-many-requests': 'Trop de tentatives. Réessayez plus tard',
+  'auth/network-request-failed': 'Connexion impossible. Vérifiez internet et réessayez.',
   'auth/requires-recent-login': 'Cette action nécessite une reconnexion récente',
 
   // Erreurs de validation
