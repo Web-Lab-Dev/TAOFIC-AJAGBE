@@ -21,7 +21,7 @@
  *   - Aucune modification de src/.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 
 import {
@@ -30,6 +30,14 @@ import {
   pendingShared,
   completedShared,
   pendingWithFalsyIds,
+  clientToday,
+  clientThisMonth,
+  clientPreviousMonth,
+  clientWithoutDate,
+  transactionTopToday,
+  transactionLowToday,
+  transactionYesterday,
+  transactionWithoutDate,
 } from '../fixtures/dashboard.js'
 
 // ---------------------------------------------------------------------------
@@ -43,6 +51,7 @@ vi.mock('../../src/context/transactions.jsx', () => ({
 // Import apres mock
 import { useTransactions } from '../../src/context/transactions.jsx'
 import { useAllTransactions } from '../../src/hooks/useAllTransactions.js'
+import { useDashboardData } from '../../src/hooks/useDashboardData.js'
 
 // ---------------------------------------------------------------------------
 
@@ -261,6 +270,258 @@ describe('TC-011A -- useAllTransactions', () => {
     const { result } = renderHook(() => useAllTransactions())
 
     expect(result.current).toEqual([])
+  })
+
+})
+
+// ---------------------------------------------------------------------------
+// TC-011B — useDashboardData
+//
+// Comportement protege :
+//   useDashboardData(clients, allTransactions) calcule :
+//     - totalClients  : clients.length (tous, sans filtre date)
+//     - monthlyClients: clients dont parsefrenchDate(client.dateAjout) tombe
+//                       dans le mois ET l'annee courants (new Date())
+//     - dailyClients  : clients dont parsefrenchDate(client.dateAjout).toDateString()
+//                       === new Date().toDateString()
+//     - todayTransactions : allTransactions filtrees par
+//                       parsefrenchDate(transaction.date).toDateString() === aujourd'hui
+//                       (delegue a useTodayTransactions)
+//     - topClient     : "${client.nom} ${client.prenom} (${formatCurrency(montant)})"
+//                       de la transaction du jour avec le montant le plus eleve,
+//                       ou "Aucune transaction aujourd'hui" si aucune.
+//
+// Horloge figee : vi.setSystemTime(new Date('2026-06-17T10:00:00.000Z'))
+//   => "aujourd'hui" = 17/06/2026, mois courant = juin 2026.
+//
+// Interdictions :
+//   - Aucun mock de parsefrenchDate, formatCurrency, getTopTransaction, Date.
+//   - Aucune modification de src/.
+//   - Aucun acces Firebase, aucun acces reseau.
+// ---------------------------------------------------------------------------
+
+describe('TC-011B -- useDashboardData', () => {
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-17T10:00:00.000Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // -------------------------------------------------------------------------
+  // [TC-011B-1] totalClients
+  //
+  // clients.length est retourne sans aucun filtre par date.
+  // Passer 3 clients (dont un sans dateAjout et un hors mois) :
+  // tous les 3 comptent dans totalClients.
+  // -------------------------------------------------------------------------
+
+  it('[TC-011B-1] totalClients -- compte tous les clients sans filtre date', () => {
+    const clients = [clientToday, clientThisMonth, clientPreviousMonth]
+
+    const { result } = renderHook(() =>
+      useDashboardData(clients, [])
+    )
+
+    expect(result.current.totalClients).toBe(3)
+  })
+
+  // -------------------------------------------------------------------------
+  // [TC-011B-2] monthlyClients
+  //
+  // Mix : clientToday (17/06/2026 => juin 2026, compte),
+  //        clientThisMonth (05/06/2026 => juin 2026, compte),
+  //        clientPreviousMonth (15/01/2025 => janvier 2025, ne compte pas),
+  //        clientWithoutDate (dateAjout absent => null => ne compte pas).
+  // Attendu : 2.
+  // -------------------------------------------------------------------------
+
+  it('[TC-011B-2] monthlyClients -- seuls les clients du mois courant (juin 2026) comptent', () => {
+    const clients = [clientToday, clientThisMonth, clientPreviousMonth, clientWithoutDate]
+
+    const { result } = renderHook(() =>
+      useDashboardData(clients, [])
+    )
+
+    expect(result.current.monthlyClients).toBe(2)
+  })
+
+  // -------------------------------------------------------------------------
+  // [TC-011B-3] dailyClients
+  //
+  // Meme mix que TC-011B-2.
+  // Seul clientToday (17/06/2026) correspond a toDateString() du 17/06/2026.
+  // Attendu : 1.
+  // -------------------------------------------------------------------------
+
+  it('[TC-011B-3] dailyClients -- seul le client du jour (17/06/2026) compte', () => {
+    const clients = [clientToday, clientThisMonth, clientPreviousMonth, clientWithoutDate]
+
+    const { result } = renderHook(() =>
+      useDashboardData(clients, [])
+    )
+
+    expect(result.current.dailyClients).toBe(1)
+  })
+
+  // -------------------------------------------------------------------------
+  // [TC-011B-4] todayTransactions
+  //
+  // transactionTopToday  : date '17/06/2026 09:30' => incluse
+  // transactionLowToday  : date '17/06/2026 08:00' => incluse
+  // transactionYesterday : date '16/06/2026 14:00' => exclue
+  // transactionWithoutDate : pas de champ date => parsefrenchDate(undefined) => null => exclue
+  //
+  // Attendu : tableau de 2 elements contenant les IDs des transactions du jour.
+  // -------------------------------------------------------------------------
+
+  it('[TC-011B-4a] todayTransactions -- inclut les transactions du jour', () => {
+    const allTransactions = [
+      transactionTopToday,
+      transactionLowToday,
+      transactionYesterday,
+      transactionWithoutDate,
+    ]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    expect(result.current.todayTransactions).toHaveLength(2)
+  })
+
+  it('[TC-011B-4b] todayTransactions -- contient transactionTopToday', () => {
+    const allTransactions = [
+      transactionTopToday,
+      transactionLowToday,
+      transactionYesterday,
+      transactionWithoutDate,
+    ]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    const ids = result.current.todayTransactions.map(t => t.id)
+    expect(ids).toContain('txn-top-today-001')
+  })
+
+  it('[TC-011B-4c] todayTransactions -- contient transactionLowToday', () => {
+    const allTransactions = [
+      transactionTopToday,
+      transactionLowToday,
+      transactionYesterday,
+      transactionWithoutDate,
+    ]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    const ids = result.current.todayTransactions.map(t => t.id)
+    expect(ids).toContain('txn-low-today-001')
+  })
+
+  it('[TC-011B-4d] todayTransactions -- exclut transactionYesterday (16/06/2026)', () => {
+    const allTransactions = [
+      transactionTopToday,
+      transactionLowToday,
+      transactionYesterday,
+      transactionWithoutDate,
+    ]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    const ids = result.current.todayTransactions.map(t => t.id)
+    expect(ids).not.toContain('txn-yesterday-001')
+  })
+
+  it('[TC-011B-4e] todayTransactions -- exclut transactionWithoutDate (champ date absent)', () => {
+    const allTransactions = [
+      transactionTopToday,
+      transactionLowToday,
+      transactionYesterday,
+      transactionWithoutDate,
+    ]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    const ids = result.current.todayTransactions.map(t => t.id)
+    expect(ids).not.toContain('txn-nodate-001')
+  })
+
+  // -------------------------------------------------------------------------
+  // [TC-011B-5] topClient -- transaction la plus haute du jour
+  //
+  // transactionTopToday.montant = 5000 > transactionLowToday.montant = 1000
+  // => getTopTransaction retourne transactionTopToday
+  // => topClient contient "Dupont" et "Marie"
+  //
+  // On utilise toContain pour eviter la dependance a formatCurrency (locale).
+  // -------------------------------------------------------------------------
+
+  it('[TC-011B-5a] topClient -- contient le nom de la transaction la plus haute', () => {
+    const allTransactions = [transactionTopToday, transactionLowToday]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    expect(result.current.topClient).toContain('Dupont')
+  })
+
+  it('[TC-011B-5b] topClient -- contient le prenom de la transaction la plus haute', () => {
+    const allTransactions = [transactionTopToday, transactionLowToday]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    expect(result.current.topClient).toContain('Marie')
+  })
+
+  // -------------------------------------------------------------------------
+  // [TC-011B-6] topClient -- aucune transaction du jour
+  //
+  // Passer uniquement transactionYesterday (exclue par useTodayTransactions).
+  // todayTransactions sera vide => topClient reste "Aucune transaction aujourd'hui".
+  // -------------------------------------------------------------------------
+
+  it("[TC-011B-6] topClient -- aucune transaction du jour => \"Aucune transaction aujourd'hui\"", () => {
+    const allTransactions = [transactionYesterday]
+
+    const { result } = renderHook(() =>
+      useDashboardData([], allTransactions)
+    )
+
+    expect(result.current.topClient).toBe("Aucune transaction aujourd'hui")
+  })
+
+  // -------------------------------------------------------------------------
+  // [TC-011B-7] entrees vides
+  //
+  // clients: [], allTransactions: []
+  // Tous les compteurs a zero, todayTransactions vide,
+  // topClient = "Aucune transaction aujourd'hui".
+  // -------------------------------------------------------------------------
+
+  it('[TC-011B-7] entrees vides -- tous les champs a leur valeur nulle de reference', () => {
+    const { result } = renderHook(() =>
+      useDashboardData([], [])
+    )
+
+    expect(result.current.totalClients).toBe(0)
+    expect(result.current.monthlyClients).toBe(0)
+    expect(result.current.dailyClients).toBe(0)
+    expect(result.current.todayTransactions).toEqual([])
+    expect(result.current.topClient).toBe("Aucune transaction aujourd'hui")
   })
 
 })

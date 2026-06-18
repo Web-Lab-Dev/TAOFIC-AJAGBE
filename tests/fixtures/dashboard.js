@@ -129,3 +129,133 @@ export const pendingWithFalsyIds = [
     createdAt: '2026-06-17T06:00:00.000Z',
   },
 ]
+
+// ---------------------------------------------------------------------------
+// Fixtures TC-011B — useDashboardData
+//
+// Date de reference figee : 2026-06-17 (horloge figee via vi.setSystemTime).
+// Champ de date client : dateAjout (format accepte par parsefrenchDate).
+// Champ de date transaction : date (lu par useTodayTransactions).
+// Champ montant transaction : montant (lu par getTopTransaction).
+// Champ client transaction : client (objet { nom, prenom }) lu par useDashboardData.
+// ---------------------------------------------------------------------------
+
+// ---- Clients ---------------------------------------------------------------
+
+/**
+ * Client ajoute le jour de reference : 17/06/2026.
+ * Comptera dans monthlyClients ET dailyClients.
+ */
+export const clientToday = {
+  id: 'client-today-001',
+  nom: 'Dupont',
+  prenom: 'Marie',
+  dateAjout: '17/06/2026',
+}
+
+/**
+ * Client ajoute dans le mois de reference (juin 2026) mais pas le jour J.
+ * Comptera dans monthlyClients, PAS dans dailyClients.
+ */
+export const clientThisMonth = {
+  id: 'client-month-001',
+  nom: 'Martin',
+  prenom: 'Paul',
+  dateAjout: '05/06/2026',
+}
+
+/**
+ * Client ajoute hors du mois de reference (janvier 2025).
+ * Ne comptera ni dans monthlyClients ni dans dailyClients.
+ */
+export const clientPreviousMonth = {
+  id: 'client-past-001',
+  nom: 'Bernard',
+  prenom: 'Luc',
+  dateAjout: '15/01/2025',
+}
+
+/**
+ * Client sans champ dateAjout.
+ * parsefrenchDate(undefined) => null => exclu de monthlyClients et dailyClients.
+ * Comptera uniquement dans totalClients.
+ */
+export const clientWithoutDate = {
+  id: 'client-nodate-001',
+  nom: 'Sans',
+  prenom: 'Date',
+}
+
+// ---- Transactions ----------------------------------------------------------
+
+/**
+ * Transaction du jour (17/06/2026) avec le montant le plus eleve.
+ * Sera incluse dans todayTransactions.
+ * topClient sera construit a partir de client.nom et client.prenom.
+ */
+export const transactionTopToday = {
+  id: 'txn-top-today-001',
+  date: '17/06/2026 09:30',
+  montant: 5000,
+  type: 'Dépôt',
+  statut: 'Validée',
+  storeId: 'store-a',
+  reseau: 'Orange',
+  client: {
+    nom: 'Dupont',
+    prenom: 'Marie',
+  },
+}
+
+/**
+ * Transaction du jour (17/06/2026) avec un montant inferieur.
+ * Sera incluse dans todayTransactions mais ne sera pas le top.
+ */
+export const transactionLowToday = {
+  id: 'txn-low-today-001',
+  date: '17/06/2026 08:00',
+  montant: 1000,
+  type: 'Retrait',
+  statut: 'Validée',
+  storeId: 'store-a',
+  reseau: 'Moov',
+  client: {
+    nom: 'Martin',
+    prenom: 'Paul',
+  },
+}
+
+/**
+ * Transaction du 16/06/2026 (hier par rapport a la date de reference).
+ * Exclue de todayTransactions.
+ */
+export const transactionYesterday = {
+  id: 'txn-yesterday-001',
+  date: '16/06/2026 14:00',
+  montant: 8000,
+  type: 'Dépôt',
+  statut: 'Validée',
+  storeId: 'store-a',
+  reseau: 'Telecel',
+  client: {
+    nom: 'Bernard',
+    prenom: 'Luc',
+  },
+}
+
+/**
+ * Transaction sans champ date.
+ * parsefrenchDate(undefined) => null => exclue de todayTransactions.
+ */
+export const transactionWithoutDate = {
+  id: 'txn-nodate-001',
+  montant: 9999,
+  type: 'Crédit',
+  statut: 'Non Terminées',
+  storeId: 'store-a',
+  reseau: 'Orange',
+  client: {
+    nom: 'Inconnu',
+    prenom: 'Client',
+  },
+}
