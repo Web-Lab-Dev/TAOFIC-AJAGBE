@@ -89,7 +89,8 @@ service cloud.firestore {
         request.resource.data.role == 'store_admin' &&
         request.resource.data.active == true &&
         request.resource.data.storeId is string &&
-        request.resource.data.storeName is string;
+        request.resource.data.storeName is string &&
+        getAfter(/databases/$(database)/documents/stores/$(request.resource.data.storeId)).data.adminUid == request.auth.uid;
 
       allow delete: if false;
     }

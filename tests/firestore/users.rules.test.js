@@ -1,29 +1,30 @@
 /**
- * TC-009 — Création d'un profil users avec storeId arbitraire (règle actuelle)
+ * TC-009 — Création d'un profil users/{uid} avec vérification du storeId (MASTER-SEC-001)
  *
- * Comportement actuel figé :
- *   firestore.rules:87-92 — match /users/{userId} → allow create :
+ * Correction appliquée (Cas B + getAfter) :
+ *   firestore.rules — match /users/{userId} → allow create :
  *     allow create: if signedIn() &&
  *       request.auth.uid == userId &&
  *       request.resource.data.role == 'store_admin' &&
  *       request.resource.data.active == true &&
  *       request.resource.data.storeId is string &&
- *       request.resource.data.storeName is string;
+ *       request.resource.data.storeName is string &&
+ *       getAfter(/databases/$(database)/documents/stores/$(request.resource.data.storeId)).data.adminUid == request.auth.uid;
  *
- *   MASTER-SEC-001 : un utilisateur authentifié peut créer son propre profil avec
- *   role 'store_admin' et n'importe quel storeId, sans vérification de l'existence
- *   de stores/{storeId} ni de adminUid. Ce profil spoofé donne ensuite accès aux
- *   ressources protégées par isStoreMember(storeId).
+ * Diagnostique MASTER-SEC-001 :
+ *   - storeId est distinct du uid (slug + 6 premiers chars de l'uid)
+ *   - stores/{storeId} contient adminUid: user.uid
+ *   - L'inscription utilise writeBatch atomique (stores + users simultanément)
+ *   - getAfter est nécessaire car les deux documents sont créés dans la même transaction
  *
- * Règle update :
- *   firestore.rules:83-85 : seul le champ 'lastLogin' peut être modifié, et uniquement
- *   par l'utilisateur lui-même (request.auth.uid == userId).
+ * Règle update (inchangée) :
+ *   firestore.rules:83-85 : seul le champ 'lastLogin' peut être modifié,
+ *   uniquement par l'utilisateur lui-même.
  *
- * Risque couvert : MASTER-SEC-001.
- * Ne pas corriger en Lot 0. Correction prévue au Lot 3A.
+ * Couvre : TC-009-01 à TC-009-10
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest'
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing'
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
@@ -75,147 +76,173 @@ beforeEach(async () => {
   await testEnv.clearFirestore()
 })
 
-describe('TC-009 — Création et modification profil users (règles Firestore)', () => {
-  it('[TC-009-01] uid-new-admin crée users/uid-new-admin avec role store_admin — allow (MASTER-SEC-001 : création libre de profil admin)', async () => {
-    /**
-     * COMPORTEMENT ACTUEL FIGÉ — MASTER-SEC-001
-     *
-     * La règle allow create sur users/{uid} (firestore.rules:87-92) vérifie :
-     *   request.auth.uid == uid                       ← uid correspond au créateur
-     *   request.resource.data.role == 'store_admin'   ← role autorisé
-     *   request.resource.data.active == true          ← actif
-     *   request.resource.data.storeId is string       ← storeId quelconque
-     *   request.resource.data.storeName is string     ← storeName quelconque
-     *
-     * Un utilisateur authentifié peut créer son propre profil avec role 'store_admin'
-     * et n'importe quel storeId, sans validation externe de l'appartenance à la boutique.
-     *
-     * Ce test fige ce comportement actuel. Ne pas corriger en Lot 0.
-     * Correction prévue au Lot 3A.
-     */
-    const ctx = getAuthenticatedContext(testEnv, 'uid-new-admin')
-    const ref = doc(ctx.firestore(), 'users', 'uid-new-admin')
-    await assertSucceeds(setDoc(ref, {
-      active: true,
-      storeId: 'store-test-aaa',
-      role: 'store_admin',
-      storeName: 'Store A',
-    }))
-  })
+describe('TC-009 — Création et modification profil users (MASTER-SEC-001 corrigé)', () => {
 
-  it('[TC-009-02] profil spoofé uid-spoofer (storeA, store_admin) — get globalClients/gclient-aaa — allow (MASTER-SEC-001 : exploitation du profil créé)', async () => {
+  it('[TC-009-01] uidB crée users/uidB avec storeId appartenant à uidA — deny', async () => {
     /**
-     * COMPORTEMENT ACTUEL FIGÉ — MASTER-SEC-001 (exploitation)
+     * MASTER-SEC-001 — Cas d'attaque principal
      *
-     * Après avoir créé un profil spoofé pointant vers store-test-aaa,
-     * uid-spoofer peut accéder aux ressources protégées par isStoreMember('store-test-aaa').
+     * uidA est le vrai propriétaire de store-aaa (adminUid: uidA).
+     * uidB tente de créer users/uidB avec storeId: 'store-aaa'.
      *
-     * firestore.rules:98 — allow read: if hasProfile()
-     * hasProfile() vérifie que le profil existe, active == true, storeId is string.
-     * Le profil spoofé satisfait toutes ces conditions.
+     * getAfter(stores/store-aaa).data.adminUid == 'uidA' != 'uidB' → DENY.
      *
-     * Ce test valide l'impact concret de MASTER-SEC-001 :
-     * la création libre d'un profil admin ouvre l'accès aux ressources de toute boutique.
+     * Règle : firestore.rules allow create users/{userId}
+     *   getAfter(...stores/store-aaa).data.adminUid == request.auth.uid
+     *   'uidA' != 'uidB' → refus.
      */
-    await seedDocument(testEnv, 'globalClients', 'gclient-aaa', {
-      nom: 'Alpha',
-      prenom: 'Client',
-      registeredStoreId: 'store-test-aaa',
-      registeredStoreName: 'Store A',
+    // Seed le document store-aaa avec adminUid = uidA (le vrai propriétaire)
+    await seedDocument(testEnv, 'stores', 'store-aaa', {
+      name: 'Boutique A',
+      active: true,
+      adminUid: 'uidA',
     })
 
-    const ctxSpoofer = getAuthenticatedContext(testEnv, 'uid-spoofer')
-
-    // Étape 1 : créer le profil spoofé via les règles Firestore (pas withSecurityRulesDisabled)
-    const profileRef = doc(ctxSpoofer.firestore(), 'users', 'uid-spoofer')
-    await assertSucceeds(setDoc(profileRef, {
-      active: true,
-      storeId: 'store-test-aaa',
-      role: 'store_admin',
-      storeName: 'Store A',
-    }))
-
-    // Étape 2 : exploiter le profil pour accéder à globalClients
-    const gcRef = doc(ctxSpoofer.firestore(), 'globalClients', 'gclient-aaa')
-    const snap = await assertSucceeds(getDoc(gcRef))
-    expect(snap.exists()).toBe(true)
-    expect(snap.data().registeredStoreId).toBe('store-test-aaa')
-  })
-
-  it('[TC-009-03] uid-attacker tente de créer users/uid-victim — deny', async () => {
-    /**
-     * firestore.rules:88 : request.auth.uid == userId
-     * uid-attacker != uid-victim → DENY.
-     */
-    const ctx = getAuthenticatedContext(testEnv, 'uid-attacker')
-    const ref = doc(ctx.firestore(), 'users', 'uid-victim')
+    // uidB essaie de créer son profil en se rattachant frauduleusement à store-aaa
+    const ctxB = getAuthenticatedContext(testEnv, 'uidB')
+    const ref = doc(ctxB.firestore(), 'users', 'uidB')
     await assertFails(setDoc(ref, {
       active: true,
-      storeId: 'store-test-aaa',
+      storeId: 'store-aaa',
       role: 'store_admin',
-      storeName: 'Store A',
+      storeName: 'Boutique A',
     }))
   })
 
-  it('[TC-009-04] uid-new-member crée users/uid-new-member avec role member — deny', async () => {
+  it('[TC-009-02] exploitation : uidB (profil spoofé store-aaa) tente de lire clients/store-aaa/history — deny', async () => {
     /**
-     * COMPORTEMENT ACTUEL FIGÉ
+     * MASTER-SEC-001 — Exploitation impossible après correction
      *
-     * firestore.rules:89 : request.resource.data.role == 'store_admin'
-     * La règle exige explicitement role == 'store_admin'.
-     * Toute tentative de création avec role != 'store_admin' est refusée.
+     * Avant la correction, uidB pouvait créer un profil spoofé pointant vers store-aaa,
+     * puis exploiter isStoreMember('store-aaa') pour lire les ressources de store-aaa.
      *
-     * Règle citée : firestore.rules lignes 87-92 :
-     *   allow create: if signedIn() &&
-     *     request.auth.uid == userId &&
-     *     request.resource.data.role == 'store_admin' &&   ← exige store_admin
-     *     request.resource.data.active == true &&
-     *     request.resource.data.storeId is string &&
-     *     request.resource.data.storeName is string;
+     * Après correction : la création du profil spoofé elle-même est refusée (TC-009-01).
+     * Ce test vérifie que sans profil valide, la lecture de history est également refusée.
+     *
+     * isStoreMember appelle hasProfile() qui vérifie que users/uidB existe et active==true.
+     * Sans profil, hasProfile() est false → DENY.
+     */
+    await seedDocument(testEnv, 'clients', 'store-aaa', { _placeholder: true })
+    await seedDocument(testEnv, 'clients/store-aaa/history', 'hist-001', {
+      type: 'Dépôt',
+      montant: 500,
+      clientId: 'client-001',
+      statut: 'Validée',
+    })
+
+    // uidB n'a PAS de profil valide dans users/uidB
+    const ctxB = getAuthenticatedContext(testEnv, 'uidB')
+    const histRef = doc(ctxB.firestore(), 'clients', 'store-aaa', 'history', 'hist-001')
+    await assertFails(getDoc(histRef))
+  })
+
+  it('[TC-009-03] propriétaire légitime uidA crée users/uidA avec son propre storeId — allow', async () => {
+    /**
+     * Parcours nominal d'inscription (writeBatch atomique).
+     *
+     * La règle utilise getAfter() pour lire stores/store-uidA-abc123 après la transaction.
+     * Le batch atomique écrit stores/ ET users/ dans la même opération → getAfter valide.
+     *
+     * Simulation : on seed d'abord stores/store-uidA-abc123 avec adminUid='uidA',
+     * puis on crée users/uidA avec storeId='store-uidA-abc123'.
+     * L'émulateur évalue getAfter sur le document stores/ déjà présent (ou créé dans batch).
+     *
+     * Note : dans l'émulateur rules-unit-testing, setDoc sur users/{uid} seul
+     * correspond au cas où stores/ est déjà présent. Pour le vrai batch, les deux
+     * sont créés atomiquement. On teste ici le cas "stores déjà créé + user create".
+     */
+    await seedDocument(testEnv, 'stores', 'store-uidA-abc123', {
+      name: 'Boutique Légitime',
+      active: true,
+      adminUid: 'uidA',
+    })
+
+    const ctxA = getAuthenticatedContext(testEnv, 'uidA')
+    const ref = doc(ctxA.firestore(), 'users', 'uidA')
+    await assertSucceeds(setDoc(ref, {
+      active: true,
+      storeId: 'store-uidA-abc123',
+      role: 'store_admin',
+      storeName: 'Boutique Légitime',
+    }))
+  })
+
+  it('[TC-009-04] uidAttacker tente de créer users/uidVictime (uid différent du sien) — deny', async () => {
+    /**
+     * firestore.rules — allow create users/{userId} :
+     *   request.auth.uid == userId
+     *
+     * request.auth.uid = 'uidAttacker' != userId = 'uidVictime' → DENY.
+     * Indépendant de la correction MASTER-SEC-001 : toujours refusé.
+     */
+    await seedDocument(testEnv, 'stores', 'store-victim-abc123', {
+      name: 'Boutique Victime',
+      active: true,
+      adminUid: 'uidVictime',
+    })
+
+    const ctx = getAuthenticatedContext(testEnv, 'uidAttacker')
+    const ref = doc(ctx.firestore(), 'users', 'uidVictime')
+    await assertFails(setDoc(ref, {
+      active: true,
+      storeId: 'store-victim-abc123',
+      role: 'store_admin',
+      storeName: 'Boutique Victime',
+    }))
+  })
+
+  it('[TC-009-05] auto-création avec role: "member" — deny', async () => {
+    /**
+     * firestore.rules — allow create users/{userId} :
+     *   request.resource.data.role == 'store_admin'
      *
      * role: 'member' != 'store_admin' → DENY.
+     * Empêche la création de sous-comptes membres via auto-inscription.
      */
-    const ctx = getAuthenticatedContext(testEnv, 'uid-new-member')
-    const ref = doc(ctx.firestore(), 'users', 'uid-new-member')
+    await seedDocument(testEnv, 'stores', 'store-member-abc123', {
+      name: 'Boutique Member',
+      active: true,
+      adminUid: 'uidMember',
+    })
+
+    const ctx = getAuthenticatedContext(testEnv, 'uidMember')
+    const ref = doc(ctx.firestore(), 'users', 'uidMember')
     await assertFails(setDoc(ref, {
       active: true,
-      storeId: 'store-test-aaa',
+      storeId: 'store-member-abc123',
       role: 'member',
-      storeName: 'Store A',
+      storeName: 'Boutique Member',
     }))
   })
 
-  it('[TC-009-05] uid-new-inactive crée users/uid-new-inactive avec active false — deny', async () => {
+  it('[TC-009-06] auto-création avec active: false — deny', async () => {
     /**
-     * COMPORTEMENT ACTUEL FIGÉ
-     *
-     * firestore.rules:90 : request.resource.data.active == true
-     * La règle exige explicitement active == true.
-     * Toute tentative de création avec active != true est refusée.
-     *
-     * Règle citée : firestore.rules lignes 87-92 :
-     *   allow create: if signedIn() &&
-     *     request.auth.uid == userId &&
-     *     request.resource.data.role == 'store_admin' &&
-     *     request.resource.data.active == true &&           ← exige active true
-     *     request.resource.data.storeId is string &&
-     *     request.resource.data.storeName is string;
+     * firestore.rules — allow create users/{userId} :
+     *   request.resource.data.active == true
      *
      * active: false != true → DENY.
      */
-    const ctx = getAuthenticatedContext(testEnv, 'uid-new-inactive')
-    const ref = doc(ctx.firestore(), 'users', 'uid-new-inactive')
+    await seedDocument(testEnv, 'stores', 'store-inactive-abc123', {
+      name: 'Boutique Inactive',
+      active: true,
+      adminUid: 'uidInactive',
+    })
+
+    const ctx = getAuthenticatedContext(testEnv, 'uidInactive')
+    const ref = doc(ctx.firestore(), 'users', 'uidInactive')
     await assertFails(setDoc(ref, {
       active: false,
-      storeId: 'store-test-aaa',
+      storeId: 'store-inactive-abc123',
       role: 'store_admin',
-      storeName: 'Store A',
+      storeName: 'Boutique Inactive',
     }))
   })
 
-  it('[TC-009-06] non authentifié — create users/uid-new — deny', async () => {
+  it('[TC-009-07] non authentifié — create users/uid-new — deny', async () => {
     /**
-     * firestore.rules:87 : signedIn() exige request.auth != null.
+     * firestore.rules — allow create users/{userId} :
+     *   signedIn() exige request.auth != null.
+     *
      * Contexte non authentifié → DENY.
      */
     const ctx = getUnauthenticatedContext(testEnv)
@@ -228,12 +255,10 @@ describe('TC-009 — Création et modification profil users (règles Firestore)'
     }))
   })
 
-  it('[TC-009-07] uid-existing-aaa — update role — deny', async () => {
+  it('[TC-009-08] utilisateur existant — update role — deny', async () => {
     /**
-     * firestore.rules:83-85 :
-     *   allow update: if hasProfile() &&
-     *     request.auth.uid == userId &&
-     *     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin']);
+     * firestore.rules — allow update users/{userId} :
+     *   request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin'])
      *
      * 'role' n'est pas dans la liste des champs modifiables → DENY.
      */
@@ -248,14 +273,13 @@ describe('TC-009 — Création et modification profil users (règles Firestore)'
     await assertFails(updateDoc(ref, { role: 'store_admin' }))
   })
 
-  it('[TC-009-08] uid-existing-aaa — update storeId — deny', async () => {
+  it('[TC-009-09] utilisateur existant — update storeId — deny', async () => {
     /**
-     * firestore.rules:83-85 :
-     *   allow update: if hasProfile() &&
-     *     request.auth.uid == userId &&
-     *     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin']);
+     * firestore.rules — allow update users/{userId} :
+     *   request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin'])
      *
      * 'storeId' n'est pas dans la liste des champs modifiables → DENY.
+     * Empêche la réaffectation d'un utilisateur à une autre boutique après inscription.
      */
     await seedDocument(testEnv, 'users', 'uid-existing-aaa', {
       active: true,
@@ -266,5 +290,38 @@ describe('TC-009 — Création et modification profil users (règles Firestore)'
     const ctx = getAuthenticatedContext(testEnv, 'uid-existing-aaa')
     const ref = doc(ctx.firestore(), 'users', 'uid-existing-aaa')
     await assertFails(updateDoc(ref, { storeId: 'store-test-bbb' }))
+  })
+
+  it('[TC-009-10] préparation V2 : uidSub s\'auto-rattache à une boutique existante avec role "member" — deny', async () => {
+    /**
+     * PRÉPARATION V2 — Sous-comptes membres
+     *
+     * Scénario : uidSub est un futur sous-compte qui tente de s'auto-créer
+     * avec role: 'member' sur une boutique existante (store-owner-aaa),
+     * même si stores/store-owner-aaa existe et que adminUid appartient à uidOwner.
+     *
+     * Deux protections actives :
+     * 1. role: 'member' != 'store_admin' → refus par la règle de rôle
+     * 2. getAfter(stores/store-owner-aaa).data.adminUid = 'uidOwner' != 'uidSub' → refus
+     *
+     * Pour la V2 : la création de sous-comptes membres devra passer par
+     * une Cloud Function (ou Admin SDK) qui contourne les règles Firestore,
+     * garantissant que l'administrateur de la boutique en est l'initiateur.
+     * La règle allow create ne devra PAS être assouplie pour les membres.
+     */
+    await seedDocument(testEnv, 'stores', 'store-owner-aaa', {
+      name: 'Boutique du Propriétaire',
+      active: true,
+      adminUid: 'uidOwner',
+    })
+
+    const ctxSub = getAuthenticatedContext(testEnv, 'uidSub')
+    const ref = doc(ctxSub.firestore(), 'users', 'uidSub')
+    await assertFails(setDoc(ref, {
+      active: true,
+      storeId: 'store-owner-aaa',
+      role: 'member',
+      storeName: 'Boutique du Propriétaire',
+    }))
   })
 })
