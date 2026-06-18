@@ -5,5 +5,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/firestore/**/*.test.js'],
     globals: false,
+    fileParallelism: false,
+    maxWorkers: 1,
   },
 })
