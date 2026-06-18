@@ -1,18 +1,18 @@
 /**
- * TC-008 — Suppression et modification d'un document history (règle actuelle)
+ * TC-008 — Suppression et modification d'un document history (règles Firestore)
  * TC-010 — Lecture non paginée history (règle actuelle)
  *
- * Comportement actuel figé :
- *   TC-008 : firestore.rules:125-135 — match /clients/{storeId}/history/{historyId}
+ * Comportement protégé (après correction MASTER-SEC-003) :
+ *   TC-008 : firestore.rules — match /clients/{storeId}/history/{historyId}
  *     - allow read:   if isStoreMember(storeId)
  *     - allow create: if isStoreMember(storeId) && validStoreScopedTransaction && validStatus && !isPendingStatus
  *     - allow update: if isStoreMember(storeId) && affectedKeys hasOnly ['statut','updatedAt','notes'] && validStatus
- *     - allow delete: if isStoreMember(storeId)  ← MASTER-SEC-003
+ *     - allow delete: if false  ← MASTER-SEC-003 corrigé
  *
  *   TC-010 : la règle allow list (couverte par allow read) n'impose pas de limite de pagination.
  *
- * Risques couverts : MASTER-SEC-003 (delete permissif), MASTER-PERF-001 (lecture non bornée).
- * Ne pas corriger en Lot 0.
+ * Risques couverts : MASTER-SEC-003 (delete bloqué), MASTER-PERF-001 (lecture non bornée).
+ * Gap documenté : balance reversal non implémenté — prévu V2/Lot 3B.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
@@ -108,24 +108,23 @@ async function seedAll() {
 }
 
 describe('TC-008 — Suppression et modification history (règles Firestore)', () => {
-  it('[TC-008-01] uid-member-aaa (storeA) — delete clients/store-test-aaa/history/hist-aaa-001 — allow', async () => {
+  it('[TC-008-01] uid-member-aaa (storeA) — delete hist-aaa-001 (Validée) — deny', async () => {
     /**
-     * COMPORTEMENT ACTUEL FIGÉ — MASTER-SEC-003
+     * MASTER-SEC-003 CORRIGÉ
      *
-     * firestore.rules:134 — règle delete sur clients/{storeId}/history/{histId} :
-     *   allow delete: if isStoreMember(storeId)
+     * firestore.rules — allow delete: if false
      *
-     * Un membre peut supprimer n'importe quelle transaction de sa boutique,
-     * y compris les transactions "Validée". Aucune vérification du statut.
-     * Piste d'audit financière non protégée.
+     * Aucun membre ne peut supprimer une transaction de l'historique,
+     * quelle que soit sa boutique ou son rôle.
+     * La suppression a été remplacée par un soft-delete (statut → 'Annulée')
+     * via deleteFromHistory dans src/services/firestore.js.
      *
-     * Ce test fige ce comportement actuel. Ne pas corriger en Lot 0.
-     * Correction prévue au Lot 3B.
+     * Gap documenté : balance reversal non implémenté — prévu V2/Lot 3B.
      */
     await seedAll()
     const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
     const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
-    await assertSucceeds(deleteDoc(ref))
+    await assertFails(deleteDoc(ref))
   })
 
   it('[TC-008-02] uid-member-bbb (storeB) — delete clients/store-test-aaa/history/hist-aaa-001 — deny', async () => {
@@ -166,17 +165,65 @@ describe('TC-008 — Suppression et modification history (règles Firestore)', (
 
   it('[TC-008-06] uid-member-aaa (storeA) — update statut seul vers valeur valide — allow', async () => {
     /**
-     * firestore.rules:131-133 :
+     * firestore.rules :
      *   allow update: if isStoreMember(storeId) &&
      *     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'updatedAt', 'notes']) &&
      *     validStatus(request.resource.data.statut);
      *
      * 'statut' est dans la liste des champs autorisés et 'Non Terminées' est une valeur validStatus → ALLOW.
+     * Ce flux est utilisé par deleteFromHistory (soft-delete → 'Annulée').
      */
     await seedAll()
     const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
     const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
     await assertSucceeds(updateDoc(ref, { statut: 'Non Terminées' }))
+  })
+
+  it('[TC-008-06b] uid-member-aaa — update type — deny', async () => {
+    /**
+     * 'type' n'est pas dans la liste des champs autorisés → DENY.
+     * Protège l'intégrité de la piste d'audit : le type d'une transaction
+     * (Dépôt, Retrait, Crédit) ne peut pas être altéré après création.
+     */
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
+    await assertFails(updateDoc(ref, { type: 'Retrait' }))
+  })
+
+  it('[TC-008-06c] uid-member-aaa — update clientId — deny', async () => {
+    /**
+     * 'clientId' n'est pas dans la liste des champs autorisés → DENY.
+     * Protège le rattachement d'une transaction à son client d'origine.
+     */
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
+    await assertFails(updateDoc(ref, { clientId: 'client-frauduleux' }))
+  })
+
+  it('[TC-008-06d] uid-member-aaa — update storeId — deny', async () => {
+    /**
+     * 'storeId' n'est pas dans la liste des champs autorisés → DENY.
+     * Protège la séparation inter-boutiques : impossible de déplacer
+     * une transaction d'une boutique vers une autre.
+     */
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
+    await assertFails(updateDoc(ref, { storeId: 'store-test-bbb' }))
+  })
+
+  it('[TC-008-10] uid-member-aaa — update notes + updatedAt — allow', async () => {
+    /**
+     * 'notes' et 'updatedAt' sont dans la liste des champs autorisés → ALLOW.
+     * Permet d'ajouter un commentaire à une transaction sans altérer
+     * les données financières.
+     */
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
+    await assertSucceeds(updateDoc(ref, { notes: 'commentaire', updatedAt: new Date().toISOString() }))
   })
 
   it('[TC-008-07] uid-member-aaa (storeA) — get clients/store-test-aaa/history/hist-aaa-001 — allow', async () => {

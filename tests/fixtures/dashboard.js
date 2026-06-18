@@ -259,3 +259,66 @@ export const transactionWithoutDate = {
     prenom: 'Client',
   },
 }
+
+// ---------------------------------------------------------------------------
+// Fixtures TC-012 — useTodayTransactions filtrage statut 'Annulée'
+//
+// Date de reference figee : 2026-06-17 (horloge figee via vi.setSystemTime).
+// Ces fixtures couvrent le comportement apres MASTER-SEC-003 :
+//   la transaction 'Annulée' ne doit pas apparaitre dans les agregations dashboard.
+// ---------------------------------------------------------------------------
+
+/**
+ * Transaction du jour (17/06/2026) avec statut 'Annulée'.
+ * Doit etre exclue de todayTransactions apres la correction MASTER-SEC-003.
+ * Avant la correction : incluse (regression).
+ */
+export const transactionAnnuleeToday = {
+  id: 'txn-annulee-today-001',
+  date: '17/06/2026 11:00',
+  montant: 3000,
+  type: 'Dépôt',
+  statut: 'Annulée',
+  storeId: 'store-a',
+  reseau: 'Orange',
+  client: {
+    nom: 'Annulé',
+    prenom: 'Client',
+  },
+}
+
+/**
+ * Transaction du jour (17/06/2026) avec statut 'Remboursée'.
+ * Doit etre incluse dans todayTransactions (pas un statut annule).
+ */
+export const transactionRembToday = {
+  id: 'txn-remb-today-001',
+  date: '17/06/2026 10:00',
+  montant: 2500,
+  type: 'Retrait',
+  statut: 'Remboursée',
+  storeId: 'store-a',
+  reseau: 'Moov',
+  client: {
+    nom: 'Rembourse',
+    prenom: 'Client',
+  },
+}
+
+/**
+ * Transaction du jour (17/06/2026) avec statut 'Non Terminées'.
+ * Doit etre incluse dans todayTransactions (statut en attente, pas annule).
+ */
+export const transactionPendingToday = {
+  id: 'txn-pending-today-001',
+  date: '17/06/2026 07:00',
+  montant: 1500,
+  type: 'Dépôt',
+  statut: 'Non Terminées',
+  storeId: 'store-a',
+  reseau: 'Telecel',
+  client: {
+    nom: 'EnAttente',
+    prenom: 'Client',
+  },
+}

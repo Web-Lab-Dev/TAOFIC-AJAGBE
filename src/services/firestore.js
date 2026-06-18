@@ -1096,7 +1096,14 @@ export class FirestoreService {
   }
 
   async deleteFromHistory(historyId) {
-    return this.deleteDocument(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, historyId)
+    const ref = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, historyId)
+    return await withErrorHandling(async () => {
+      await updateDoc(ref, {
+        statut: 'Annulée',
+        updatedAt: serverTimestamp(),
+      })
+      return true
+    }, `deleteFromHistory(${historyId})`)
   }
 
   subscribeToHistory(callback, filters = {}) {

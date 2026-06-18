@@ -136,7 +136,7 @@ service cloud.firestore {
         allow update: if isStoreMember(storeId) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'updatedAt', 'notes']) &&
           validStatus(request.resource.data.statut);
-        allow delete: if isStoreMember(storeId);
+        allow delete: if false;
       }
 
       match /networkBalances/{balanceId} {
