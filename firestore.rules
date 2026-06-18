@@ -102,10 +102,14 @@ service cloud.firestore {
         request.resource.data.registeredStoreId == profile().storeId;
 
       allow update: if hasProfile() &&
-        validClient(request.resource.data) &&
-        request.resource.data.registeredStoreId == resource.data.registeredStoreId;
+        resource.data.registeredStoreId is string &&
+        resource.data.registeredStoreId == profile().storeId &&
+        request.resource.data.registeredStoreId == resource.data.registeredStoreId &&
+        validClient(request.resource.data);
 
-      allow delete: if hasProfile();
+      allow delete: if hasProfile() &&
+        resource.data.registeredStoreId is string &&
+        resource.data.registeredStoreId == profile().storeId;
     }
 
     match /clients/{storeId} {
