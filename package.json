@@ -18,7 +18,9 @@
     "accounts:delete:dry-run": "node scripts/deleteExistingAccounts.mjs",
     "accounts:delete": "node scripts/deleteExistingAccounts.mjs --execute",
     "test:unit": "vitest run --config vitest.config.js tests/unit",
-    "test:components": "vitest run --config vitest.config.js tests/components tests/integration"
+    "test:components": "vitest run --config vitest.config.js tests/components tests/integration",
+    "test:firestore": "firebase emulators:exec --only firestore --project demo-akayis-test \"npx vitest run --config vitest.firestore.config.js\"",
+    "test:firestore:smoke": "firebase emulators:exec --only firestore --project demo-akayis-test \"npx vitest run --config vitest.firestore.config.js tests/firestore/smoke.test.js\""
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",
