@@ -16,7 +16,8 @@
     "account:create-temp-access": "node scripts/createTemporaryStoreAccess.mjs",
     "seed:stores": "node scripts/seedStores.mjs",
     "accounts:delete:dry-run": "node scripts/deleteExistingAccounts.mjs",
-    "accounts:delete": "node scripts/deleteExistingAccounts.mjs --execute"
+    "accounts:delete": "node scripts/deleteExistingAccounts.mjs --execute",
+    "test:unit": "vitest run --config vitest.config.js tests/unit"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.13",
@@ -39,7 +40,9 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
+    "jsdom": "^29.1.1",
     "vite": "^7.1.2",
+    "vitest": "^4.1.9",
     "workbox-window": "^7.3.0"
   }
 }
