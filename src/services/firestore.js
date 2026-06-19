@@ -24,6 +24,7 @@ import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
 import { CLIENT_ID, getFirestoreCollectionPath } from '../config/clientIsolation'
 import { parseFcfaAmount } from '../utils/fcfaAmount.js'
+import { buildDraftPayload, computeDraftUpdateImpacts } from '../utils/draftLifecycle.js'
 import {
   validateFcfaAmount as _validateFcfaAmountFn,
   normalizeNetworkBalances as _normalizeNetworkBalancesFn,
@@ -886,16 +887,11 @@ export class FirestoreService {
       }
 
       const currentDraft = draftSnap.data()
-      const nextDraft = {
-        ...currentDraft,
-        ...updates,
-        statut: FIRESTORE_CONFIG.STATUS.PENDING
-      }
       const balanceRef = this.getNetworkBalanceDocRef()
       const balanceSnap = await tx.get(balanceRef)
       const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-      const restoredBalances = this.reverseInitialTransactionImpact(currentBalances, currentDraft)
-      const nextBalances = this.applyInitialTransactionImpact(restoredBalances, nextDraft)
+      const nextDraft = buildDraftPayload(currentDraft, updates)
+      const { nextBalances } = computeDraftUpdateImpacts(currentDraft, nextDraft, currentBalances)
       const now = serverTimestamp()
 
       tx.update(draftRef, {
