@@ -8,6 +8,7 @@ import Toast from '../Toast'
 import { NETWORK_OPTIONS, TRANSACTION_TYPES, NETWORK_CODES, MESSAGES } from '../../utils/constants.js'
 import { validateTransactionForm, validateTransactionAction } from '../../utils/helpers.js'
 import logger from '../../utils/logger.js'
+import { parseFcfaAmount } from '../../utils/fcfaAmount.js'
 
 const normalizeLabel = (value) => String(value || '')
   .trim()
@@ -128,7 +129,7 @@ function TransactionForm({ clients }) {
 
     const stockValidation = validateAmount(network, amount, transactionType)
     const basicFormValid = validateTransactionForm(transactionClient, amount, transactionType)
-    const amountValue = parseFloat(amount) || 0
+    const amountValue = parseFcfaAmount(amount) || 0
     const liquidityAvailable = getLiquidite()
     const normalizedType = normalizeLabel(transactionType)
     const isWithdrawal = normalizedType === 'retrait'
@@ -209,7 +210,12 @@ function TransactionForm({ clients }) {
       return
     }
 
-    const amountValue = parseFloat(amount)
+    const amountValue = parseFcfaAmount(amount)
+    if (amountValue === null) {
+      showToast('Le montant doit être un entier strictement positif en FCFA', 'error')
+      setIsSubmitting(false)
+      return
+    }
     const clientName = `${transactionClient.prenom || ''} ${transactionClient.nom || ''}`.trim()
     const confirmationMessage = [
       'Confirmer cette transaction ?',

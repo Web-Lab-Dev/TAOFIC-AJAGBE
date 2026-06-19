@@ -760,6 +760,82 @@ export class FirestoreService {
     return balances
   }
 
+  _reversePendingOnlyImpact(balances, type, reseau, amount) {
+    if (this.isDepositType(type) || this.isCreditType(type)) {
+      return this.adjustBalanceValue(balances, reseau, 'stock', amount)
+    }
+    if (this.isWithdrawalType(type)) {
+      return this.adjustBalanceValue(balances, reseau, 'stock', -amount)
+    }
+    throw new Error(`Type de transaction non reconnu pour le renversement : ${type}`)
+  }
+
+  _reverseDirectValidatedImpact(balances, type, reseau, amount) {
+    if (this.isDepositType(type)) {
+      return this.applyLiquidityDelta(
+        this.adjustBalanceValue(balances, reseau, 'stock', amount),
+        -amount
+      )
+    }
+    if (this.isWithdrawalType(type)) {
+      throw new Error('Renversement impossible : la répartition exacte de la liquidité consommée par ce retrait n\'est pas disponible. Cette transaction ne peut pas être annulée automatiquement.')
+    }
+    if (this.isCreditType(type)) {
+      return this.adjustBalanceValue(balances, reseau, 'stock', amount)
+    }
+    throw new Error(`Type de transaction non reconnu pour le renversement : ${type}`)
+  }
+
+  reverseHistoryTransactionImpact(currentBalances, historyData) {
+    const rawAmount = historyData.montant
+    const amount = Number(rawAmount)
+    const reseau = historyData.reseau
+    const type = historyData.type
+    const paymentMethod = historyData.paymentMethod || null
+    const effectiveNetwork = historyData.effectiveNetwork || null
+    const statut = historyData.statut
+
+    if (this.normalizeTransactionLabel(statut) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.CANCELLED)) {
+      throw new Error('Cette transaction est déjà annulée')
+    }
+
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new Error(`Le montant doit être un entier strictement positif pour le renversement : ${rawAmount}`)
+    }
+
+    if (!reseau) {
+      throw new Error('Données de transaction incomplètes pour le renversement financier')
+    }
+
+    if (!type) {
+      throw new Error('Données de transaction incomplètes pour le renversement financier')
+    }
+
+    if (!this.isDepositType(type) && !this.isWithdrawalType(type) && !this.isCreditType(type)) {
+      throw new Error(`Type de transaction non reconnu pour le renversement : ${type}`)
+    }
+
+    // Path 2 avec règlement : annuler le règlement puis l'impact pending
+    if (paymentMethod) {
+      const settlementDelta = this.isWithdrawalType(type) ? -amount : amount
+      let next
+      if (effectiveNetwork === 'Liquidite') {
+        next = this.applyLiquidityDelta(currentBalances, -settlementDelta)
+      } else {
+        next = this.adjustBalanceValue(currentBalances, effectiveNetwork, 'stock', -settlementDelta)
+      }
+      return this._reversePendingOnlyImpact(next, type, reseau, amount)
+    }
+
+    // Path 2 sans règlement : annuler uniquement l'impact pending
+    if (historyData.validatedAt) {
+      return this._reversePendingOnlyImpact(currentBalances, type, reseau, amount)
+    }
+
+    // Path 1 direct validée : annuler applyInitialTransactionImpact(Validée)
+    return this._reverseDirectValidatedImpact(currentBalances, type, reseau, amount)
+  }
+
   applySettlementImpact(balances, transactionData, paymentMethod) {
     const amount = Number(transactionData.montant) || 0
     const targetNetwork = this.mapPaymentMethodToNetwork(paymentMethod)
@@ -1096,14 +1172,54 @@ export class FirestoreService {
   }
 
   async deleteFromHistory(historyId) {
-    const ref = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, historyId)
-    return await withErrorHandling(async () => {
-      await updateDoc(ref, {
-        statut: 'Annulée',
-        updatedAt: serverTimestamp(),
+    this.requireActiveStore()
+    try {
+      return await runTransaction(db, async (tx) => {
+        const historyRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, historyId)
+        const historySnap = await tx.get(historyRef)
+
+        if (!historySnap.exists()) {
+          throw new Error(`Transaction ${historyId} introuvable`)
+        }
+
+        const historyData = historySnap.data()
+
+        if (this.normalizeTransactionLabel(historyData.statut) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.CANCELLED)) {
+          return false
+        }
+
+        const balanceRef = this.getNetworkBalanceDocRef()
+        const balanceSnap = await tx.get(balanceRef)
+
+        if (!balanceSnap.exists()) {
+          throw new Error('Impossible de lire networkBalances/current : document absent. Le renversement est annulé.')
+        }
+        const rawBalances = balanceSnap.data()
+        const currentBalances = this.normalizeNetworkBalances(rawBalances)
+        if (!currentBalances || typeof currentBalances !== 'object' || Array.isArray(currentBalances) || Object.keys(currentBalances).length === 0) {
+          throw new Error('Données de soldes invalides ou absentes. Le renversement est annulé.')
+        }
+
+        const nextBalances = this.reverseHistoryTransactionImpact(currentBalances, historyData)
+        const now = serverTimestamp()
+
+        tx.update(historyRef, {
+          statut: FIRESTORE_CONFIG.STATUS.CANCELLED,
+          updatedAt: now,
+        })
+        tx.set(balanceRef, {
+          balances: nextBalances,
+          updatedAt: now,
+        }, { merge: true })
+
+        return true
       })
-      return true
-    }, `deleteFromHistory(${historyId})`)
+    } catch (error) {
+      const friendlyMessage = getUserFriendlyMessage(error)
+      const enhancedError = new Error(friendlyMessage)
+      enhancedError.originalError = error
+      throw enhancedError
+    }
   }
 
   subscribeToHistory(callback, filters = {}) {
