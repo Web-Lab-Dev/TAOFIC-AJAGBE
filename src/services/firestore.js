@@ -24,7 +24,6 @@ import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
 import { CLIENT_ID, getFirestoreCollectionPath } from '../config/clientIsolation'
 import { parseFcfaAmount } from '../utils/fcfaAmount.js'
-import { buildDraftPayload, computeDraftUpdateImpacts } from '../utils/draftLifecycle.js'
 import {
   validateFcfaAmount as _validateFcfaAmountFn,
   normalizeNetworkBalances as _normalizeNetworkBalancesFn,
@@ -46,6 +45,7 @@ import {
   reverseHistoryTransactionImpact as _reverseHistoryTransactionImpactFn,
   applySettlementImpact as _applySettlementImpactFn
 } from '../utils/financialImpact.js'
+import { DraftService } from './draftService.js'
 
 // Service Firestore modulaire avec cache, gestion d'erreurs et optimisations
 
@@ -65,6 +65,11 @@ export class FirestoreService {
 
     // Configurer la fonction de fetch pour le cache
     cacheManager.setFetchFunction(this.fetchFromFirestore.bind(this))
+
+    // Service délégué pour l'orchestration des drafts.
+    // On passe this comme contexte vivant (pas de bind anticipé) afin que
+    // les spies posés sur l'instance après construction soient honorés.
+    this._draftService = new DraftService({ ctx: this })
   }
 
   _validateFcfaAmount(raw, context = '') {
@@ -861,97 +866,26 @@ export class FirestoreService {
     )
   }
 
-  // DRAFTS (Transactions non terminées)
+  // DRAFTS (Transactions non terminées) — délèguent à DraftService
+
   async getDrafts() {
-    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS)
+    return this._draftService.getDrafts()
   }
 
   async addDraft(transactionData) {
-    return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, {
-      ...transactionData,
-      statut: FIRESTORE_CONFIG.STATUS.PENDING,
-      date: formatDateToFrench()
-    })
+    return this._draftService.addDraft(transactionData)
   }
 
   async updateDraft(draftId, updates) {
-    if (updates.montant !== undefined) {
-      this._validateFcfaAmount(updates.montant, 'updateDraft')
-    }
-    return runTransaction(db, async (tx) => {
-      const draftRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
-      const draftSnap = await tx.get(draftRef)
-
-      if (!draftSnap.exists()) {
-        throw new Error('Transaction introuvable')
-      }
-
-      const currentDraft = draftSnap.data()
-      const balanceRef = this.getNetworkBalanceDocRef()
-      const balanceSnap = await tx.get(balanceRef)
-      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-      const nextDraft = buildDraftPayload(currentDraft, updates)
-      const { nextBalances } = computeDraftUpdateImpacts(currentDraft, nextDraft, currentBalances)
-      const now = serverTimestamp()
-
-      tx.update(draftRef, {
-        ...updates,
-        statut: FIRESTORE_CONFIG.STATUS.PENDING,
-        updatedAt: now
-      })
-      tx.set(balanceRef, {
-        balances: nextBalances,
-        updatedAt: now
-      }, { merge: true })
-
-      return { id: draftId, ...nextDraft }
-    })
+    return this._draftService.updateDraft(draftId, updates)
   }
 
   async deleteDraft(draftId) {
-    return runTransaction(db, async (tx) => {
-      const draftRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
-      const draftSnap = await tx.get(draftRef)
-
-      if (!draftSnap.exists()) {
-        return false
-      }
-
-      const balanceRef = this.getNetworkBalanceDocRef()
-      const balanceSnap = await tx.get(balanceRef)
-      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-      const nextBalances = this.reverseInitialTransactionImpact(currentBalances, draftSnap.data())
-      const now = serverTimestamp()
-
-      tx.delete(draftRef)
-      tx.set(balanceRef, {
-        balances: nextBalances,
-        updatedAt: now
-      }, { merge: true })
-
-      return true
-    })
+    return this._draftService.deleteDraft(draftId)
   }
 
   subscribeToDrafts(callback) {
-    const collectionRef = this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS)
-
-    return onSnapshot(collectionRef,
-      (snapshot) => {
-        try {
-          const documents = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-          callback(documents)
-        } catch (error) {
-          console.error('Drafts snapshot processing error:', error)
-        }
-      },
-      (error) => {
-        console.error('Drafts subscription error:', error)
-      }
-    )
+    return this._draftService.subscribeToDrafts(callback)
   }
 
   // HISTORY (Transactions terminées)
@@ -968,41 +902,7 @@ export class FirestoreService {
   }
 
   async addTransaction(transactionData) {
-    this.requireActiveStore()
-    this._validateFcfaAmount(transactionData.montant, 'addTransaction')
-
-    try {
-      return await runTransaction(db, async (tx) => {
-        const balanceRef = this.getNetworkBalanceDocRef()
-        const balanceSnap = await tx.get(balanceRef)
-        const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-        const nextBalances = this.applyInitialTransactionImpact(currentBalances, transactionData)
-        const targetCollection = this.isPendingStatus(transactionData.statut)
-          ? FIRESTORE_CONFIG.COLLECTIONS.DRAFTS
-          : FIRESTORE_CONFIG.COLLECTIONS.HISTORY
-        const transactionRef = doc(this.collectionRef(targetCollection))
-        const now = serverTimestamp()
-        const transactionPayload = {
-          ...transactionData,
-          date: formatDateToFrench(),
-          createdAt: now,
-          updatedAt: now
-        }
-
-        tx.set(transactionRef, transactionPayload)
-        tx.set(balanceRef, {
-          balances: nextBalances,
-          updatedAt: now
-        }, { merge: true })
-
-        return { id: transactionRef.id, ...transactionPayload }
-      })
-    } catch (error) {
-      const friendlyMessage = getUserFriendlyMessage(error)
-      const enhancedError = new Error(friendlyMessage)
-      enhancedError.originalError = error
-      throw enhancedError
-    }
+    return this._draftService.addTransaction(transactionData)
   }
 
   async deleteFromHistory(historyId) {
@@ -1101,85 +1001,9 @@ export class FirestoreService {
     return _mapPaymentMethodToNetworkFn(paymentMethod)
   }
 
-  // VALIDATION DE TRANSACTION (Drafts → History)
+  // VALIDATION DE TRANSACTION (Drafts → History) — délègue à DraftService
   async validateTransaction(draftId, customStatus = 'Validée', selectedPaymentMethod = null) {
-    try {
-      this.requireActiveStore()
-
-      // 1. Récupérer la transaction draft directement par ID
-      const draftDocRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
-      const draftDoc = await getDoc(draftDocRef)
-
-      if (!draftDoc.exists()) {
-        console.warn(`Transaction draft ${draftId} n'existe pas ou a déjà été supprimée`)
-        return false
-      }
-
-      const transactionData = draftDoc.data()
-
-      // 2. Vérifier que les données sont valides avant de les ajouter à l'historique
-      if (!transactionData.clientId || !transactionData.type || !transactionData.montant) {
-        console.warn(`Transaction draft ${draftId} a des données incomplètes:`, transactionData)
-        return false
-      }
-
-      // 2b. Valider le montant FCFA (entier strictement positif)
-      this._validateFcfaAmount(transactionData.montant, 'validateTransaction')
-
-      // 3. Extraire la méthode de paiement du statut si pas fournie explicitement
-      let effectivePaymentMethod = selectedPaymentMethod
-      if (!effectivePaymentMethod && customStatus !== 'Validée') {
-        // Extraire de "Payé par Orange Money" => "Orange Money"
-        const match = customStatus.match(/(?:Payé|Remboursé|Encaissé) par (.+)$/)
-        if (match) {
-          effectivePaymentMethod = match[1]
-        }
-      }
-
-      const settlementAction = this.getSettlementActionFromStatus(customStatus)
-      const effectiveNetworkMapped = effectivePaymentMethod ? this.mapPaymentMethodToNetwork(effectivePaymentMethod) : transactionData.reseau
-      return await runTransaction(db, async (tx) => {
-        const lockedDraftDoc = await tx.get(draftDocRef)
-
-        if (!lockedDraftDoc.exists()) {
-          return false
-        }
-
-        const lockedTransactionData = lockedDraftDoc.data()
-        this.validateSettlementAction(lockedTransactionData.type, settlementAction)
-        const balanceRef = this.getNetworkBalanceDocRef()
-        const balanceSnap = await tx.get(balanceRef)
-        const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-        const nextBalances = effectivePaymentMethod
-          ? this.applySettlementImpact(currentBalances, lockedTransactionData, effectivePaymentMethod)
-          : currentBalances
-        const now = serverTimestamp()
-        const historyData = {
-          ...lockedTransactionData,
-          statut: customStatus,
-          paymentMethod: effectivePaymentMethod,
-          effectiveNetwork: effectiveNetworkMapped,
-          validatedAt: now,
-          updatedAt: now
-        }
-
-        const historyRef = doc(this.collectionRef(FIRESTORE_CONFIG.COLLECTIONS.HISTORY))
-        tx.set(historyRef, historyData)
-        tx.delete(draftDocRef)
-        tx.set(balanceRef, {
-          balances: nextBalances,
-          updatedAt: now
-        }, { merge: true })
-
-        return true
-      })
-    } catch (error) {
-      console.error('Transaction validation error:', error)
-      const friendlyMessage = getUserFriendlyMessage(error)
-      const enhancedError = new Error(friendlyMessage)
-      enhancedError.originalError = error
-      throw enhancedError
-    }
+    return this._draftService.validateTransaction(draftId, customStatus, selectedPaymentMethod)
   }
 
   // MIGRATION DES DONNÉES LOCALSTORAGE
