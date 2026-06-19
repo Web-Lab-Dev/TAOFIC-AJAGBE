@@ -18,8 +18,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { getUserFriendlyMessage, withErrorHandling } from '../utils/errorHandler'
-import { formatDateToFrench } from '../utils/helpers'
+import { withErrorHandling } from '../utils/errorHandler'
 import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
 import { CLIENT_ID, getFirestoreCollectionPath } from '../config/clientIsolation'
@@ -46,6 +45,7 @@ import {
   applySettlementImpact as _applySettlementImpactFn
 } from '../utils/financialImpact.js'
 import { DraftService } from './draftService.js'
+import { HistoryService } from './historyService.js'
 
 // Service Firestore modulaire avec cache, gestion d'erreurs et optimisations
 
@@ -70,6 +70,10 @@ export class FirestoreService {
     // On passe this comme contexte vivant (pas de bind anticipé) afin que
     // les spies posés sur l'instance après construction soient honorés.
     this._draftService = new DraftService({ ctx: this })
+
+    // Service délégué pour l'orchestration de l'historique.
+    // Même pattern : contexte vivant pour honorer les spies.
+    this._historyService = new HistoryService({ ctx: this })
   }
 
   _validateFcfaAmount(raw, context = '') {
@@ -888,17 +892,14 @@ export class FirestoreService {
     return this._draftService.subscribeToDrafts(callback)
   }
 
-  // HISTORY (Transactions terminées)
+  // HISTORY (Transactions terminées) — délèguent à HistoryService
+
   async getHistory() {
-    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.HISTORY)
+    return this._historyService.getHistory()
   }
 
   async addToHistory(transactionData) {
-    this._validateFcfaAmount(transactionData.montant, 'addToHistory')
-    return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, {
-      ...transactionData,
-      date: formatDateToFrench()
-    })
+    return this._historyService.addToHistory(transactionData)
   }
 
   async addTransaction(transactionData) {
@@ -906,94 +907,11 @@ export class FirestoreService {
   }
 
   async deleteFromHistory(historyId) {
-    this.requireActiveStore()
-    try {
-      return await runTransaction(db, async (tx) => {
-        const historyRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, historyId)
-        const historySnap = await tx.get(historyRef)
-
-        if (!historySnap.exists()) {
-          throw new Error(`Transaction ${historyId} introuvable`)
-        }
-
-        const historyData = historySnap.data()
-
-        if (this.normalizeTransactionLabel(historyData.statut) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.CANCELLED)) {
-          return false
-        }
-
-        const balanceRef = this.getNetworkBalanceDocRef()
-        const balanceSnap = await tx.get(balanceRef)
-
-        if (!balanceSnap.exists()) {
-          throw new Error('Impossible de lire networkBalances/current : document absent. Le renversement est annulé.')
-        }
-        const rawBalances = balanceSnap.data()
-        const currentBalances = this.normalizeNetworkBalances(rawBalances)
-        if (!currentBalances || typeof currentBalances !== 'object' || Array.isArray(currentBalances) || Object.keys(currentBalances).length === 0) {
-          throw new Error('Données de soldes invalides ou absentes. Le renversement est annulé.')
-        }
-
-        const nextBalances = this.reverseHistoryTransactionImpact(currentBalances, historyData)
-        const now = serverTimestamp()
-
-        tx.update(historyRef, {
-          statut: FIRESTORE_CONFIG.STATUS.CANCELLED,
-          updatedAt: now,
-        })
-        tx.set(balanceRef, {
-          balances: nextBalances,
-          updatedAt: now,
-        }, { merge: true })
-
-        return true
-      })
-    } catch (error) {
-      const friendlyMessage = getUserFriendlyMessage(error)
-      const enhancedError = new Error(friendlyMessage)
-      enhancedError.originalError = error
-      throw enhancedError
-    }
+    return this._historyService.deleteFromHistory(historyId)
   }
 
   subscribeToHistory(callback, filters = {}) {
-    let queryOptions = {
-      // ⚠️ Pas de orderByField pour inclure TOUS les éléments d'historique, même sans createdAt
-      // orderByField: 'createdAt',
-      // orderDirection: 'desc'
-    }
-
-    // Ajouter des filtres si spécifiés
-    if (filters.clientId || filters.dateRange) {
-      queryOptions.where = []
-
-      if (filters.clientId) {
-        queryOptions.where.push({
-          field: 'clientId',
-          operator: '==',
-          value: filters.clientId
-        })
-      }
-
-      if (filters.dateRange) {
-        if (filters.dateRange.start) {
-          queryOptions.where.push({
-            field: 'createdAt',
-            operator: '>=',
-            value: filters.dateRange.start
-          })
-        }
-        if (filters.dateRange.end) {
-          queryOptions.where.push({
-            field: 'createdAt',
-            operator: '<=',
-            value: filters.dateRange.end
-          })
-        }
-      }
-    }
-
-    return this.subscribeToCollection(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, callback, queryOptions)
+    return this._historyService.subscribeToHistory(callback, filters)
   }
 
   // Helper pour mapper les méthodes de paiement aux réseaux
