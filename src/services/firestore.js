@@ -23,6 +23,7 @@ import { formatDateToFrench } from '../utils/helpers'
 import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
 import { CLIENT_ID, getFirestoreCollectionPath } from '../config/clientIsolation'
+import { parseFcfaAmount } from '../utils/fcfaAmount.js'
 
 // Service Firestore modulaire avec cache, gestion d'erreurs et optimisations
 
@@ -49,6 +50,17 @@ export class FirestoreService {
 
     // Configurer la fonction de fetch pour le cache
     cacheManager.setFetchFunction(this.fetchFromFirestore.bind(this))
+  }
+
+  _validateFcfaAmount(raw, context = '') {
+    const amount = parseFcfaAmount(raw)
+    if (amount === null) {
+      throw new Error(
+        `Montant FCFA invalide${context ? ' dans ' + context : ''} : ${JSON.stringify(raw)}. ` +
+        'Le montant doit être un entier strictement positif.'
+      )
+    }
+    return amount
   }
 
   setActiveStore(store = {}) {
@@ -709,7 +721,7 @@ export class FirestoreService {
   }
 
   applyInitialTransactionImpact(balances, transactionData) {
-    const amount = Number(transactionData.montant) || 0
+    const amount = this._validateFcfaAmount(transactionData.montant, 'applyInitialTransactionImpact')
     const network = transactionData.reseau
 
     if (this.isPendingStatus(transactionData.statut)) {
@@ -744,7 +756,7 @@ export class FirestoreService {
   }
 
   reverseInitialTransactionImpact(balances, transactionData) {
-    const amount = Number(transactionData.montant) || 0
+    const amount = this._validateFcfaAmount(transactionData.montant, 'reverseInitialTransactionImpact')
     const network = transactionData.reseau
 
     if (this.isPendingStatus(transactionData.statut)) {
@@ -837,7 +849,7 @@ export class FirestoreService {
   }
 
   applySettlementImpact(balances, transactionData, paymentMethod) {
-    const amount = Number(transactionData.montant) || 0
+    const amount = this._validateFcfaAmount(transactionData.montant, 'applySettlementImpact')
     const targetNetwork = this.mapPaymentMethodToNetwork(paymentMethod)
     const delta = this.isWithdrawalType(transactionData.type) ? -amount : amount
 
@@ -1041,6 +1053,9 @@ export class FirestoreService {
   }
 
   async updateDraft(draftId, updates) {
+    if (updates.montant !== undefined) {
+      this._validateFcfaAmount(updates.montant, 'updateDraft')
+    }
     return runTransaction(db, async (tx) => {
       const draftRef = this.docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
       const draftSnap = await tx.get(draftRef)
@@ -1128,6 +1143,7 @@ export class FirestoreService {
   }
 
   async addToHistory(transactionData) {
+    this._validateFcfaAmount(transactionData.montant, 'addToHistory')
     return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, {
       ...transactionData,
       date: formatDateToFrench()
@@ -1136,6 +1152,7 @@ export class FirestoreService {
 
   async addTransaction(transactionData) {
     this.requireActiveStore()
+    this._validateFcfaAmount(transactionData.montant, 'addTransaction')
 
     try {
       return await runTransaction(db, async (tx) => {
@@ -1297,6 +1314,9 @@ export class FirestoreService {
         return false
       }
 
+      // 2b. Valider le montant FCFA (entier strictement positif)
+      this._validateFcfaAmount(transactionData.montant, 'validateTransaction')
+
       // 3. Extraire la méthode de paiement du statut si pas fournie explicitement
       let effectivePaymentMethod = selectedPaymentMethod
       if (!effectivePaymentMethod && customStatus !== 'Validée') {
@@ -1397,7 +1417,12 @@ export class FirestoreService {
       for (const transaction of pendingTransactions) {
         const fixedTransaction = fixTransactionClientId(transaction)
         if (fixedTransaction) {
-          await this.addDraft(fixedTransaction)
+          const validatedAmount = parseFcfaAmount(fixedTransaction.montant)
+          if (validatedAmount === null) {
+            console.warn('Migration : transaction ignorée — montant FCFA invalide :', fixedTransaction)
+            continue
+          }
+          await this.addDraft({ ...fixedTransaction, montant: validatedAmount })
         }
       }
 
@@ -1405,7 +1430,12 @@ export class FirestoreService {
       for (const transaction of completedTransactions) {
         const fixedTransaction = fixTransactionClientId(transaction)
         if (fixedTransaction) {
-          await this.addToHistory(fixedTransaction)
+          const validatedAmount = parseFcfaAmount(fixedTransaction.montant)
+          if (validatedAmount === null) {
+            console.warn('Migration : transaction ignorée — montant FCFA invalide :', fixedTransaction)
+            continue
+          }
+          await this.addToHistory({ ...fixedTransaction, montant: validatedAmount })
         }
       }
 

@@ -193,8 +193,8 @@ describe('TC-002 — applyInitialTransactionImpact : cas retrait', () => {
     )
   })
 
-  // Retrait Validée montant nul — balances inchangées
-  it('[TC-002-L2] retrait Validée montant 0 — balances inchangées', () => {
+  // Retrait Validée montant nul — désormais refusé : lève une erreur FCFA
+  it('[TC-002-L2] retrait Validée montant 0 — lève une erreur FCFA invalide', () => {
     const transactionData = {
       type: 'Retrait',
       statut: 'Validée',
@@ -202,11 +202,9 @@ describe('TC-002 — applyInitialTransactionImpact : cas retrait', () => {
       reseau: 'Orange',
     }
 
-    const result = svc.applyInitialTransactionImpact(baseBalances, transactionData)
-
-    expect(result.Orange.stock).toBe(1000)
-    expect(result.Orange.liquidite).toBe(500)
-    expect(result.Moov.stock).toBe(800)
+    expect(() => svc.applyInitialTransactionImpact(baseBalances, transactionData)).toThrow(
+      'Montant FCFA invalide'
+    )
   })
 
   // Immutabilité

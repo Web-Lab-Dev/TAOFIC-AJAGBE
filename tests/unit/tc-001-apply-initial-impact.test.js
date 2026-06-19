@@ -169,8 +169,8 @@ describe('TC-001 — applyInitialTransactionImpact : cas dépôt', () => {
     expect(result.Orange.liquidite).toBe(500)
   })
 
-  // Montant nul — comportement actuel : aucune variation (capturer sans corriger)
-  it('[TC-001-L1] dépôt Validée montant 0 — balances retournées inchangées', () => {
+  // Montant nul — désormais refusé : lève une erreur (garde FCFA entier strictement positif)
+  it('[TC-001-L1] dépôt Validée montant 0 — lève une erreur FCFA invalide', () => {
     const transactionData = {
       type: 'Dépôt',
       statut: 'Validée',
@@ -178,10 +178,9 @@ describe('TC-001 — applyInitialTransactionImpact : cas dépôt', () => {
       reseau: 'Orange',
     }
 
-    const result = svc.applyInitialTransactionImpact(baseBalances, transactionData)
-
-    expect(result.Orange.stock).toBe(1000)
-    expect(result.Orange.liquidite).toBe(500)
+    expect(() => svc.applyInitialTransactionImpact(baseBalances, transactionData)).toThrow(
+      'Montant FCFA invalide'
+    )
   })
 
   // Crédit statut Validée — doit lever une erreur métier spécifique
