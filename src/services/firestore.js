@@ -24,17 +24,31 @@ import cacheManager, { cacheUtils } from '../utils/cacheManager'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
 import { CLIENT_ID, getFirestoreCollectionPath } from '../config/clientIsolation'
 import { parseFcfaAmount } from '../utils/fcfaAmount.js'
+import {
+  validateFcfaAmount as _validateFcfaAmountFn,
+  normalizeNetworkBalances as _normalizeNetworkBalancesFn,
+  adjustBalanceValue as _adjustBalanceValueFn,
+  applyLiquidityDelta as _applyLiquidityDeltaFn,
+  normalizeTransactionLabel as _normalizeTransactionLabelFn,
+  isDepositType as _isDepositTypeFn,
+  isWithdrawalType as _isWithdrawalTypeFn,
+  isCreditType as _isCreditTypeFn,
+  isPendingStatus as _isPendingStatusFn,
+  isValidatedStatus as _isValidatedStatusFn,
+  mapPaymentMethodToNetwork as _mapPaymentMethodToNetworkFn,
+  getSettlementActionFromStatus as _getSettlementActionFromStatusFn,
+  validateSettlementAction as _validateSettlementActionFn,
+  applyInitialTransactionImpact as _applyInitialTransactionImpactFn,
+  reverseInitialTransactionImpact as _reverseInitialTransactionImpactFn,
+  reversePendingOnlyImpact as _reversePendingOnlyImpactFn,
+  reverseDirectValidatedImpact as _reverseDirectValidatedImpactFn,
+  reverseHistoryTransactionImpact as _reverseHistoryTransactionImpactFn,
+  applySettlementImpact as _applySettlementImpactFn
+} from '../utils/financialImpact.js'
 
 // Service Firestore modulaire avec cache, gestion d'erreurs et optimisations
 
 const CURRENT_BALANCE_DOC_ID = 'current'
-const DEFAULT_NETWORK_BALANCES = {
-  Orange: { stock: 0, liquidite: 0 },
-  Moov: { stock: 0, liquidite: 0 },
-  Telecel: { stock: 0, liquidite: 0 },
-  Coris: { stock: 0, liquidite: 0 },
-  Sank: { stock: 0, liquidite: 0 }
-}
 
 export class FirestoreService {
   constructor() {
@@ -53,14 +67,7 @@ export class FirestoreService {
   }
 
   _validateFcfaAmount(raw, context = '') {
-    const amount = parseFcfaAmount(raw)
-    if (amount === null) {
-      throw new Error(
-        `Montant FCFA invalide${context ? ' dans ' + context : ''} : ${JSON.stringify(raw)}. ` +
-        'Le montant doit être un entier strictement positif.'
-      )
-    }
-    return amount
+    return _validateFcfaAmountFn(raw, context)
   }
 
   setActiveStore(store = {}) {
@@ -627,257 +634,71 @@ export class FirestoreService {
   }
 
   normalizeNetworkBalances(data = {}) {
-    const source = data.balances || data
-    const normalized = { ...DEFAULT_NETWORK_BALANCES }
-
-    Object.entries(source || {}).forEach(([network, value]) => {
-      if (!value || typeof value !== 'object') return
-
-      normalized[network] = {
-        stock: Math.max(0, Number(value.stock) || 0),
-        liquidite: Math.max(0, Number(value.liquidite) || 0)
-      }
-    })
-
-    return normalized
+    return _normalizeNetworkBalancesFn(data)
   }
 
   adjustBalanceValue(balances, network, field, delta) {
-    const next = { ...balances }
-    const current = next[network] || { stock: 0, liquidite: 0 }
-    const currentValue = Number(current[field]) || 0
-
-    if (delta < 0 && currentValue + delta < 0) {
-      const label = field === 'stock' ? 'Stock' : 'Liquidite'
-      const target = field === 'stock' ? ` pour ${network}` : ''
-      throw new Error(`${label} insuffisant${target}. Disponible: ${currentValue.toLocaleString('fr-FR')} FCFA`)
-    }
-
-    next[network] = {
-      ...current,
-      [field]: currentValue + delta
-    }
-
-    return next
+    return _adjustBalanceValueFn(balances, network, field, delta)
   }
 
   applyLiquidityDelta(balances, delta) {
-    const networks = Object.keys(balances)
-    const firstNetwork = networks[0] || 'Orange'
-
-    if (delta >= 0) {
-      return this.adjustBalanceValue(balances, firstNetwork, 'liquidite', delta)
-    }
-
-    let remaining = Math.abs(delta)
-    let next = { ...balances }
-
-    for (const network of networks) {
-      if (remaining <= 0) break
-
-      const currentLiquidity = Number(next[network]?.liquidite) || 0
-      const amountToRemove = Math.min(currentLiquidity, remaining)
-      next = this.adjustBalanceValue(next, network, 'liquidite', -amountToRemove)
-      remaining -= amountToRemove
-    }
-
-    if (remaining > 0) {
-      const totalLiquidity = Object.values(balances).reduce(
-        (sum, data) => sum + (Number(data?.liquidite) || 0),
-        0
-      )
-      throw new Error(`Liquidite insuffisante. Disponible: ${totalLiquidity.toLocaleString('fr-FR')} FCFA`)
-    }
-
-    return next
+    return _applyLiquidityDeltaFn(balances, delta)
   }
 
   normalizeTransactionLabel(value) {
-    return String(value || '')
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
+    return _normalizeTransactionLabelFn(value)
   }
 
   isDepositType(type) {
-    return this.normalizeTransactionLabel(type) === 'depot'
+    return _isDepositTypeFn(type)
   }
 
   isWithdrawalType(type) {
-    return this.normalizeTransactionLabel(type) === 'retrait'
+    return _isWithdrawalTypeFn(type)
   }
 
   isCreditType(type) {
-    return this.normalizeTransactionLabel(type) === 'credit'
+    return _isCreditTypeFn(type)
   }
 
   isPendingStatus(status) {
-    return this.normalizeTransactionLabel(status) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.PENDING)
+    return _isPendingStatusFn(status)
   }
 
   isValidatedStatus(status) {
-    return this.normalizeTransactionLabel(status) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.VALIDATED)
+    return _isValidatedStatusFn(status)
   }
 
   applyInitialTransactionImpact(balances, transactionData) {
-    const amount = this._validateFcfaAmount(transactionData.montant, 'applyInitialTransactionImpact')
-    const network = transactionData.reseau
-
-    if (this.isPendingStatus(transactionData.statut)) {
-      if (this.isDepositType(transactionData.type) || this.isCreditType(transactionData.type)) {
-        return this.adjustBalanceValue(balances, network, 'stock', -amount)
-      }
-
-      if (this.isWithdrawalType(transactionData.type)) {
-        return this.adjustBalanceValue(balances, network, 'stock', amount)
-      }
-    }
-
-    if (this.isValidatedStatus(transactionData.statut)) {
-      if (this.isCreditType(transactionData.type)) {
-        throw new Error('Les credits doivent etre rembourses via une methode de paiement')
-      }
-
-      if (this.isDepositType(transactionData.type)) {
-        return this.applyLiquidityDelta(
-          this.adjustBalanceValue(balances, network, 'stock', -amount),
-          amount
-        )
-      }
-
-      if (this.isWithdrawalType(transactionData.type)) {
-        const balancesAfterCashPayment = this.applyLiquidityDelta(balances, -amount)
-        return this.adjustBalanceValue(balancesAfterCashPayment, network, 'stock', amount)
-      }
-    }
-
-    return balances
+    return _applyInitialTransactionImpactFn(balances, transactionData)
   }
 
   reverseInitialTransactionImpact(balances, transactionData) {
-    const amount = this._validateFcfaAmount(transactionData.montant, 'reverseInitialTransactionImpact')
-    const network = transactionData.reseau
-
-    if (this.isPendingStatus(transactionData.statut)) {
-      if (this.isDepositType(transactionData.type) || this.isCreditType(transactionData.type)) {
-        return this.adjustBalanceValue(balances, network, 'stock', amount)
-      }
-
-      if (this.isWithdrawalType(transactionData.type)) {
-        return this.adjustBalanceValue(balances, network, 'stock', -amount)
-      }
-    }
-
-    return balances
+    return _reverseInitialTransactionImpactFn(balances, transactionData)
   }
 
   _reversePendingOnlyImpact(balances, type, reseau, amount) {
-    if (this.isDepositType(type) || this.isCreditType(type)) {
-      return this.adjustBalanceValue(balances, reseau, 'stock', amount)
-    }
-    if (this.isWithdrawalType(type)) {
-      return this.adjustBalanceValue(balances, reseau, 'stock', -amount)
-    }
-    throw new Error(`Type de transaction non reconnu pour le renversement : ${type}`)
+    return _reversePendingOnlyImpactFn(balances, type, reseau, amount)
   }
 
   _reverseDirectValidatedImpact(balances, type, reseau, amount) {
-    if (this.isDepositType(type)) {
-      return this.applyLiquidityDelta(
-        this.adjustBalanceValue(balances, reseau, 'stock', amount),
-        -amount
-      )
-    }
-    if (this.isWithdrawalType(type)) {
-      throw new Error('Renversement impossible : la répartition exacte de la liquidité consommée par ce retrait n\'est pas disponible. Cette transaction ne peut pas être annulée automatiquement.')
-    }
-    if (this.isCreditType(type)) {
-      return this.adjustBalanceValue(balances, reseau, 'stock', amount)
-    }
-    throw new Error(`Type de transaction non reconnu pour le renversement : ${type}`)
+    return _reverseDirectValidatedImpactFn(balances, type, reseau, amount)
   }
 
   reverseHistoryTransactionImpact(currentBalances, historyData) {
-    const rawAmount = historyData.montant
-    const amount = Number(rawAmount)
-    const reseau = historyData.reseau
-    const type = historyData.type
-    const paymentMethod = historyData.paymentMethod || null
-    const effectiveNetwork = historyData.effectiveNetwork || null
-    const statut = historyData.statut
-
-    if (this.normalizeTransactionLabel(statut) === this.normalizeTransactionLabel(FIRESTORE_CONFIG.STATUS.CANCELLED)) {
-      throw new Error('Cette transaction est déjà annulée')
-    }
-
-    if (!Number.isInteger(amount) || amount <= 0) {
-      throw new Error(`Le montant doit être un entier strictement positif pour le renversement : ${rawAmount}`)
-    }
-
-    if (!reseau) {
-      throw new Error('Données de transaction incomplètes pour le renversement financier')
-    }
-
-    if (!type) {
-      throw new Error('Données de transaction incomplètes pour le renversement financier')
-    }
-
-    if (!this.isDepositType(type) && !this.isWithdrawalType(type) && !this.isCreditType(type)) {
-      throw new Error(`Type de transaction non reconnu pour le renversement : ${type}`)
-    }
-
-    // Path 2 avec règlement : annuler le règlement puis l'impact pending
-    if (paymentMethod) {
-      const settlementDelta = this.isWithdrawalType(type) ? -amount : amount
-      let next
-      if (effectiveNetwork === 'Liquidite') {
-        next = this.applyLiquidityDelta(currentBalances, -settlementDelta)
-      } else {
-        next = this.adjustBalanceValue(currentBalances, effectiveNetwork, 'stock', -settlementDelta)
-      }
-      return this._reversePendingOnlyImpact(next, type, reseau, amount)
-    }
-
-    // Path 2 sans règlement : annuler uniquement l'impact pending
-    if (historyData.validatedAt) {
-      return this._reversePendingOnlyImpact(currentBalances, type, reseau, amount)
-    }
-
-    // Path 1 direct validée : annuler applyInitialTransactionImpact(Validée)
-    return this._reverseDirectValidatedImpact(currentBalances, type, reseau, amount)
+    return _reverseHistoryTransactionImpactFn(currentBalances, historyData)
   }
 
   applySettlementImpact(balances, transactionData, paymentMethod) {
-    const amount = this._validateFcfaAmount(transactionData.montant, 'applySettlementImpact')
-    const targetNetwork = this.mapPaymentMethodToNetwork(paymentMethod)
-    const delta = this.isWithdrawalType(transactionData.type) ? -amount : amount
-
-    if (targetNetwork === 'Liquidite') {
-      return this.applyLiquidityDelta(balances, delta)
-    }
-
-    return this.adjustBalanceValue(balances, targetNetwork, 'stock', delta)
+    return _applySettlementImpactFn(balances, transactionData, paymentMethod)
   }
 
   getSettlementActionFromStatus(status) {
-    if (status?.startsWith('Payé par ')) return 'payerPar'
-    if (status?.startsWith('Remboursé par ')) return 'rembourser'
-    if (status?.startsWith('Encaissé par ')) return 'encaisser'
-    return null
+    return _getSettlementActionFromStatusFn(status)
   }
 
   validateSettlementAction(transactionType, action) {
-    let expectedAction = null
-    if (this.isWithdrawalType(transactionType)) expectedAction = 'payerPar'
-    if (this.isCreditType(transactionType)) expectedAction = 'rembourser'
-    if (this.isDepositType(transactionType)) expectedAction = 'encaisser'
-
-    if (!action || expectedAction === action) {
-      return
-    }
-
-    throw new Error(`Action ${action} non autorisee pour ${transactionType}`)
+    return _validateSettlementActionFn(transactionType, action)
   }
 
   async setNetworkBalances(balances) {
@@ -1281,15 +1102,7 @@ export class FirestoreService {
 
   // Helper pour mapper les méthodes de paiement aux réseaux
   mapPaymentMethodToNetwork(paymentMethod) {
-    const mapping = {
-      'Orange Money': 'Orange',
-      'Moov Money': 'Moov',
-      'Sank Money': 'Sank',
-      'Coris Money': 'Coris',
-      'Telecel Money': 'Telecel',
-      'Cash': 'Liquidite'
-    }
-    return mapping[paymentMethod] || paymentMethod
+    return _mapPaymentMethodToNetworkFn(paymentMethod)
   }
 
   // VALIDATION DE TRANSACTION (Drafts → History)
