@@ -1,30 +1,6 @@
 import { NETWORK_CODES, TRANSACTION_STYLES, FILTER_CONFIG } from './constants.js'
 
 /**
- * Génère un ID unique sécurisé pour les transactions
- * Utilise crypto.randomUUID() si disponible, sinon fallback
- */
-let lastTimestamp = 0
-let counter = 0
-
-export const generateTransactionId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
-  }
-
-  // Fallback amélioré pour éviter les collisions
-  const timestamp = Date.now()
-  if (timestamp === lastTimestamp) {
-    counter++
-  } else {
-    counter = 0
-    lastTimestamp = timestamp
-  }
-
-  return `${timestamp}_${counter}_${Math.random().toString(36).substr(2, 12)}`
-}
-
-/**
  * Extrait le nom complet du client
  * Gère les différents formats de client (string, object, null)
  */

@@ -23,14 +23,6 @@ export const PAYMENT_METHODS = [
   'Cash'
 ]
 
-// Status des transactions
-export const TRANSACTION_STATUS = {
-  PENDING: 'Non Terminées',
-  COMPLETED: 'Validée',
-  PAID_BY: (method) => `Payé par ${method}`,
-  REFUNDED_BY: (method) => `Remboursé par ${method}`
-}
-
 // Styles pour les types de transactions
 export const TRANSACTION_STYLES = {
   'Retrait': {

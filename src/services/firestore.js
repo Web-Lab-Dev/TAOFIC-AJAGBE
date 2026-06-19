@@ -51,7 +51,6 @@ import { BalanceService } from './balanceService.js'
 export class FirestoreService {
   constructor() {
     this.activeStore = null
-    this.listeners = new Map()
     this.connectionPool = new Map() // Pool de connexions pour optimiser les listeners
     this.metrics = {
       operations: 0,
@@ -575,13 +574,7 @@ export class FirestoreService {
    * Désabonner tous les listeners
    */
   unsubscribeAll() {
-    // Anciens listeners (compatibilité)
-    this.listeners.forEach((unsubscribe, _collectionName) => {
-      unsubscribe()
-    })
-    this.listeners.clear()
-
-    // Nouveaux listeners optimisés
+    // Listeners optimisés
     this.connectionPool.forEach((listenerInfo, _subscriptionKey) => {
       listenerInfo.unsubscribe()
     })
@@ -595,13 +588,6 @@ export class FirestoreService {
    * Désabonner un listener spécifique
    */
   unsubscribeFromCollection(collectionName) {
-    // Legacy support
-    const unsubscribe = this.listeners.get(collectionName)
-    if (unsubscribe) {
-      unsubscribe()
-      this.listeners.delete(collectionName)
-    }
-
     // Optimized listeners
     const keysToRemove = []
     this.connectionPool.forEach((listenerInfo, key) => {
@@ -630,12 +616,12 @@ export class FirestoreService {
     return {
       ...this.metrics,
       cacheStats: cacheManager.getStats(),
-      activeListeners: this.connectionPool.size + this.listeners.size,
+      activeListeners: this.connectionPool.size,
       connectionPoolSize: this.connectionPool.size,
-      legacyListenersSize: this.listeners.size,
       cacheHitRatio: this.metrics.cacheHits > 0
         ? (this.metrics.cacheHits / (this.metrics.cacheHits + this.metrics.cacheMisses))
-        : 0
+        : 0,
+      legacyListenersSize: 0
     }
   }
 
