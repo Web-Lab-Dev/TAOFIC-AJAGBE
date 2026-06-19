@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   addDoc,
-  setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
@@ -14,7 +13,6 @@ import {
   limit,
   startAfter,
   writeBatch,
-  runTransaction,
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
@@ -46,10 +44,9 @@ import {
 } from '../utils/financialImpact.js'
 import { DraftService } from './draftService.js'
 import { HistoryService } from './historyService.js'
+import { BalanceService } from './balanceService.js'
 
 // Service Firestore modulaire avec cache, gestion d'erreurs et optimisations
-
-const CURRENT_BALANCE_DOC_ID = 'current'
 
 export class FirestoreService {
   constructor() {
@@ -74,6 +71,10 @@ export class FirestoreService {
     // Service délégué pour l'orchestration de l'historique.
     // Même pattern : contexte vivant pour honorer les spies.
     this._historyService = new HistoryService({ ctx: this })
+
+    // Service délégué pour l'orchestration des soldes réseau.
+    // Même pattern : contexte vivant pour honorer les spies.
+    this._balanceService = new BalanceService({ ctx: this })
   }
 
   _validateFcfaAmount(raw, context = '') {
@@ -639,8 +640,7 @@ export class FirestoreService {
   }
 
   getNetworkBalanceDocRef() {
-    this.requireActiveStore()
-    return this.docRef(FIRESTORE_CONFIG.COLLECTIONS.NETWORK_BALANCES, CURRENT_BALANCE_DOC_ID)
+    return this._balanceService.getNetworkBalanceDocRef()
   }
 
   normalizeNetworkBalances(data = {}) {
@@ -712,66 +712,19 @@ export class FirestoreService {
   }
 
   async setNetworkBalances(balances) {
-    const normalizedBalances = this.normalizeNetworkBalances(balances)
-
-    await setDoc(this.getNetworkBalanceDocRef(), {
-      balances: normalizedBalances,
-      updatedAt: serverTimestamp()
-    }, { merge: true })
-
-    return normalizedBalances
+    return this._balanceService.setNetworkBalances(balances)
   }
 
   async ensureNetworkBalances(initialBalances) {
-    return runTransaction(db, async (tx) => {
-      const balanceRef = this.getNetworkBalanceDocRef()
-      const balanceSnap = await tx.get(balanceRef)
-
-      if (balanceSnap.exists()) {
-        return this.normalizeNetworkBalances(balanceSnap.data())
-      }
-
-      const normalizedBalances = this.normalizeNetworkBalances(initialBalances)
-      tx.set(balanceRef, {
-        balances: normalizedBalances,
-        updatedAt: serverTimestamp()
-      })
-
-      return normalizedBalances
-    })
+    return this._balanceService.ensureNetworkBalances(initialBalances)
   }
 
   async setNetworkBalance(network, type, amount) {
-    return runTransaction(db, async (tx) => {
-      const balanceRef = this.getNetworkBalanceDocRef()
-      const balanceSnap = await tx.get(balanceRef)
-      const currentBalances = this.normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-      const nextBalances = {
-        ...currentBalances,
-        [network]: {
-          ...(currentBalances[network] || { stock: 0, liquidite: 0 }),
-          [type]: Math.max(0, Number(amount) || 0)
-        }
-      }
-
-      tx.set(balanceRef, {
-        balances: nextBalances,
-        updatedAt: serverTimestamp()
-      }, { merge: true })
-
-      return nextBalances
-    })
+    return this._balanceService.setNetworkBalance(network, type, amount)
   }
 
   subscribeToNetworkBalances(callback) {
-    return onSnapshot(this.getNetworkBalanceDocRef(),
-      (snapshot) => {
-        callback(this.normalizeNetworkBalances(snapshot.exists() ? snapshot.data() : {}))
-      },
-      (error) => {
-        console.error('Network balances subscription error:', error)
-      }
-    )
+    return this._balanceService.subscribeToNetworkBalances(callback)
   }
 
   /**
