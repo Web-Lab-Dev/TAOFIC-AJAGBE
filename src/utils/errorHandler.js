@@ -175,19 +175,4 @@ export const withErrorHandling = async (operation, context = '') => {
   }
 }
 
-// Vérifier l'état de santé de Firestore
-export const checkFirestoreHealth = () => {
-  return {
-    circuitBreakerState: circuitBreaker.state,
-    isHealthy: !circuitBreaker.isOpen(),
-    failures: circuitBreaker.failures,
-    lastFailureTime: circuitBreaker.lastFailureTime
-  }
-}
-
-// Reset du circuit breaker (pour tests ou récupération manuelle)
-export const resetCircuitBreaker = () => {
-  circuitBreaker.onSuccess()
-}
-
 export { circuitBreaker }

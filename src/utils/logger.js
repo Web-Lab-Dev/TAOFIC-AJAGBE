@@ -1,7 +1,6 @@
 // Système de logging intelligent pour production/développement
 
 const isDevelopment = import.meta.env.DEV
-const isProduction = import.meta.env.PROD
 
 // Logger principal avec différents niveaux
 const logger = {
@@ -99,46 +98,6 @@ const logger = {
   }
 }
 
-// Fonction utilitaire pour créer des loggers contextuels
-export const createContextLogger = (context) => ({
-  debug: (...args) => logger.debug(`[${context}]`, ...args),
-  info: (...args) => logger.info(`[${context}]`, ...args),
-  warn: (...args) => logger.warn(`[${context}]`, ...args),
-  error: (...args) => logger.error(`[${context}]`, ...args)
-})
-
 // Export du logger principal
 export default logger
 export { logger }
-
-// Fonction pour désactiver complètement les logs (si nécessaire)
-export const disableLogging = () => {
-  Object.keys(logger).forEach(key => {
-    if (typeof logger[key] === 'function') {
-      logger[key] = () => {}
-    } else if (typeof logger[key] === 'object') {
-      Object.keys(logger[key]).forEach(subKey => {
-        logger[key][subKey] = () => {}
-      })
-    }
-  })
-}
-
-// Fonction pour monitorer les erreurs globales (à utiliser dans main.jsx)
-export const setupGlobalErrorHandling = () => {
-  if (isProduction) {
-    // En production, capturer les erreurs non gérées
-    window.addEventListener('error', (event) => {
-      logger.error('Global error:', {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno
-      })
-    })
-
-    window.addEventListener('unhandledrejection', (event) => {
-      logger.error('Unhandled promise rejection:', event.reason)
-    })
-  }
-}

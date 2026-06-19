@@ -196,34 +196,6 @@ class CacheManager {
 // Instance singleton
 const cacheManager = new CacheManager()
 
-// Decorator pour les fonctions avec cache automatique
-export const withCache = (cacheTTL = FIRESTORE_CONFIG.CACHE.TTL) => {
-  return (target, propertyKey, descriptor) => {
-    const originalMethod = descriptor.value
-
-    descriptor.value = async function(...args) {
-      // Générer une clé basée sur les arguments
-      const cacheKey = `method_${propertyKey}_${JSON.stringify(args)}`
-
-      // Vérifier le cache
-      const cached = cacheManager.get(cacheKey)
-      if (cached) {
-        return cached
-      }
-
-      // Exécuter la méthode originale
-      const result = await originalMethod.apply(this, args)
-
-      // Mettre en cache le résultat
-      cacheManager.set(cacheKey, result, cacheTTL)
-
-      return result
-    }
-
-    return descriptor
-  }
-}
-
 // Utility functions pour le cache
 export const cacheUtils = {
   // Wrapper pour les opérations avec cache manuel
