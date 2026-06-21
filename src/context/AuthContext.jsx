@@ -171,9 +171,6 @@ export const AuthProvider = ({ children }) => {
       setActiveStore(store)
       setUserProfile(profile)
       setCurrentUser(result.user)
-      await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, result.user.uid), {
-        lastLogin: serverTimestamp()
-      }, { merge: true })
       setLoading(false)
 
       return result
