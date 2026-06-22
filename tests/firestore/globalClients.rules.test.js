@@ -272,6 +272,200 @@ describe('TC-007D — Modification globalClients', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// TC-007F — Contraintes validClient() : longueurs nom/prenom
+// ---------------------------------------------------------------------------
+
+describe('TC-007F — validClient() : longueurs nom et prenom', () => {
+
+  it('[TC-007F-01] nom de 1 caractère → deny (firestore.rules : nom.size() >= 2)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-short-nom')
+    await assertFails(setDoc(ref, {
+      nom: 'A',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+  it('[TC-007F-02] nom de 2 caractères → allow (limite basse exacte)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-nom-2')
+    await assertSucceeds(setDoc(ref, {
+      nom: 'Ba',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+  it('[TC-007F-03] nom de 50 caractères → allow (limite haute exacte)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-nom-50')
+    await assertSucceeds(setDoc(ref, {
+      nom: 'A'.repeat(50),
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+  it('[TC-007F-04] nom de 51 caractères → deny (firestore.rules : nom.size() <= 50)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-nom-51')
+    await assertFails(setDoc(ref, {
+      nom: 'A'.repeat(51),
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+  it('[TC-007F-05] prenom de 1 caractère → deny (firestore.rules : prenom.size() >= 2)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-short-prenom')
+    await assertFails(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'K',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+  it('[TC-007F-06] prenom de 2 caractères → allow (limite basse exacte)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-prenom-2')
+    await assertSucceeds(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Ba',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+  it('[TC-007F-07] prenom de 51 caractères → deny (firestore.rules : prenom.size() <= 50)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-prenom-51')
+    await assertFails(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'B'.repeat(51),
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+})
+
+// ---------------------------------------------------------------------------
+// TC-007G — Contraintes validClient() : champ numeroPersonnel
+// ---------------------------------------------------------------------------
+
+describe('TC-007G — validClient() : champ numeroPersonnel', () => {
+
+  it('[TC-007G-01] numeroPersonnel absent → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-no-phone')
+    await assertSucceeds(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+    }))
+  })
+
+  it('[TC-007G-02] numeroPersonnel vide ("") → allow (firestore.rules : data.numeroPersonnel == "")', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-empty-phone')
+    await assertSucceeds(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+      numeroPersonnel: '',
+    }))
+  })
+
+  it('[TC-007G-03] numeroPersonnel "70001234" (8 chiffres) → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-phone-valid')
+    await assertSucceeds(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+      numeroPersonnel: '70001234',
+    }))
+  })
+
+  it('[TC-007G-04] numeroPersonnel "+226 70 00 12 34" (avec +, espace) → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-phone-intl')
+    await assertSucceeds(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+      numeroPersonnel: '+226 70 00 12 34',
+    }))
+  })
+
+  it('[TC-007G-05] numeroPersonnel "7000123" (7 chiffres, < 8) → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-phone-short')
+    await assertFails(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+      numeroPersonnel: '7000123',
+    }))
+  })
+
+  it('[TC-007G-06] numeroPersonnel "7000abc1" (lettres) → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-phone-letters')
+    await assertFails(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+      numeroPersonnel: '7000abc1',
+    }))
+  })
+
+  it('[TC-007G-07] numeroPersonnel avec 121 caractères (>120) → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'globalClients', 'gclient-phone-long')
+    await assertFails(setDoc(ref, {
+      nom: 'Ouedraogo',
+      prenom: 'Kader',
+      registeredStoreId: 'store-test-aaa',
+      registeredStoreName: 'Store A',
+      numeroPersonnel: '1'.repeat(121),
+    }))
+  })
+
+})
+
+// ---------------------------------------------------------------------------
+// TC-007E — Suppression globalClients
+// ---------------------------------------------------------------------------
+
 describe('TC-007E — Suppression globalClients', () => {
   it('[TC-007E-01] uid-member-aaa — supprime gclient-aaa (sien) — allow', async () => {
     await seedAll()

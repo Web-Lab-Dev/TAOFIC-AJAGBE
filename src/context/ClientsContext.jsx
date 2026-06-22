@@ -92,6 +92,7 @@ export function ClientsProvider({ children }) {
     }
   }, [user, userProfile?.storeId, activeStore?.id, authLoading])
 
+
   const addClient = async (newClient) => {
     try {
       setError(null)

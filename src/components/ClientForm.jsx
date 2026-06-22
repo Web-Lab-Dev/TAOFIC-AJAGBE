@@ -81,9 +81,25 @@ function ClientForm({ onSubmit, initialData = null, title = 'Ajouter un client' 
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    // Validation basique
+    // Validation alignée sur validClient() de firestore.rules (nom/prenom : 2-50 caractères)
     if (!formData.nom || !formData.prenom) {
       showToast('Le nom et le prénom sont obligatoires', 'error')
+      return
+    }
+    if (formData.nom.length < 2) {
+      showToast('Le nom doit comporter au moins 2 caractères', 'error')
+      return
+    }
+    if (formData.nom.length > 50) {
+      showToast('Le nom ne peut pas dépasser 50 caractères', 'error')
+      return
+    }
+    if (formData.prenom.length < 2) {
+      showToast('Le prénom doit comporter au moins 2 caractères', 'error')
+      return
+    }
+    if (formData.prenom.length > 50) {
+      showToast('Le prénom ne peut pas dépasser 50 caractères', 'error')
       return
     }
 

@@ -195,19 +195,53 @@ export class FirestoreService {
   validateClientData(data, rules) {
     const errors = []
 
-    if (!data.nom || data.nom.length < rules.NAME_MIN_LENGTH) {
-      errors.push(`Le nom doit contenir au moins ${rules.NAME_MIN_LENGTH} caractères`)
-    }
-
-    if (data.nom && data.nom.length > rules.NAME_MAX_LENGTH) {
+    // --- nom ---
+    if (!data.nom || typeof data.nom !== 'string') {
+      errors.push(`Le nom est requis`)
+    } else if (data.nom.length < rules.NAME_MIN_LENGTH) {
+      errors.push(`Le nom doit comporter au moins ${rules.NAME_MIN_LENGTH} caractères`)
+    } else if (data.nom.length > rules.NAME_MAX_LENGTH) {
       errors.push(`Le nom ne peut pas dépasser ${rules.NAME_MAX_LENGTH} caractères`)
     }
 
-    rules.REQUIRED_FIELDS.forEach(field => {
-      if (!data[field]) {
-        errors.push(`Le champ ${field} est requis`)
+    // --- prenom ---
+    if (!data.prenom || typeof data.prenom !== 'string') {
+      errors.push(`Le prénom est requis`)
+    } else if (data.prenom.length < rules.NAME_MIN_LENGTH) {
+      errors.push(`Le prénom doit comporter au moins ${rules.NAME_MIN_LENGTH} caractères`)
+    } else if (data.prenom.length > rules.NAME_MAX_LENGTH) {
+      errors.push(`Le prénom ne peut pas dépasser ${rules.NAME_MAX_LENGTH} caractères`)
+    }
+
+    // --- numeroPersonnel (optionnel) ---
+    // Aligné sur validClient() firestore.rules ligne 30-32 :
+    //   (!data.keys().hasAny(['numeroPersonnel']) ||
+    //    data.numeroPersonnel == '' ||
+    //    data.numeroPersonnel.matches('^[0-9+\\-\\s()/]{8,120}$'))
+    const personalNumber = data.numeroPersonnel
+    if (personalNumber !== undefined && personalNumber !== '') {
+      if (typeof personalNumber !== 'string' || !rules.PHONE_REGEX.test(personalNumber)) {
+        errors.push('Le numéro personnel doit être une chaîne de 8 à 120 caractères (chiffres, +, -, espaces, /, ())')
       }
-    })
+    }
+
+    // --- registeredStoreId ---
+    if (
+      !data.registeredStoreId ||
+      typeof data.registeredStoreId !== 'string' ||
+      data.registeredStoreId.trim() === ''
+    ) {
+      errors.push('Identifiant de boutique manquant ou invalide')
+    }
+
+    // --- registeredStoreName ---
+    if (
+      !data.registeredStoreName ||
+      typeof data.registeredStoreName !== 'string' ||
+      data.registeredStoreName.trim() === ''
+    ) {
+      errors.push('Nom de boutique manquant ou invalide')
+    }
 
     return { isValid: errors.length === 0, errors }
   }
@@ -784,10 +818,17 @@ export class FirestoreService {
   async addClient(clientData) {
     const activeStore = this.requireActiveStore()
 
+    if (!activeStore?.id || !activeStore?.name) {
+      throw new Error('Boutique active non disponible pour la création du client')
+    }
+
+    // Les champs d'appartenance à la boutique sont toujours imposés par le service
+    // (jamais hérités des données du formulaire) pour aligner avec la règle Firestore :
+    //   allow create: if ... request.resource.data.registeredStoreId == profile().storeId
     return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
       ...clientData,
-      registeredStoreId: clientData.registeredStoreId || activeStore.id,
-      registeredStoreName: clientData.registeredStoreName || activeStore.name,
+      registeredStoreId: activeStore.id,
+      registeredStoreName: activeStore.name,
       dateAjout: new Date().toLocaleDateString('fr-FR')
     })
   }
