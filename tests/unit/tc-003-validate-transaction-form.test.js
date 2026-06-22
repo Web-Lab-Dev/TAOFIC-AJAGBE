@@ -1,25 +1,23 @@
 /**
- * TC-003 — Validation d'une transaction valide (payload)
+ * TC-003 — Validation d'un formulaire de transaction
  *
  * Comportement protégé :
  *   validateTransactionForm(selectedClient, amount, transactionType)
  *   retourne une valeur truthy quand les trois paramètres sont présents et
- *   que parseFloat(amount) > 0.
+ *   que parseFcfaAmount(amount) !== null (entier strictement positif).
  *   Retourne une valeur falsy dès qu'un paramètre est absent, vide ou
- *   que le montant est <= 0.
+ *   que le montant est invalide selon parseFcfaAmount.
  *
- * Source : src/utils/helpers.js ligne 203-205
+ * Source : src/utils/helpers.js
  *   export const validateTransactionForm = (selectedClient, amount, transactionType) => {
- *     return selectedClient && amount && parseFloat(amount) > 0 && transactionType
+ *     return selectedClient && parseFcfaAmount(amount) !== null && transactionType
  *   }
  *
- * helpers.js n'importe QUE src/utils/constants.js (pas de Firebase, pas de DOM).
- * Aucun mock requis.
+ * Alignement : parseFcfaAmount est la source de vérité unique pour les montants FCFA.
+ * Les montants décimaux (0.01, 0.5, 1.5) sont REJETÉS car le FCFA est une devise entière.
  *
- * ATTENTION : cette fonction est un simple prédicat booléen ;
- * elle NE vérifie PAS le type parmi une liste — n'importe quelle
+ * ATTENTION : cette fonction ne vérifie PAS le type parmi une liste — n'importe quelle
  * chaîne truthy pour transactionType est acceptée.
- * Ce comportement est figé tel quel (golden test).
  */
 
 import { describe, it, expect } from 'vitest'
@@ -48,11 +46,6 @@ describe('TC-003 — validateTransactionForm : cas valides', () => {
 
   it('retourne truthy pour un client string, montant entier positif, type Retrait', () => {
     const result = validateTransactionForm(CLIENT_STRING, '200', 'Retrait')
-    expect(result).toBeTruthy()
-  })
-
-  it('retourne truthy pour un client string, montant décimal positif, type Crédit', () => {
-    const result = validateTransactionForm(CLIENT_STRING, '0.01', 'Crédit')
     expect(result).toBeTruthy()
   })
 
@@ -152,9 +145,33 @@ describe('TC-003 — validateTransactionForm : montant invalide', () => {
     expect(result).toBeFalsy()
   })
 
-  it('comportement observé — amount "0.00" : retourne falsy (parseFloat("0.00") === 0)', () => {
-    // "0.00" est truthy (chaîne non vide) mais parseFloat("0.00") === 0
+  it('retourne falsy quand amount vaut "0.00" (zéro décimal)', () => {
     const result = validateTransactionForm(CLIENT_VALIDE, '0.00', 'Dépôt')
+    expect(result).toBeFalsy()
+  })
+
+  it('retourne falsy quand amount est décimal "0.01" — le FCFA ne supporte pas les centimes', () => {
+    const result = validateTransactionForm(CLIENT_VALIDE, '0.01', 'Dépôt')
+    expect(result).toBeFalsy()
+  })
+
+  it('retourne falsy quand amount est décimal "0.5" — parseFcfaAmount rejette les décimaux', () => {
+    const result = validateTransactionForm(CLIENT_VALIDE, '0.5', 'Dépôt')
+    expect(result).toBeFalsy()
+  })
+
+  it('retourne falsy quand amount est décimal "1.5" — parseFcfaAmount rejette les décimaux', () => {
+    const result = validateTransactionForm(CLIENT_VALIDE, '1.5', 'Dépôt')
+    expect(result).toBeFalsy()
+  })
+
+  it('retourne falsy quand amount est décimal "1000.5" — parseFcfaAmount rejette les décimaux', () => {
+    const result = validateTransactionForm(CLIENT_VALIDE, '1000.5', 'Dépôt')
+    expect(result).toBeFalsy()
+  })
+
+  it('retourne falsy quand amount est décimal number 1.5 — parseFcfaAmount rejette les décimaux', () => {
+    const result = validateTransactionForm(CLIENT_VALIDE, 1.5, 'Dépôt')
     expect(result).toBeFalsy()
   })
 })

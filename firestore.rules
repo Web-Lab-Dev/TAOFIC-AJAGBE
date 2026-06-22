@@ -35,7 +35,7 @@ service cloud.firestore {
     function validTransaction(data) {
       return data.keys().hasAll(['type', 'montant', 'clientId']) &&
              data.type in ['Dépôt', 'Depot', 'Retrait', 'Crédit', 'Credit', 'DÃ©pÃ´t', 'CrÃ©dit'] &&
-             data.montant is number && data.montant > 0 && data.montant <= 100000000 &&
+             data.montant is number && data.montant > 0 && data.montant == math.floor(data.montant) && data.montant <= 9007199254740991 &&
              data.clientId is string && data.clientId.size() > 0;
     }
 

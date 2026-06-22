@@ -35,6 +35,7 @@ import { db } from '../config/firebase'
 import { getUserFriendlyMessage } from '../utils/errorHandler'
 import { formatDateToFrench } from '../utils/helpers'
 import { FIRESTORE_CONFIG } from '../constants/firestoreConstants'
+import { parseFcfaAmount } from '../utils/fcfaAmount.js'
 
 export class HistoryService {
   /**
@@ -74,8 +75,10 @@ export class HistoryService {
 
   async addToHistory(transactionData) {
     this._validateFcfaAmount(transactionData.montant, 'addToHistory')
+    const parsedAmount = parseFcfaAmount(transactionData.montant)
     return this._addDocument(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, {
       ...transactionData,
+      montant: parsedAmount,
       date: formatDateToFrench()
     })
   }

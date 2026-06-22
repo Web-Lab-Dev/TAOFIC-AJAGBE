@@ -519,9 +519,26 @@ describe('TC-004 [sync] — Cohérence entre constantes documentaires et firesto
     })
   })
 
-  describe('Plafond montant', () => {
-    it('firestore.rules contient le plafond 100000000', () => {
-      expect(rulesContent).toContain('100000000')
+  describe('Plafond montant (supprimé — Lot C2)', () => {
+    it('firestore.rules ne contient plus le plafond 100000000 (supprimé Lot C2)', () => {
+      /**
+       * L'ancien plafond AMOUNT_MAX = 100000000 a été supprimé lors du Lot C2.
+       * firestore.rules ne doit contenir aucune borne supérieure sur montant.
+       * Seules garanties conservées : is number, > 0, == math.floor(montant).
+       */
+      expect(rulesContent).not.toContain('100000000')
+    })
+
+    it('firestore.rules conserve la contrainte entier positif (> 0)', () => {
+      expect(rulesContent).toContain('data.montant > 0')
+    })
+
+    it('firestore.rules conserve la contrainte entier strict (math.floor)', () => {
+      expect(rulesContent).toContain('math.floor(data.montant)')
+    })
+
+    it('firestore.rules conserve la contrainte type number', () => {
+      expect(rulesContent).toContain('data.montant is number')
     })
   })
 

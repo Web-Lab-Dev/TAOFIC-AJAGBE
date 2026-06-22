@@ -1,4 +1,5 @@
 import { useNetworkCards } from './useNetworkCards'
+import { parseFcfaAmount } from '../utils/fcfaAmount.js'
 
 /**
  * Hook de compatibilité pour maintenir l'interface existante
@@ -11,14 +12,14 @@ export const useSimpleNetworkData = () => {
 
   // Interface de compatibilité pour le formulaire
   const validateAmount = (network, amount, transactionType) => {
-    const numericAmount = parseFloat(amount) || 0
+    const numericAmount = parseFcfaAmount(amount)
     const normalizedType = String(transactionType || '')
       .trim()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .toLowerCase()
 
-    if (numericAmount <= 0) {
+    if (numericAmount === null) {
       return {
         isValid: false,
         message: 'Le montant doit être supérieur à 0'

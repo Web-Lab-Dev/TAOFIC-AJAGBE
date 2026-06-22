@@ -1,4 +1,5 @@
 import { NETWORK_CODES, TRANSACTION_STYLES, FILTER_CONFIG } from './constants.js'
+import { parseFcfaAmount } from './fcfaAmount.js'
 
 /**
  * Extrait le nom complet du client
@@ -177,7 +178,7 @@ export const formatTime = (dateString) => {
  * Valide un formulaire de transaction
  */
 export const validateTransactionForm = (selectedClient, amount, transactionType) => {
-  return selectedClient && amount && parseFloat(amount) > 0 && transactionType
+  return selectedClient && parseFcfaAmount(amount) !== null && transactionType
 }
 
 /**

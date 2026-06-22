@@ -403,7 +403,6 @@ export function reverseDirectValidatedImpact(balances, type, reseau, amount) {
  */
 export function reverseHistoryTransactionImpact(currentBalances, historyData) {
   const rawAmount = historyData.montant
-  const amount = Number(rawAmount)
   const reseau = historyData.reseau
   const type = historyData.type
   const paymentMethod = historyData.paymentMethod || null
@@ -414,9 +413,7 @@ export function reverseHistoryTransactionImpact(currentBalances, historyData) {
     throw new Error('Cette transaction est déjà annulée')
   }
 
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error(`Le montant doit être un entier strictement positif pour le renversement : ${rawAmount}`)
-  }
+  const amount = validateFcfaAmount(rawAmount, 'reverseHistoryTransactionImpact')
 
   if (!reseau) {
     throw new Error('Données de transaction incomplètes pour le renversement financier')

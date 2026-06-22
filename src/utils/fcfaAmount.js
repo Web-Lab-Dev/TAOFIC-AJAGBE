@@ -40,7 +40,7 @@ function stripSpaces(str) {
 export function parseFcfaAmount(value) {
   // Accepter les nombres directs
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) return null
+    if (!Number.isFinite(value) || !Number.isSafeInteger(value) || value <= 0) return null
     return value
   }
 
@@ -60,7 +60,7 @@ export function parseFcfaAmount(value) {
 
   const n = Number(stripped)
 
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) return null
+  if (!Number.isFinite(n) || !Number.isSafeInteger(n) || n <= 0) return null
 
   return n
 }

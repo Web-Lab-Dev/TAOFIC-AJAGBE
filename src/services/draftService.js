@@ -40,6 +40,7 @@ import {
   reverseInitialTransactionImpact,
   applySettlementImpact
 } from '../utils/financialImpact.js'
+import { parseFcfaAmount } from '../utils/fcfaAmount.js'
 import { buildDraftPayload, computeDraftUpdateImpacts } from '../utils/draftLifecycle.js'
 
 export class DraftService {
@@ -83,8 +84,16 @@ export class DraftService {
   // ---------------------------------------------------------------------------
 
   async addDraft(transactionData) {
+    const parsedAmount = parseFcfaAmount(transactionData.montant)
+    if (parsedAmount === null) {
+      throw new Error(
+        `Montant FCFA invalide dans addDraft : ${JSON.stringify(transactionData.montant)}. ` +
+        'Le montant doit être un entier strictement positif.'
+      )
+    }
     return this._addDocument(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, {
       ...transactionData,
+      montant: parsedAmount,
       statut: FIRESTORE_CONFIG.STATUS.PENDING,
       date: formatDateToFrench()
     })
@@ -95,8 +104,13 @@ export class DraftService {
   // ---------------------------------------------------------------------------
 
   async updateDraft(draftId, updates) {
+    let normalizedUpdates = updates
     if (updates.montant !== undefined) {
-      validateFcfaAmount(updates.montant, 'updateDraft')
+      const parsedAmount = validateFcfaAmount(updates.montant, 'updateDraft')
+      normalizedUpdates = {
+        ...updates,
+        montant: parsedAmount
+      }
     }
     return runTransaction(db, async (tx) => {
       const draftRef = this._docRef(FIRESTORE_CONFIG.COLLECTIONS.DRAFTS, draftId)
@@ -110,12 +124,12 @@ export class DraftService {
       const balanceRef = this._getNetworkBalanceDocRef()
       const balanceSnap = await tx.get(balanceRef)
       const currentBalances = normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-      const nextDraft = buildDraftPayload(currentDraft, updates)
+      const nextDraft = buildDraftPayload(currentDraft, normalizedUpdates)
       const { nextBalances } = computeDraftUpdateImpacts(currentDraft, nextDraft, currentBalances)
       const now = serverTimestamp()
 
       tx.update(draftRef, {
-        ...updates,
+        ...normalizedUpdates,
         statut: FIRESTORE_CONFIG.STATUS.PENDING,
         updatedAt: now
       })
@@ -188,21 +202,25 @@ export class DraftService {
 
   async addTransaction(transactionData) {
     this._requireActiveStore()
-    validateFcfaAmount(transactionData.montant, 'addTransaction')
+    const parsedAmount = validateFcfaAmount(transactionData.montant, 'addTransaction')
+    const normalizedTransactionData = {
+      ...transactionData,
+      montant: parsedAmount
+    }
 
     try {
       return await runTransaction(db, async (tx) => {
         const balanceRef = this._getNetworkBalanceDocRef()
         const balanceSnap = await tx.get(balanceRef)
         const currentBalances = normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
-        const nextBalances = applyInitialTransactionImpact(currentBalances, transactionData)
-        const targetCollection = isPendingStatus(transactionData.statut)
+        const nextBalances = applyInitialTransactionImpact(currentBalances, normalizedTransactionData)
+        const targetCollection = isPendingStatus(normalizedTransactionData.statut)
           ? FIRESTORE_CONFIG.COLLECTIONS.DRAFTS
           : FIRESTORE_CONFIG.COLLECTIONS.HISTORY
         const transactionRef = doc(this._collectionRef(targetCollection))
         const now = serverTimestamp()
         const transactionPayload = {
-          ...transactionData,
+          ...normalizedTransactionData,
           date: formatDateToFrench(),
           createdAt: now,
           updatedAt: now

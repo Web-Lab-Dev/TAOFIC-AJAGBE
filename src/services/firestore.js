@@ -215,8 +215,10 @@ export class FirestoreService {
   validateTransactionData(data, rules) {
     const errors = []
 
-    if (!data.montant || data.montant < rules.AMOUNT_MIN || data.montant > rules.AMOUNT_MAX) {
-      errors.push(`Le montant doit être entre ${rules.AMOUNT_MIN} et ${rules.AMOUNT_MAX}`)
+    if ('montant' in data) {
+      if (parseFcfaAmount(data.montant) === null) {
+        errors.push('Le montant doit être un entier strictement positif')
+      }
     }
 
     rules.REQUIRED_FIELDS.forEach(field => {
@@ -243,8 +245,22 @@ export class FirestoreService {
         throw new Error(`Données invalides: ${validation.errors.join(', ')}`)
       }
 
+      // Normaliser le montant en number pour les collections transactionnelles.
+      // validateTransactionData a déjà validé : parseFcfaAmount est ici sans risque.
+      const isTransactional =
+        collectionName === FIRESTORE_CONFIG.COLLECTIONS.DRAFTS ||
+        collectionName === FIRESTORE_CONFIG.COLLECTIONS.HISTORY
+
+      let dataToWrite = data
+      if (isTransactional && data.montant !== undefined) {
+        const parsedAmount = parseFcfaAmount(data.montant)
+        if (parsedAmount !== null) {
+          dataToWrite = { ...data, montant: parsedAmount }
+        }
+      }
+
       const enrichedData = {
-        ...data,
+        ...dataToWrite,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       }
