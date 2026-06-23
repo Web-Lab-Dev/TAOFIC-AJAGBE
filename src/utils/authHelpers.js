@@ -1,4 +1,4 @@
-import { AUTH_ERRORS, AUTH_CONFIG } from '../constants/authMessages'
+import { AUTH_ERRORS, AUTH_CONFIG, AUTH_ROLES } from '../constants/authMessages'
 import { serverTimestamp } from 'firebase/firestore'
 
 /**
@@ -216,7 +216,7 @@ export const createLoadingState = () => {
 export const getDefaultUserProfile = (email) => ({
   name: email ? email.split('@')[0] : 'Utilisateur',
   email: email || '',
-  role: 'store_admin',
+  role: AUTH_ROLES.STORE_ADMIN,
   createdAt: serverTimestamp(),
   lastLogin: serverTimestamp()
 })

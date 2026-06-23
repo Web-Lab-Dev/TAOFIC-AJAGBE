@@ -76,12 +76,21 @@ export const AUTH_LABELS = {
   LOADING_CHANGING: 'Modification...'
 }
 
-export const AUTH_ROLES = {
-  STORE_ADMIN: 'store_admin'
-}
+export const AUTH_ROLES = Object.freeze({
+  STORE_ADMIN: 'store_admin',
+  SYSTEM_MANAGER: 'system_manager',
+  DEALER: 'dealer',
+})
+
+export const GLOBAL_ROLES = Object.freeze([
+  AUTH_ROLES.SYSTEM_MANAGER,
+  AUTH_ROLES.DEALER,
+])
 
 export const AUTH_ROLE_LABELS = {
-  [AUTH_ROLES.STORE_ADMIN]: 'Compte boutique'
+  [AUTH_ROLES.STORE_ADMIN]: 'Compte boutique',
+  [AUTH_ROLES.SYSTEM_MANAGER]: 'Gérant global',
+  [AUTH_ROLES.DEALER]: 'Dealer',
 }
 
 // Configurations

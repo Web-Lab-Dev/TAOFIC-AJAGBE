@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -37,26 +37,7 @@ const createStoreId = (storeName, uid) => {
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase()
 
-const fetchUserProfile = async (uid) => {
-  const docRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, uid)
-  const docSnap = await getDoc(docRef)
-
-  if (docSnap.exists()) {
-    const profile = docSnap.data()
-    if (!profile.active || !profile.storeId) {
-      throw new Error('Compte non rattaché à une boutique active')
-    }
-    return profile
-  }
-
-  throw new Error('Compte non rattaché à une boutique')
-}
-
 const fetchStoreProfile = async (profile) => {
-  if (!profile?.storeId) {
-    throw new Error('Compte non rattaché à une boutique')
-  }
-
   const storeRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.STORES, profile.storeId)
   const storeSnap = await getDoc(storeRef)
   if (!storeSnap.exists()) {
@@ -77,6 +58,48 @@ const fetchStoreProfile = async (profile) => {
   return store
 }
 
+/**
+ * Résout le profil authentifié pour n'importe quel rôle.
+ *
+ * - Vérifie que le document users/{uid} existe
+ * - Vérifie que le profil est actif
+ * - Vérifie que le rôle appartient aux rôles autorisés
+ * - Pour store_admin : charge le store et vérifie qu'il est actif
+ * - Pour system_manager et dealer : aucune lecture store, activeStore = null
+ *
+ * @returns {{ profile: object, store: object|null }}
+ */
+export const resolveAuthenticatedProfile = async (uid) => {
+  const docRef = doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, uid)
+  const docSnap = await getDoc(docRef)
+
+  if (!docSnap.exists()) {
+    throw new Error('Profil introuvable')
+  }
+
+  const profile = docSnap.data()
+
+  if (!profile.active) {
+    throw new Error('Compte inactif')
+  }
+
+  const validRoles = Object.values(AUTH_ROLES)
+  if (!validRoles.includes(profile.role)) {
+    throw new Error('Rôle non autorisé')
+  }
+
+  if (profile.role === AUTH_ROLES.STORE_ADMIN) {
+    if (!profile.storeId) {
+      throw new Error('Compte non rattaché à une boutique active')
+    }
+    const store = await fetchStoreProfile(profile)
+    return { profile, store }
+  }
+
+  // Rôles globaux : pas de boutique requise
+  return { profile, store: null }
+}
+
 export const useAuth = () => {
   const context = useContext(AuthContext)
   if (!context) {
@@ -91,6 +114,10 @@ export const AuthProvider = ({ children }) => {
   const [activeStore, setActiveStore] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  // Compteur de génération : chaque nouvel événement Auth invalide les résolutions précédentes.
+  // Également mis à Number.MAX_SAFE_INTEGER lors du démontage pour bloquer tout setState tardif.
+  const authResolutionIdRef = useRef(0)
 
   const signup = useCallback(async (email, password, storeName) => {
     try {
@@ -139,9 +166,9 @@ export const AuthProvider = ({ children }) => {
       setUserProfile(profilePayload)
 
       return result
-    } catch (error) {
+    } catch (err) {
       const createdUser = auth.currentUser
-      if (createdUser && error?.code?.startsWith('permission-denied')) {
+      if (createdUser && err?.code?.startsWith('permission-denied')) {
         try {
           await deleteUser(createdUser)
         } catch (deleteError) {
@@ -149,11 +176,11 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
-      const errorMessage = getAuthErrorMessage(error.code, error.message)
+      const errorMessage = getAuthErrorMessage(err.code, err.message)
       setError(errorMessage)
       setLoading(false)
-      console.error('Signup error:', error)
-      throw error
+      console.error('Signup error:', err)
+      throw err
     }
   }, [])
 
@@ -164,8 +191,7 @@ export const AuthProvider = ({ children }) => {
 
       await setPersistence(auth, browserLocalPersistence)
       const result = await signInWithEmailAndPassword(auth, normalizeEmail(email), password)
-      const profile = await fetchUserProfile(result.user.uid)
-      const store = await fetchStoreProfile(profile)
+      const { profile, store } = await resolveAuthenticatedProfile(result.user.uid)
 
       firestoreService.setActiveStore(store)
       setActiveStore(store)
@@ -174,12 +200,12 @@ export const AuthProvider = ({ children }) => {
       setLoading(false)
 
       return result
-    } catch (error) {
-      const errorMessage = getAuthErrorMessage(error.code, error.message)
+    } catch (err) {
+      const errorMessage = getAuthErrorMessage(err.code, err.message)
       setError(errorMessage)
       setLoading(false)
-      console.error('Signin error:', error)
-      throw error
+      console.error('Signin error:', err)
+      throw err
     }
   }, [])
 
@@ -190,11 +216,11 @@ export const AuthProvider = ({ children }) => {
       setUserProfile(null)
       setActiveStore(null)
       firestoreService.setActiveStore(null)
-    } catch (error) {
-      const errorMessage = getAuthErrorMessage(error.code, 'Erreur lors de la déconnexion')
+    } catch (err) {
+      const errorMessage = getAuthErrorMessage(err.code, 'Erreur lors de la déconnexion')
       setError(errorMessage)
-      console.error('Logout error:', error)
-      throw error
+      console.error('Logout error:', err)
+      throw err
     }
   }, [])
 
@@ -203,11 +229,11 @@ export const AuthProvider = ({ children }) => {
       setError('')
       await sendPasswordResetEmail(auth, normalizeEmail(email))
       return true
-    } catch (error) {
-      const errorMessage = getAuthErrorMessage(error.code, error.message)
+    } catch (err) {
+      const errorMessage = getAuthErrorMessage(err.code, err.message)
       setError(errorMessage)
-      console.error('Password reset error:', error)
-      throw error
+      console.error('Password reset error:', err)
+      throw err
     }
   }, [])
 
@@ -224,79 +250,91 @@ export const AuthProvider = ({ children }) => {
       await reauthenticateWithCredential(user, credential)
       await updatePassword(user, newPassword)
       return true
-    } catch (error) {
-      const errorMessage = getAuthErrorMessage(error.code, error.message)
+    } catch (err) {
+      const errorMessage = getAuthErrorMessage(err.code, err.message)
       setError(errorMessage)
-      console.error('Password change error:', error)
-      throw error
+      console.error('Password change error:', err)
+      throw err
     }
   }, [])
 
   const getUserProfile = useCallback(async (uid) => {
     try {
-      return await fetchUserProfile(uid)
-    } catch (error) {
-      console.error('Error getting user profile:', error)
-      setError(error.message || 'Compte non rattaché à une boutique')
-      return null
-    }
-  }, [])
-
-  const getStoreProfile = useCallback(async (profile) => {
-    try {
-      return await fetchStoreProfile(profile)
-    } catch (error) {
-      setError(error.message || 'Boutique introuvable')
+      const { profile } = await resolveAuthenticatedProfile(uid)
+      return profile
+    } catch (err) {
+      console.error('Error getting user profile:', err)
       return null
     }
   }, [])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoading(true)
-      setCurrentUser(user)
+      // Incrémenter la génération : toute résolution précédente devient obsolète.
+      const resolutionId = ++authResolutionIdRef.current
 
-      if (user) {
-        const profile = await getUserProfile(user.uid)
-        if (profile) {
-          const store = await getStoreProfile(profile)
-          if (!store?.active) {
-            setError('Boutique inactive')
-            setUserProfile(profile)
-            setActiveStore(null)
-            firestoreService.setActiveStore(null)
-          } else {
-            firestoreService.setActiveStore(store)
-            setActiveStore(store)
-            setUserProfile(profile)
-            await setDoc(doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid), {
-              lastLogin: serverTimestamp()
-            }, { merge: true })
-          }
-        } else {
-          setUserProfile(null)
-          setActiveStore(null)
-          firestoreService.setActiveStore(null)
-        }
-      } else {
+      // Nettoyage synchrone immédiat : aucun ancien contexte ne reste exploitable.
+      setLoading(true)
+      setError('')
+      setCurrentUser(user)
+      setUserProfile(null)
+      setActiveStore(null)
+      firestoreService.setActiveStore(null)
+
+      if (!user) {
+        if (resolutionId !== authResolutionIdRef.current) return
+        setLoading(false)
+        return
+      }
+
+      try {
+        const { profile, store } = await resolveAuthenticatedProfile(user.uid)
+
+        if (resolutionId !== authResolutionIdRef.current) return
+
+        firestoreService.setActiveStore(store)
+        setActiveStore(store)
+        setUserProfile(profile)
+        setError('')
+
+        await setDoc(
+          doc(db, FIRESTORE_CONFIG.COLLECTIONS.USERS, user.uid),
+          { lastLogin: serverTimestamp() },
+          { merge: true }
+        )
+      } catch (err) {
+        if (resolutionId !== authResolutionIdRef.current) return
+        setError(err.message || 'Accès non autorisé')
         setUserProfile(null)
         setActiveStore(null)
         firestoreService.setActiveStore(null)
       }
 
+      if (resolutionId !== authResolutionIdRef.current) return
       setLoading(false)
     })
 
-    return unsubscribe
-  }, [getStoreProfile, getUserProfile])
+    return () => {
+      // Invalider toute résolution en cours lors du démontage.
+      authResolutionIdRef.current = Number.MAX_SAFE_INTEGER
+      unsubscribe()
+    }
+  }, [])
+
+  const role = userProfile?.role ?? null
 
   const value = useMemo(() => ({
     currentUser,
     userProfile,
     activeStore,
-    isStoreAdmin: userProfile?.role === AUTH_ROLES.STORE_ADMIN,
     loading,
     error,
+    authError: error,
+    role,
+    isStoreAdmin: role === AUTH_ROLES.STORE_ADMIN,
+    isSystemManager: role === AUTH_ROLES.SYSTEM_MANAGER,
+    isDealer: role === AUTH_ROLES.DEALER,
+    hasStoreContext: role === AUTH_ROLES.STORE_ADMIN && activeStore?.id === userProfile?.storeId,
     signup,
     signin,
     logout,
@@ -309,6 +347,7 @@ export const AuthProvider = ({ children }) => {
     activeStore,
     loading,
     error,
+    role,
     signup,
     signin,
     logout,
