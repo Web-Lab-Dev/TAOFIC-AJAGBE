@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react'
 import { exportClientsToXLSM, importClientsFromXLSM, validateExcelFile } from '../utils/excelUtils'
 
-export const useExcelOperations = (onImportSuccess, onShowNotification) => {
+export const useExcelOperations = (onImportSuccess, onShowNotification, storesById = {}) => {
   const [isImporting, setIsImporting] = useState(false)
   const fileInputRef = useRef(null)
 
   const handleExport = async (clients) => {
-    const result = await exportClientsToXLSM(clients)
+    const result = await exportClientsToXLSM(clients, undefined, storesById)
     if (result.success) {
       onShowNotification(`Export réussi ! ${result.count} clients exportés.`, 'success')
     } else {

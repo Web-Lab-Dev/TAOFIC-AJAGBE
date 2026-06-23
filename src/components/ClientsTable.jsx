@@ -1,8 +1,10 @@
+import { useContext, useMemo } from 'react'
 import { useClientsFilter } from '../hooks/useClientsFilter'
 import { useExcelOperations } from '../hooks/useExcelOperations'
 import { usePagination } from '../hooks/usePagination'
 import { useToast } from '../hooks/useToast'
 import { useTheme } from '../context/ThemeContext.jsx'
+import { AuthContext } from '../context/AuthContext'
 import { MONTH_OPTIONS, TABLE_HEADERS } from '../constants'
 import TableRow from './TableRow'
 import Pagination from './Pagination'
@@ -10,11 +12,21 @@ import Toast from './Toast'
 
 function ClientsTable({ clients, onDelete, onEdit, onImportClients }) {
   const { toasts, showToast, removeToast } = useToast()
+  const { activeStore } = useContext(AuthContext)
   const { searchTerm, setSearchTerm, selectedMonth, setSelectedMonth, filteredClients } = useClientsFilter(clients)
   const { paginatedData, ...paginationProps } = usePagination(filteredClients)
+
+  // Construire la map des boutiques pour la résolution du nom dans l'export.
+  // L'utilisateur ne voit que les clients de sa propre boutique (activeStore).
+  const storesById = useMemo(() => {
+    if (!activeStore?.id) return {}
+    return { [activeStore.id]: activeStore }
+  }, [activeStore])
+
   const { isImporting, fileInputRef, handleExport, handleImportClick, handleFileImport } = useExcelOperations(
     onImportClients,
-    showToast
+    showToast,
+    storesById
   )
   const { themeClasses } = useTheme()
 

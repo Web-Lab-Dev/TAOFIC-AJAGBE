@@ -21,8 +21,9 @@ export const MONTH_OPTIONS = [
 ]
 
 export const EXCEL_HEADERS = [
+  'Boutique',
   'Nom',
-  'Prénom', 
+  'Prénom',
   'Numéro d\'identité',
   'Numéro personnel',
   'Numéro agent / Code agent',
