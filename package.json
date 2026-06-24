@@ -20,7 +20,11 @@
     "test:unit": "vitest run --config vitest.config.js tests/unit",
     "test:components": "vitest run --config vitest.config.js tests/components tests/integration",
     "test:firestore": "firebase emulators:exec --only firestore --project demo-akayis-test \"npx vitest run --config vitest.firestore.config.js\"",
-    "test:firestore:smoke": "firebase emulators:exec --only firestore --project demo-akayis-test \"npx vitest run --config vitest.firestore.config.js tests/firestore/smoke.test.js\""
+    "test:firestore:smoke": "firebase emulators:exec --only firestore --project demo-akayis-test \"npx vitest run --config vitest.firestore.config.js tests/firestore/smoke.test.js\"",
+    "test:integration": "npx vitest run --config vitest.integration.config.js",
+    "v2:user:create": "node scripts/createTechnicalUser.mjs",
+    "v2:user:verify": "node scripts/verifyTechnicalUser.mjs",
+    "v2:user:delete": "node scripts/deleteTechnicalUser.mjs"
   },
   "dependencies": {
     "firebase": "^12.2.1",
