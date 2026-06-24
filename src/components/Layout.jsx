@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Outlet } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import NavBar from './NavBar'
 import NetworkCardsDrawer from './network/NetworkCardsDrawer'
@@ -83,7 +84,7 @@ function Layout({ children }) {
               backgroundAttachment: 'fixed'
             }}
           />
-          {children}
+          {children !== undefined ? children : <Outlet />}
         </div>
       </main>
 

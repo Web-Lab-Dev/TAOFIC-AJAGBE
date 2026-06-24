@@ -1,9 +1,11 @@
 /**
  * TC-026 — ProtectedRoute : comportement par rôle et par état Auth
  *
- * Rend réellement ProtectedRoute avec un contexte Auth mocké.
- * Vérifie que chaque combinaison (loading, rôle, activeStore, etc.) produit
- * le rendu attendu sans jamais exposer le contenu boutique aux rôles globaux.
+ * ProtectedRoute est un alias de RoleGuard restreint à store_admin.
+ * Les rôles non autorisés (system_manager, dealer) sont désormais REDIRIGÉS
+ * vers leur espace propre, et non plus affichés sur une page d'attente.
+ *
+ * Tous les rendus utilisent MemoryRouter car RoleGuard peut émettre <Navigate>.
  */
 
 // ---------------------------------------------------------------------------
@@ -70,7 +72,6 @@ vi.mock('../../src/utils/authHelpers', () => ({
   getAuthErrorMessage: vi.fn((code, msg) => msg || code || 'Erreur'),
 }))
 
-// Mock AuthPage pour isoler ProtectedRoute du reste de l'arbre de rendu
 vi.mock('../../src/components/auth/AuthPage', () => ({
   default: () => <div data-testid="auth-page">PAGE_AUTH</div>,
 }))
@@ -81,11 +82,11 @@ vi.mock('../../src/components/auth/AuthPage', () => ({
 
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { useAuth } from '../../src/context/AuthContext'
 import ProtectedRoute from '../../src/components/auth/ProtectedRoute'
 import { AUTH_ROLES } from '../../src/constants/authMessages'
 
-// Mock useAuth pour contrôler totalement le contexte injecté dans ProtectedRoute
 vi.mock('../../src/context/AuthContext', () => ({
   useAuth: vi.fn(),
   AuthContext: React.createContext(null),
@@ -143,11 +144,27 @@ const dealerCtx = () => ({
   isDealer: true,
 })
 
-const renderRoute = () =>
+/**
+ * Rend ProtectedRoute dans un MemoryRouter avec des routes destination visibles.
+ * Les destinations /admin et /dealer permettent de vérifier que les redirections
+ * aboutissent sur le bon espace.
+ */
+const renderRoute = (initialPath = '/') =>
   render(
-    <ProtectedRoute>
-      <Children />
-    </ProtectedRoute>
+    <MemoryRouter initialEntries={[initialPath]}>
+      <Routes>
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <Children />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/admin" element={<div data-testid="admin-space">ESPACE ADMIN</div>} />
+        <Route path="/dealer" element={<div data-testid="dealer-space">ESPACE DEALER</div>} />
+      </Routes>
+    </MemoryRouter>
   )
 
 // ---------------------------------------------------------------------------
@@ -246,66 +263,56 @@ describe('TC-026 — ProtectedRoute : comportement par rôle', () => {
   })
 
   // =========================================================================
-  // 7. system_manager → page d'attente, children absents
+  // 7. system_manager → redirigé vers /admin (plus de page d'attente)
   // =========================================================================
 
-  it('7. system_manager → page d\'attente visible, children absents', () => {
+  it('7. system_manager sur route boutique → redirigé vers /admin', () => {
     useAuth.mockReturnValue(systemManagerCtx())
     renderRoute()
 
-    expect(screen.getByText(/espace gérant global/i)).toBeInTheDocument()
-    expect(screen.getByText(/en cours de déploiement/i)).toBeInTheDocument()
+    expect(screen.getByTestId('admin-space')).toBeInTheDocument()
     expect(screen.queryByTestId(CHILDREN_TESTID)).not.toBeInTheDocument()
   })
 
   // =========================================================================
-  // 8. dealer → page d'attente, children absents
+  // 8. dealer → redirigé vers /dealer (plus de page d'attente)
   // =========================================================================
 
-  it('8. dealer → page d\'attente visible, children absents', () => {
+  it('8. dealer sur route boutique → redirigé vers /dealer', () => {
     useAuth.mockReturnValue(dealerCtx())
     renderRoute()
 
-    expect(screen.getByText(/espace dealer/i)).toBeInTheDocument()
-    expect(screen.getByText(/en cours de déploiement/i)).toBeInTheDocument()
+    expect(screen.getByTestId('dealer-space')).toBeInTheDocument()
     expect(screen.queryByTestId(CHILDREN_TESTID)).not.toBeInTheDocument()
   })
 
   // =========================================================================
-  // 9. Bouton déconnexion présent pour rôle global
+  // 9. Bouton déconnexion sur accès bloqué (profil absent)
   // =========================================================================
 
-  it('9. system_manager → bouton déconnexion présent', () => {
-    useAuth.mockReturnValue(systemManagerCtx())
-    renderRoute()
-
-    expect(screen.getByRole('button', { name: /se déconnecter/i })).toBeInTheDocument()
-  })
-
-  it('9b. dealer → bouton déconnexion présent', () => {
-    useAuth.mockReturnValue(dealerCtx())
+  it('9. profil absent → bouton déconnexion présent', () => {
+    useAuth.mockReturnValue({
+      ...defaultCtx(),
+      currentUser: { uid: 'uid-x' },
+      userProfile: null,
+    })
     renderRoute()
 
     expect(screen.getByRole('button', { name: /se déconnecter/i })).toBeInTheDocument()
   })
 
   // =========================================================================
-  // 10. Clic déconnexion appelle logout
+  // 10. Clic déconnexion appelle logout (accès bloqué)
   // =========================================================================
 
-  it('10. system_manager : clic déconnexion appelle logout', () => {
+  it('10. profil absent : clic déconnexion appelle logout', () => {
     const logout = vi.fn()
-    useAuth.mockReturnValue({ ...systemManagerCtx(), logout })
-    renderRoute()
-
-    fireEvent.click(screen.getByRole('button', { name: /se déconnecter/i }))
-
-    expect(logout).toHaveBeenCalledTimes(1)
-  })
-
-  it('10b. dealer : clic déconnexion appelle logout', () => {
-    const logout = vi.fn()
-    useAuth.mockReturnValue({ ...dealerCtx(), logout })
+    useAuth.mockReturnValue({
+      ...defaultCtx(),
+      currentUser: { uid: 'uid-x' },
+      userProfile: null,
+      logout,
+    })
     renderRoute()
 
     fireEvent.click(screen.getByRole('button', { name: /se déconnecter/i }))
@@ -314,7 +321,7 @@ describe('TC-026 — ProtectedRoute : comportement par rôle', () => {
   })
 
   // =========================================================================
-  // 11. Aucune donnée boutique visible pour les rôles globaux
+  // 11. Aucune donnée boutique visible pour les rôles globaux (redirigés)
   // =========================================================================
 
   it('11. system_manager → aucun contenu boutique dans le DOM', () => {
@@ -337,23 +344,32 @@ describe('TC-026 — ProtectedRoute : comportement par rôle', () => {
   // 12. Changement store_admin → dealer retire immédiatement les children
   // =========================================================================
 
-  it('12. store_admin → dealer : children retirés immédiatement', () => {
-    // Premier rendu en store_admin
+  it('12. store_admin → dealer : children retirés, redirection /dealer', () => {
     useAuth.mockReturnValue(storeAdminCtx())
     const { rerender } = renderRoute()
 
     expect(screen.getByTestId(CHILDREN_TESTID)).toBeInTheDocument()
 
-    // Changement vers dealer
     useAuth.mockReturnValue(dealerCtx())
     rerender(
-      <ProtectedRoute>
-        <Children />
-      </ProtectedRoute>
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <Children />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/admin" element={<div data-testid="admin-space">ESPACE ADMIN</div>} />
+          <Route path="/dealer" element={<div data-testid="dealer-space">ESPACE DEALER</div>} />
+        </Routes>
+      </MemoryRouter>
     )
 
     expect(screen.queryByTestId(CHILDREN_TESTID)).not.toBeInTheDocument()
-    expect(screen.getByText(/espace dealer/i)).toBeInTheDocument()
+    expect(screen.getByTestId('dealer-space')).toBeInTheDocument()
   })
 
   // =========================================================================

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { NAV_ITEMS } from '../constants/navigation'
+import { STORE_NAV_ITEMS } from '../constants/navigation'
 import { useTheme } from '../context/ThemeContext.jsx'
 import PWAInstallButton from './PWAInstallButton'
 
@@ -35,7 +35,7 @@ function NavBar() {
         <div className="hidden md:flex justify-between items-center">
           <div className="flex-1"></div>
           <div className="flex justify-center space-x-1">
-            {NAV_ITEMS.map((item) => (
+            {STORE_NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -62,7 +62,7 @@ function NavBar() {
             value={location.pathname}
           >
             <option value="" disabled>Sélectionner une page</option>
-            {NAV_ITEMS.map((item) => (
+            {STORE_NAV_ITEMS.map((item) => (
               <option key={item.path} value={item.path}>
                 {item.name}
               </option>
