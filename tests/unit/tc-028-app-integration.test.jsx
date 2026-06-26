@@ -121,11 +121,14 @@ vi.mock('../../src/pages/admin/AdminProfile', () => ({
 vi.mock('../../src/pages/dealer/DealerHome', () => ({
   default: () => <div data-testid="dealer-home">DealerHome</div>,
 }))
-vi.mock('../../src/pages/dealer/DealerStoresPlaceholder', () => ({
+vi.mock('../../src/pages/dealer/DealerStores', () => ({
   default: () => <div data-testid="dealer-stores">DealerStores</div>,
 }))
-vi.mock('../../src/pages/dealer/DealerRequestsPlaceholder', () => ({
+vi.mock('../../src/pages/dealer/DealerRequests', () => ({
   default: () => <div data-testid="dealer-requests">DealerRequests</div>,
+}))
+vi.mock('../../src/pages/dealer/NewDealerRequest', () => ({
+  default: () => <div data-testid="dealer-requests-new">NewDealerRequest</div>,
 }))
 vi.mock('../../src/pages/dealer/DealerProfile', () => ({
   default: () => <div data-testid="dealer-profile">DealerProfile</div>,
@@ -333,6 +336,12 @@ describe('TC-028-A — URL finale par rôle', () => {
     renderApp(dealerCtx(), '/dealer/profile')
     expect(screen.getByTestId('dealer-profile')).toBeInTheDocument()
   })
+
+  it('A-16 : dealer sur "/dealer/requests/new" → NewDealerRequest rendu', () => {
+    renderApp(dealerCtx(), '/dealer/requests/new')
+    expect(screen.getByTestId('dealer-requests-new')).toBeInTheDocument()
+    expect(screen.getByTestId('location').textContent).toBe('/dealer/requests/new')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -443,5 +452,66 @@ describe('TC-028-C — Isolation Firestore providers', () => {
   it('C-3 : store_admin avec boutique active → subscribeToClients appelé (providers actifs)', () => {
     renderWithProviders(storeAdminCtx(), '/')
     expect(firestoreService.subscribeToClients).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Section D — Isolation routes Dealer
+// Vérifie que chaque route /dealer/* est accessible uniquement au rôle dealer
+// et redirige les autres rôles vers leur espace respectif.
+// ---------------------------------------------------------------------------
+
+describe('TC-028-D — Isolation routes Dealer', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('D-1 : dealer sur /dealer/stores → dealer-stores rendu', () => {
+    renderApp(dealerCtx(), '/dealer/stores')
+    expect(screen.getByTestId('dealer-stores')).toBeInTheDocument()
+  })
+
+  it('D-2 : dealer sur /dealer/requests → dealer-requests rendu', () => {
+    renderApp(dealerCtx(), '/dealer/requests')
+    expect(screen.getByTestId('dealer-requests')).toBeInTheDocument()
+  })
+
+  it('D-3 : dealer sur /dealer/requests/new → dealer-requests-new rendu', () => {
+    renderApp(dealerCtx(), '/dealer/requests/new')
+    expect(screen.getByTestId('dealer-requests-new')).toBeInTheDocument()
+  })
+
+  it('D-4 : store_admin sur /dealer/stores → redirigé vers / (Dashboard)', () => {
+    renderApp(storeAdminCtx(), '/dealer/stores')
+    expect(screen.queryByTestId('dealer-stores')).not.toBeInTheDocument()
+    expect(screen.getByTestId('page-dashboard')).toBeInTheDocument()
+  })
+
+  it('D-5 : system_manager sur /dealer/stores → redirigé vers /admin', () => {
+    renderApp(systemManagerCtx(), '/dealer/stores')
+    expect(screen.queryByTestId('dealer-stores')).not.toBeInTheDocument()
+    expect(screen.getByTestId('admin-home')).toBeInTheDocument()
+  })
+
+  it('D-6 : non authentifié sur /dealer/stores → AuthPage', () => {
+    renderApp(defaultCtx(), '/dealer/stores')
+    expect(screen.queryByTestId('dealer-stores')).not.toBeInTheDocument()
+    expect(screen.getByTestId('auth-page')).toBeInTheDocument()
+  })
+
+  it('D-7 : store_admin sur /dealer/requests → redirigé vers /', () => {
+    renderApp(storeAdminCtx(), '/dealer/requests')
+    expect(screen.queryByTestId('dealer-requests')).not.toBeInTheDocument()
+    expect(screen.getByTestId('page-dashboard')).toBeInTheDocument()
+  })
+
+  it('D-8 : store_admin sur /dealer/requests/new → redirigé vers /', () => {
+    renderApp(storeAdminCtx(), '/dealer/requests/new')
+    expect(screen.queryByTestId('dealer-requests-new')).not.toBeInTheDocument()
+    expect(screen.getByTestId('page-dashboard')).toBeInTheDocument()
+  })
+
+  it('D-9 : system_manager sur /dealer/requests → redirigé vers /admin', () => {
+    renderApp(systemManagerCtx(), '/dealer/requests')
+    expect(screen.queryByTestId('dealer-requests')).not.toBeInTheDocument()
+    expect(screen.getByTestId('admin-home')).toBeInTheDocument()
   })
 })

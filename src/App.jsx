@@ -30,8 +30,9 @@ import AdminProfile from './pages/admin/AdminProfile.jsx'
 
 // Pages Dealer
 import DealerHome from './pages/dealer/DealerHome.jsx'
-import DealerStoresPlaceholder from './pages/dealer/DealerStoresPlaceholder.jsx'
-import DealerRequestsPlaceholder from './pages/dealer/DealerRequestsPlaceholder.jsx'
+import DealerStores from './pages/dealer/DealerStores.jsx'
+import DealerRequests from './pages/dealer/DealerRequests.jsx'
+import NewDealerRequest from './pages/dealer/NewDealerRequest.jsx'
 import DealerProfile from './pages/dealer/DealerProfile.jsx'
 
 import { useAuth } from './context/AuthContext.jsx'
@@ -121,8 +122,9 @@ export function AppContent() {
         }
       >
         <Route path="/dealer" element={<DealerHome />} />
-        <Route path="/dealer/stores" element={<DealerStoresPlaceholder />} />
-        <Route path="/dealer/requests" element={<DealerRequestsPlaceholder />} />
+        <Route path="/dealer/stores" element={<DealerStores />} />
+        <Route path="/dealer/requests" element={<DealerRequests />} />
+        <Route path="/dealer/requests/new" element={<NewDealerRequest />} />
         <Route path="/dealer/profile" element={<DealerProfile />} />
       </Route>
 
