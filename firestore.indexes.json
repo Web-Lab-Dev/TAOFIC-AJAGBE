@@ -1,0 +1,31 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "dealerRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dealerRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetStoreId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dealerRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dealerUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

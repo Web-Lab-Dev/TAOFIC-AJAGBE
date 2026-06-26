@@ -2,6 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ─────────────────────────────────────────────────────────────
+    // Helpers V1 — backward compat boutiques
+    // ─────────────────────────────────────────────────────────────
+
     function signedIn() {
       return request.auth != null;
     }
@@ -10,16 +14,56 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    // Réservé aux membres de boutique (store_admin, member).
+    // Exige role boutique explicite → dealer/system_manager refusés même avec storeId.
     function hasProfile() {
       return signedIn() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         profile().active == true &&
+        profile().role in ['store_admin', 'member'] &&
         profile().storeId is string;
     }
 
     function isStoreMember(storeId) {
       return hasProfile() && profile().storeId == storeId;
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // Helpers V2 — rôles globaux
+    // Source de vérité : users/{request.auth.uid}
+    // Jamais request.resource.data.role
+    // ─────────────────────────────────────────────────────────────
+
+    function isActiveUser() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        profile().active == true &&
+        profile().role in ['store_admin', 'system_manager', 'dealer'];
+    }
+
+    function isStoreAdmin(storeId) {
+      return isActiveUser() &&
+        profile().role == 'store_admin' &&
+        profile().storeId is string &&
+        profile().storeId == storeId;
+    }
+
+    function isSystemManager() {
+      return isActiveUser() && profile().role == 'system_manager';
+    }
+
+    function isDealer() {
+      return isActiveUser() && profile().role == 'dealer';
+    }
+
+    // Données brutes de la boutique pour validation dealerRequests
+    function storeDoc(storeId) {
+      return get(/databases/$(database)/documents/stores/$(storeId)).data;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Validation V1
+    // ─────────────────────────────────────────────────────────────
 
     function validClient(data) {
       return data.keys().hasAll(['nom', 'prenom', 'registeredStoreId', 'registeredStoreName']) &&
@@ -66,24 +110,83 @@ service cloud.firestore {
       return status in ['Non Terminées', 'Non Terminees', 'Non TerminÃ©es'];
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Validation V2 — dealerRequests
+    // ─────────────────────────────────────────────────────────────
+
+    function validDealerRequestKeys(data) {
+      let k = ['dealerUid', 'dealerEmail', 'dealerName',
+               'targetStoreId', 'targetStoreName',
+               'requestType', 'network', 'amount',
+               'status', 'createdAt', 'updatedAt',
+               'confirmedBy', 'confirmedAt',
+               'rejectedBy', 'rejectedAt', 'rejectionReason',
+               'previousBalance', 'newBalance'];
+      return data.keys().hasAll(k) && data.keys().hasOnly(k);
+    }
+
+    function validDealerRequest(data) {
+      return validDealerRequestKeys(data) &&
+        data.dealerUid is string && data.dealerUid == request.auth.uid &&
+        profile().email is string && profile().email.size() > 0 &&
+        data.dealerEmail is string && data.dealerEmail.size() > 0 &&
+        data.dealerEmail == profile().email &&
+        profile().name is string && profile().name.size() > 0 &&
+        data.dealerName is string && data.dealerName.size() > 0 &&
+        data.dealerName == profile().name &&
+        data.status == 'pending' &&
+        data.requestType in ['stock_add', 'liquidity_add'] &&
+        data.network == 'Orange' &&
+        data.amount is int && data.amount > 0 &&
+        data.targetStoreId is string && data.targetStoreId.size() > 0 &&
+        data.createdAt == request.time &&
+        data.updatedAt == request.time &&
+        data.confirmedBy == null && data.confirmedAt == null &&
+        data.rejectedBy == null && data.rejectedAt == null &&
+        data.rejectionReason == null && data.previousBalance == null && data.newBalance == null &&
+        exists(/databases/$(database)/documents/stores/$(data.targetStoreId)) &&
+        storeDoc(data.targetStoreId).active == true &&
+        storeDoc(data.targetStoreId).name is string &&
+        storeDoc(data.targetStoreId).name.size() > 0 &&
+        data.targetStoreName == storeDoc(data.targetStoreId).name;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Boutiques
+    // ─────────────────────────────────────────────────────────────
+
     match /stores/{storeId} {
-      allow read: if isStoreMember(storeId);
+      allow read: if isStoreMember(storeId) || isSystemManager() || isDealer();
+      // Création uniquement dans le writeBatch atomique boutique + store_admin
       allow create: if signedIn() &&
         request.resource.data.adminUid == request.auth.uid &&
         request.resource.data.active == true &&
         request.resource.data.name is string &&
-        request.resource.data.name.size() >= 2;
+        request.resource.data.name.size() >= 2 &&
+        getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'store_admin' &&
+        getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.storeId == storeId &&
+        getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
       allow update, delete: if false;
     }
 
-    match /users/{userId} {
-      allow read: if signedIn() && request.auth.uid == userId;
-      allow read: if hasProfile() && profile().storeId == resource.data.storeId;
+    // ─────────────────────────────────────────────────────────────
+    // Profils utilisateurs
+    // ─────────────────────────────────────────────────────────────
 
-      allow update: if hasProfile() &&
+    match /users/{userId} {
+      // Tout utilisateur connecté lit son propre profil
+      allow read: if signedIn() && request.auth.uid == userId;
+      // Membres de la même boutique (V1 compat) — dealer/system_manager bloqués via hasProfile()
+      allow read: if isStoreMember(resource.data.storeId);
+      // Supervision globale
+      allow read: if isSystemManager();
+
+      // lastLogin modifiable par toute identité active reconnue (boutique et globale)
+      allow update: if (hasProfile() || isActiveUser()) &&
         request.auth.uid == userId &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin']);
 
+      // Création profil boutique uniquement (writeBatch atomique store + user)
       allow create: if signedIn() &&
         request.auth.uid == userId &&
         request.resource.data.role == 'store_admin' &&
@@ -95,8 +198,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Clients globaux
+    // ─────────────────────────────────────────────────────────────
+
     match /globalClients/{clientId} {
-      allow read: if hasProfile();
+      allow read: if hasProfile() || isSystemManager();
 
       allow create: if hasProfile() &&
         validClient(request.resource.data) &&
@@ -113,6 +220,26 @@ service cloud.firestore {
         resource.data.registeredStoreId == profile().storeId;
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Demandes Dealer
+    // update/delete réservés à une future Cloud Function Admin SDK
+    // ─────────────────────────────────────────────────────────────
+
+    match /dealerRequests/{requestId} {
+      allow read: if isDealer() && resource.data.dealerUid == request.auth.uid;
+      allow read: if isStoreAdmin(resource.data.targetStoreId);
+      allow read: if isSystemManager();
+
+      allow create: if isDealer() && validDealerRequest(request.resource.data);
+
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Données par boutique (V1)
+    // ─────────────────────────────────────────────────────────────
+
     match /clients/{storeId} {
       allow read: if isStoreMember(storeId);
       allow write: if false;
@@ -128,7 +255,7 @@ service cloud.firestore {
       }
 
       match /history/{historyId} {
-        allow read: if isStoreMember(storeId);
+        allow read: if isStoreMember(storeId) || isSystemManager();
         allow create: if isStoreMember(storeId) &&
           validStoreScopedTransaction(request.resource.data, storeId) &&
           validStatus(request.resource.data.statut) &&
@@ -140,7 +267,7 @@ service cloud.firestore {
       }
 
       match /networkBalances/{balanceId} {
-        allow read: if isStoreMember(storeId);
+        allow read: if isStoreMember(storeId) || isDealer() || isSystemManager();
         allow create, update: if isStoreMember(storeId) &&
           balanceId == 'current' &&
           request.resource.data.balances is map;
@@ -156,6 +283,26 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // Collection group — lecture globale system_manager / dealer
+    // ─────────────────────────────────────────────────────────────
+
+    match /{path=**}/history/{docId} {
+      allow read: if isSystemManager();
+    }
+
+    match /{path=**}/drafts/{docId} {
+      allow read: if isSystemManager();
+    }
+
+    match /{path=**}/networkBalances/{docId} {
+      allow read: if isDealer() || isSystemManager();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Refus par défaut
+    // ─────────────────────────────────────────────────────────────
 
     match /{document=**} {
       allow read, write: if false;
