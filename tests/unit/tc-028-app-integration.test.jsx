@@ -134,6 +134,14 @@ vi.mock('../../src/pages/dealer/DealerProfile', () => ({
   default: () => <div data-testid="dealer-profile">DealerProfile</div>,
 }))
 
+// Pages Store Admin (V2-6)
+vi.mock('../../src/pages/store/StoreAdminDealerRequests', () => ({
+  default: () => <div data-testid="store-dealer-requests-page">StoreAdminDealerRequests</div>,
+}))
+vi.mock('../../src/pages/store/StoreAdminDealerRequestDetails', () => ({
+  default: () => <div data-testid="store-dealer-request-details-page">StoreAdminDealerRequestDetails</div>,
+}))
+
 // AuthPage
 vi.mock('../../src/components/auth/AuthPage', () => ({
   default: () => <div data-testid="auth-page">PAGE_AUTH</div>,
@@ -513,5 +521,55 @@ describe('TC-028-D — Isolation routes Dealer', () => {
     renderApp(systemManagerCtx(), '/dealer/requests')
     expect(screen.queryByTestId('dealer-requests')).not.toBeInTheDocument()
     expect(screen.getByTestId('admin-home')).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Section E — Isolation routes Store Admin Dealer (V2-6)
+// Vérifie que /dealer-requests et /dealer-requests/:id sont accessibles
+// uniquement au rôle store_admin et redirigent les autres.
+// ---------------------------------------------------------------------------
+
+describe('TC-028-E — Isolation routes Store Admin Dealer (V2-6)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('E-1 : store_admin sur /dealer-requests → StoreAdminDealerRequests rendu', () => {
+    renderApp(storeAdminCtx(), '/dealer-requests')
+    expect(screen.getByTestId('store-dealer-requests-page')).toBeInTheDocument()
+  })
+
+  it('E-2 : store_admin sur /dealer-requests/req-123 → StoreAdminDealerRequestDetails rendu', () => {
+    renderApp(storeAdminCtx(), '/dealer-requests/req-123')
+    expect(screen.getByTestId('store-dealer-request-details-page')).toBeInTheDocument()
+  })
+
+  it('E-3 : dealer sur /dealer-requests → redirigé vers /dealer (page non visible)', () => {
+    renderApp(dealerCtx(), '/dealer-requests')
+    expect(screen.queryByTestId('store-dealer-requests-page')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dealer-home')).toBeInTheDocument()
+  })
+
+  it('E-4 : system_manager sur /dealer-requests → redirigé vers /admin', () => {
+    renderApp(systemManagerCtx(), '/dealer-requests')
+    expect(screen.queryByTestId('store-dealer-requests-page')).not.toBeInTheDocument()
+    expect(screen.getByTestId('admin-home')).toBeInTheDocument()
+  })
+
+  it('E-5 : non authentifié sur /dealer-requests → AuthPage', () => {
+    renderApp(defaultCtx(), '/dealer-requests')
+    expect(screen.queryByTestId('store-dealer-requests-page')).not.toBeInTheDocument()
+    expect(screen.getByTestId('auth-page')).toBeInTheDocument()
+  })
+
+  it('E-6 : dealer sur /dealer-requests/req-abc → redirigé vers /dealer', () => {
+    renderApp(dealerCtx(), '/dealer-requests/req-abc')
+    expect(screen.queryByTestId('store-dealer-request-details-page')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dealer-home')).toBeInTheDocument()
+  })
+
+  it('E-7 : non authentifié sur /dealer-requests/req-abc → AuthPage', () => {
+    renderApp(defaultCtx(), '/dealer-requests/req-abc')
+    expect(screen.queryByTestId('store-dealer-request-details-page')).not.toBeInTheDocument()
+    expect(screen.getByTestId('auth-page')).toBeInTheDocument()
   })
 })

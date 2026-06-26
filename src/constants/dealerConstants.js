@@ -24,3 +24,4 @@ export const DEALER_NETWORK = 'Orange'
 
 export const DEALER_REQUESTS_PAGE_SIZE = 20
 export const DEALER_STORES_PAGE_SIZE = 20
+export const STORE_DEALER_REQUESTS_PAGE_SIZE = 20

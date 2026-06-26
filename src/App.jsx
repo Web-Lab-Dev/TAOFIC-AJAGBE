@@ -22,6 +22,8 @@ import Transactions from './pages/Transactions'
 import Historique from './pages/Historique'
 import Formulaire from './pages/Formulaire'
 import Profil from './pages/Profil'
+import StoreAdminDealerRequests from './pages/store/StoreAdminDealerRequests.jsx'
+import StoreAdminDealerRequestDetails from './pages/store/StoreAdminDealerRequestDetails.jsx'
 
 // Pages Admin (system_manager)
 import AdminHome from './pages/admin/AdminHome.jsx'
@@ -98,6 +100,8 @@ export function AppContent() {
         <Route path="/historique" element={<Historique />} />
         <Route path="/formulaire" element={<Formulaire />} />
         <Route path="/profil" element={<Profil />} />
+        <Route path="/dealer-requests" element={<StoreAdminDealerRequests />} />
+        <Route path="/dealer-requests/:requestId" element={<StoreAdminDealerRequestDetails />} />
       </Route>
 
       {/* ── Espace Admin (system_manager) ────────────────────────────────── */}

@@ -4,6 +4,7 @@ export const NAV_ITEMS = [
   { name: 'Transactions', path: '/transactions' },
   { name: 'Historique', path: '/historique' },
   { name: 'Formulaire', path: '/formulaire' },
+  { name: 'Demandes Dealer', path: '/dealer-requests' },
   { name: 'Profil', path: '/profil' }
 ]
 
