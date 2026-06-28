@@ -52,9 +52,21 @@ vi.mock('firebase/firestore', () => ({
   runTransaction: vi.fn(),
 }))
 vi.mock('../../src/config/firebase', () => ({
-  auth: {}, db: {},
+  auth: {}, db: {}, functions: {},
   firebaseInfo: { projectId: 'test', isDev: true, useEmulators: false },
   default: {},
+}))
+
+vi.mock('firebase/functions', () => ({
+  getFunctions: vi.fn(() => ({})),
+  connectFunctionsEmulator: vi.fn(),
+  httpsCallable: vi.fn(),
+}))
+
+vi.mock('../../src/services/storeDealerRequestCommandService', () => ({
+  confirmDealerRequestCommand: vi.fn(),
+  rejectDealerRequestCommand: vi.fn(),
+  mapCallableError: vi.fn(err => new Error(err?.message ?? 'Erreur')),
 }))
 
 vi.mock('../../src/services/storeAdminDealerService', () => ({
@@ -503,14 +515,17 @@ describe('TC-033-DETAIL — StoreAdminDealerRequestDetails', () => {
     })
   })
 
-  it('[DET-09] aucun bouton Confirmer, Rejeter, Modifier', async () => {
-    mocks.getStoreAdminDealerRequestById.mockResolvedValue({ ...REQS[0], id: 'req-1' })
-    renderDetails('req-1')
+  it('[DET-09] demande confirmed → aucun bouton Confirmer/Rejeter/Modifier', async () => {
+    // Les actions sont masquées pour les demandes déjà traitées (confirmed, rejected).
+    // TC-039 couvre la visibilité pour le statut pending.
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue({ ...REQS[1], id: 'req-2' })
+    renderDetails('req-2')
     await waitFor(() => screen.getByTestId('btn-back'))
 
+    expect(screen.queryByTestId('action-buttons')).not.toBeInTheDocument()
     const buttons = screen.queryAllByRole('button')
     const forbidden = buttons.filter(b =>
-      /confirmer|rejeter|modifier|supprimer|valider/i.test(b.textContent)
+      /confirmer la demande|rejeter la demande|modifier|supprimer/i.test(b.textContent)
     )
     expect(forbidden).toHaveLength(0)
   })

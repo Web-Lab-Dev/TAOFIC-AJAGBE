@@ -827,6 +827,234 @@ describe('TC-035-PE — absence d\'effets partiels', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// §PE (complément) — effets partiels sur erreurs de profil
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TC-035-PE2 — effets partiels profil (pré-vérification)', () => {
+  it('[PE-08] profil inactif (pre-check) → demande inchangée, aucun audit', async () => {
+    await seedUser(INACTIVE_UID, INACTIVE_PROFILE)
+    await seedRequest('req-pe-8', BASE_REQ)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    await expect(
+      confirmDealerRequestHandler(makeRequest(INACTIVE_UID, { requestId: 'req-pe-8' }), { db, FieldValue })
+    ).rejects.toMatchObject({ code: 'PROFILE_INACTIVE' })
+
+    const reqSnap = await db.doc('dealerRequests/req-pe-8').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const balSnap = await db.doc(`clients/${STORE_A}/networkBalances/current`).get()
+    expect(balSnap.data().balances.Orange.stock).toBe(50000)
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+  })
+
+  it('[PE-09] rôle interdit (pre-check) → demande inchangée, solde inchangé, aucun audit', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedRequest('req-pe-9', BASE_REQ)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    await expect(
+      confirmDealerRequestHandler(makeRequest(DEALER_UID, { requestId: 'req-pe-9' }), { db, FieldValue })
+    ).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
+
+    const reqSnap = await db.doc('dealerRequests/req-pe-9').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const balSnap = await db.doc(`clients/${STORE_A}/networkBalances/current`).get()
+    expect(balSnap.data().balances.Orange.stock).toBe(50000)
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+  })
+
+  it('[PE-10] storeId changé en transaction → REQUEST_STORE_MISMATCH, demande inchangée, aucun audit', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-pe-10', BASE_REQ) // targetStoreId = STORE_A
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    const iDb = makeSnapshotOverrideDb(db, `users/${STORE_ADMIN_UID}`, { storeId: STORE_B })
+
+    await expect(
+      confirmDealerRequestHandler(makeRequest(STORE_ADMIN_UID, { requestId: 'req-pe-10' }), { db: iDb, FieldValue })
+    ).rejects.toMatchObject({ code: 'REQUEST_STORE_MISMATCH' })
+
+    const reqSnap = await db.doc('dealerRequests/req-pe-10').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const balSnap = await db.doc(`clients/${STORE_A}/networkBalances/current`).get()
+    expect(balSnap.data().balances.Orange.stock).toBe(50000)
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+    const auditSnapB = await db.collection(`clients/${STORE_B}/auditLogs`).get()
+    expect(auditSnapB.size).toBe(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §PROF — Changements concurrents de profil
+//
+// Stratégie : makeSnapshotOverrideDb intercepte le premier t.get(targetPath)
+// à l'intérieur de la transaction et retourne un snapshot synthétique dont
+// les champs sont fusionnés avec overrideData. Cela simule le cas où le profil
+// a été modifié entre le pre-check hors-transaction et la lecture in-transaction
+// sans écriture externe (qui provoquerait un deadlock sur l'émulateur Firestore,
+// car celui-ci utilise un verrou pessimiste sur les documents lus dans une
+// transaction).
+//
+// Ce que le test vérifie : la logique métier in-transaction de validateProfileData
+// détecte et rejette le profil invalide, laissant la demande et le solde intacts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeSnapshotOverrideDb(realDb, targetPath, overrideData) {
+  return {
+    doc:        (...args) => realDb.doc(...args),
+    collection: (...args) => realDb.collection(...args),
+
+    runTransaction: (callback) =>
+      realDb.runTransaction(async (realTransaction) => {
+        let overrideApplied = false
+
+        const transactionProxy = {
+          get: async (ref) => {
+            const snapshot = await realTransaction.get(ref)
+            if (!overrideApplied && ref.path === targetPath) {
+              overrideApplied = true
+              return {
+                exists: snapshot.exists,
+                id: snapshot.id,
+                ref: snapshot.ref,
+                data: () => ({ ...snapshot.data(), ...overrideData }),
+              }
+            }
+            return snapshot
+          },
+          update: (...args) => realTransaction.update(...args),
+          set:    (...args) => realTransaction.set(...args),
+          create: (...args) => realTransaction.create(...args),
+          delete: (...args) => realTransaction.delete(...args),
+        }
+
+        return callback(transactionProxy)
+      }),
+  }
+}
+
+describe('TC-035-PROF — changements concurrents de profil', () => {
+  it('[PROF-01] confirm — profil active→false entre pre-check et commit → PROFILE_INACTIVE, demande inchangée, aucun audit', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-prof-1', BASE_REQ)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    const iDb = makeSnapshotOverrideDb(db, `users/${STORE_ADMIN_UID}`, { active: false })
+
+    await expect(
+      confirmDealerRequestHandler(makeRequest(STORE_ADMIN_UID, { requestId: 'req-prof-1' }), { db: iDb, FieldValue })
+    ).rejects.toMatchObject({ code: 'PROFILE_INACTIVE' })
+
+    const reqSnap = await db.doc('dealerRequests/req-prof-1').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const balSnap = await db.doc(`clients/${STORE_A}/networkBalances/current`).get()
+    expect(balSnap.data().balances.Orange.stock).toBe(50000)
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+  })
+
+  it('[PROF-02] confirm — rôle changé entre pre-check et commit → ROLE_FORBIDDEN, demande inchangée, aucun audit', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-prof-2', BASE_REQ)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    const iDb = makeSnapshotOverrideDb(db, `users/${STORE_ADMIN_UID}`, { role: 'dealer' })
+
+    await expect(
+      confirmDealerRequestHandler(makeRequest(STORE_ADMIN_UID, { requestId: 'req-prof-2' }), { db: iDb, FieldValue })
+    ).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
+
+    const reqSnap = await db.doc('dealerRequests/req-prof-2').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+  })
+
+  it('[PROF-03] confirm — storeId changé entre pre-check et commit → REQUEST_STORE_MISMATCH, demande inchangée, aucun audit', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-prof-3', BASE_REQ) // targetStoreId = STORE_A
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    const iDb = makeSnapshotOverrideDb(db, `users/${STORE_ADMIN_UID}`, { storeId: STORE_B })
+
+    await expect(
+      confirmDealerRequestHandler(makeRequest(STORE_ADMIN_UID, { requestId: 'req-prof-3' }), { db: iDb, FieldValue })
+    ).rejects.toMatchObject({ code: 'REQUEST_STORE_MISMATCH' })
+
+    const reqSnap = await db.doc('dealerRequests/req-prof-3').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const balSnap = await db.doc(`clients/${STORE_A}/networkBalances/current`).get()
+    expect(balSnap.data().balances.Orange.stock).toBe(50000)
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+    const auditSnapB = await db.collection(`clients/${STORE_B}/auditLogs`).get()
+    expect(auditSnapB.size).toBe(0)
+  })
+
+  it('[PROF-04] reject — profil active→false entre pre-check et commit → PROFILE_INACTIVE, demande inchangée, aucun audit', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-prof-4', BASE_REQ)
+
+    const iDb = makeSnapshotOverrideDb(db, `users/${STORE_ADMIN_UID}`, { active: false })
+
+    await expect(
+      rejectDealerRequestHandler(
+        makeRequest(STORE_ADMIN_UID, { requestId: 'req-prof-4', rejectionReason: 'Motif valide.' }),
+        { db: iDb, FieldValue }
+      )
+    ).rejects.toMatchObject({ code: 'PROFILE_INACTIVE' })
+
+    const reqSnap = await db.doc('dealerRequests/req-prof-4').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+  })
+
+  it('[PROF-05] reject — rôle changé entre pre-check et commit → ROLE_FORBIDDEN, demande inchangée, aucun audit', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-prof-5', BASE_REQ)
+
+    const iDb = makeSnapshotOverrideDb(db, `users/${STORE_ADMIN_UID}`, { role: 'system_manager' })
+
+    await expect(
+      rejectDealerRequestHandler(
+        makeRequest(STORE_ADMIN_UID, { requestId: 'req-prof-5', rejectionReason: 'Motif valide.' }),
+        { db: iDb, FieldValue }
+      )
+    ).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
+
+    const reqSnap = await db.doc('dealerRequests/req-prof-5').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+  })
+
+  it('[PROF-06] reject — storeId changé entre pre-check et commit → REQUEST_STORE_MISMATCH, demande inchangée, aucun audit', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-prof-6', BASE_REQ) // targetStoreId = STORE_A
+
+    const iDb = makeSnapshotOverrideDb(db, `users/${STORE_ADMIN_UID}`, { storeId: STORE_B })
+
+    await expect(
+      rejectDealerRequestHandler(
+        makeRequest(STORE_ADMIN_UID, { requestId: 'req-prof-6', rejectionReason: 'Motif valide.' }),
+        { db: iDb, FieldValue }
+      )
+    ).rejects.toMatchObject({ code: 'REQUEST_STORE_MISMATCH' })
+
+    const reqSnap = await db.doc('dealerRequests/req-prof-6').get()
+    expect(reqSnap.data().status).toBe('pending')
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+    const auditSnapB = await db.collection(`clients/${STORE_B}/auditLogs`).get()
+    expect(auditSnapB.size).toBe(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // §AU — Audit unique (preuve de retry-safety)
 // ─────────────────────────────────────────────────────────────────────────────
 // L'ID d'audit est généré via .doc() dans le callback de transaction.
