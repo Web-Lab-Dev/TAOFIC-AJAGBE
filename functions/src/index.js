@@ -1,0 +1,36 @@
+/**
+ * Entry point des Cloud Functions V2.
+ *
+ * Région : europe-west1 — proximité géographique Afrique de l'Ouest (FCFA).
+ *
+ * Architecture :
+ *   - Les handlers métier (confirm/reject) sont dans ./dealerRequests/.
+ *   - Ce fichier initialise Admin SDK et enveloppe les handlers en onCall.
+ *   - La conversion DealerRequestError → HttpsError est centralisée dans ./callable.js.
+ *
+ * Ne pas déployer sans audit de sécurité complet.
+ * Utiliser exclusivement les émulateurs pendant l'audit : demo-akayis-test.
+ */
+
+import { initializeApp, getApps } from 'firebase-admin/app'
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { onCall } from 'firebase-functions/v2/https'
+import { wrapCallable } from './callable.js'
+import { confirmDealerRequestHandler } from './dealerRequests/confirmDealerRequest.js'
+import { rejectDealerRequestHandler } from './dealerRequests/rejectDealerRequest.js'
+
+// Garde idempotente : évite "App named '[DEFAULT]' already exists" lors des imports
+// dans les tests d'intégration (TC-036) qui s'exécutent après TC-035 dans le même processus.
+if (!getApps().length) initializeApp()
+const db = getFirestore()
+const deps = { db, FieldValue }
+
+export const confirmDealerRequest = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(confirmDealerRequestHandler, deps)
+)
+
+export const rejectDealerRequest = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(rejectDealerRequestHandler, deps)
+)
