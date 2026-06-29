@@ -529,6 +529,224 @@ describe('TC-039-RJ — modale de rejet', () => {
 })
 
 // ===========================================================================
+// §A11Y — Accessibilité des modales
+// ===========================================================================
+
+describe('TC-039-A11Y — accessibilité des modales', () => {
+  it('[A11Y-01] modale confirm — attributs ARIA requis présents', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+
+    const overlay = screen.getByTestId('confirm-modal-overlay')
+    expect(overlay).toHaveAttribute('role', 'dialog')
+    expect(overlay).toHaveAttribute('aria-modal', 'true')
+    expect(overlay).toHaveAttribute('aria-labelledby', 'confirm-modal-title')
+    expect(overlay).toHaveAttribute('aria-describedby', 'confirm-modal-desc')
+    expect(document.getElementById('confirm-modal-title')).toBeInTheDocument()
+    expect(document.getElementById('confirm-modal-desc')).toBeInTheDocument()
+  })
+
+  it('[A11Y-02] modale rejet — attributs ARIA requis présents', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-reject'))
+    fireEvent.click(screen.getByTestId('btn-reject'))
+
+    const overlay = screen.getByTestId('reject-modal-overlay')
+    expect(overlay).toHaveAttribute('role', 'dialog')
+    expect(overlay).toHaveAttribute('aria-modal', 'true')
+    expect(overlay).toHaveAttribute('aria-labelledby', 'reject-modal-title')
+    expect(overlay).toHaveAttribute('aria-describedby', 'reject-modal-desc')
+    expect(document.getElementById('reject-modal-title')).toBeInTheDocument()
+    expect(document.getElementById('reject-modal-desc')).toBeInTheDocument()
+  })
+
+  it('[A11Y-03] Escape → ferme modale confirm', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    expect(screen.getByTestId('confirm-modal-overlay')).toBeInTheDocument()
+
+    fireEvent.keyDown(screen.getByTestId('confirm-modal-overlay'), { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('confirm-modal-overlay')).not.toBeInTheDocument()
+    })
+  })
+
+  it('[A11Y-04] Escape → ferme modale rejet', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-reject'))
+    fireEvent.click(screen.getByTestId('btn-reject'))
+    expect(screen.getByTestId('reject-modal-overlay')).toBeInTheDocument()
+
+    fireEvent.keyDown(screen.getByTestId('reject-modal-overlay'), { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('reject-modal-overlay')).not.toBeInTheDocument()
+    })
+  })
+
+  it('[A11Y-05] piège Tab (confirm) — Tab depuis dernier élément appelle focus() sur le premier', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('confirm-checkbox'))
+
+    await act(async () => {})
+
+    const submitBtn = screen.getByTestId('confirm-modal-submit')
+    const checkbox  = screen.getByTestId('confirm-checkbox')
+    submitBtn.focus()
+    expect(document.activeElement).toBe(submitBtn)
+
+    // Le handler onKeyDown est sur l'overlay ; l'événement y est déposé directement.
+    // document.activeElement (submitBtn = dernier) → après Tab, focus doit passer à checkbox (premier).
+    fireEvent.keyDown(screen.getByTestId('confirm-modal-overlay'), { key: 'Tab', code: 'Tab' })
+    expect(document.activeElement).toBe(checkbox)
+  })
+
+  it('[A11Y-06] piège Shift+Tab (confirm) — Shift+Tab depuis premier élément déplace focus sur le dernier', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('confirm-checkbox'))
+
+    await act(async () => {})
+
+    const checkbox  = screen.getByTestId('confirm-checkbox')
+    const submitBtn = screen.getByTestId('confirm-modal-submit')
+    checkbox.focus()
+    expect(document.activeElement).toBe(checkbox)
+
+    // document.activeElement (checkbox = premier) → après Shift+Tab, focus doit passer à submitBtn (dernier).
+    fireEvent.keyDown(screen.getByTestId('confirm-modal-overlay'), { key: 'Tab', code: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(submitBtn)
+  })
+
+  it('[A11Y-07] fermeture modale confirm (Annuler) → focus retourné au bouton déclencheur', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+
+    fireEvent.click(screen.getByTestId('confirm-modal-cancel'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('confirm-modal-overlay')).not.toBeInTheDocument()
+    })
+    expect(document.activeElement).toBe(screen.getByTestId('btn-confirm'))
+  })
+
+  it('[A11Y-08] fermeture modale rejet (Annuler) → focus retourné au bouton déclencheur', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-reject'))
+    fireEvent.click(screen.getByTestId('btn-reject'))
+
+    fireEvent.click(screen.getByTestId('reject-modal-cancel'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('reject-modal-overlay')).not.toBeInTheDocument()
+    })
+    expect(document.activeElement).toBe(screen.getByTestId('btn-reject'))
+  })
+
+  it('[A11Y-09] succès confirmation → focus sur bannière de succès', async () => {
+    mocks.getStoreAdminDealerRequestById
+      .mockResolvedValueOnce(REQ_PENDING)
+      .mockResolvedValueOnce({ ...REQ_PENDING, status: 'confirmed' })
+    mocks.confirmDealerRequestCommand.mockResolvedValue({ success: true })
+
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('confirm-checkbox'))
+
+    await act(async () => { fireEvent.click(screen.getByTestId('confirm-modal-submit')) })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('action-success')).toBeInTheDocument()
+    })
+    expect(document.activeElement).toBe(screen.getByTestId('action-success'))
+  })
+
+  it('[A11Y-10] piège Tab (rejet) — Tab depuis dernier élément déplace focus sur le premier', async () => {
+    mocks.getStoreAdminDealerRequestById.mockResolvedValue(REQ_PENDING)
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-reject'))
+    fireEvent.click(screen.getByTestId('btn-reject'))
+
+    const textarea = screen.getByTestId('reject-reason-textarea')
+    fireEvent.change(textarea, { target: { value: 'Motif valide.' } })
+
+    await act(async () => {})
+
+    const submitBtn = screen.getByTestId('reject-modal-submit')
+    submitBtn.focus()
+    expect(document.activeElement).toBe(submitBtn)
+
+    // document.activeElement (submitBtn = dernier) → après Tab, focus doit passer à textarea (premier).
+    fireEvent.keyDown(screen.getByTestId('reject-modal-overlay'), { key: 'Tab', code: 'Tab' })
+    expect(document.activeElement).toBe(textarea)
+  })
+})
+
+// ===========================================================================
+// §RELOAD — Rechargement échoué après mutation réussie
+// ===========================================================================
+
+describe('TC-039-RELOAD — rechargement échoué après mutation réussie', () => {
+  it('[RELOAD-01] confirmation réussie mais rechargement échoué → refresh-error et action-success visibles, modale fermée', async () => {
+    mocks.getStoreAdminDealerRequestById
+      .mockResolvedValueOnce(REQ_PENDING)
+      .mockRejectedValueOnce(new Error('Réseau indisponible'))
+    mocks.confirmDealerRequestCommand.mockResolvedValue({ success: true })
+
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    fireEvent.click(screen.getByTestId('confirm-checkbox'))
+
+    await act(async () => { fireEvent.click(screen.getByTestId('confirm-modal-submit')) })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('action-success')).toBeInTheDocument()
+      expect(screen.getByTestId('refresh-error')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('confirm-modal-overlay')).not.toBeInTheDocument()
+    expect(mocks.confirmDealerRequestCommand).toHaveBeenCalledWith('req-pending')
+  })
+
+  it('[RELOAD-02] rejet réussi mais rechargement échoué → refresh-error et action-success visibles, modale fermée', async () => {
+    mocks.getStoreAdminDealerRequestById
+      .mockResolvedValueOnce(REQ_PENDING)
+      .mockRejectedValueOnce(new Error('Réseau indisponible'))
+    mocks.rejectDealerRequestCommand.mockResolvedValue({ success: true })
+
+    renderDetails()
+    await waitFor(() => screen.getByTestId('btn-reject'))
+    fireEvent.click(screen.getByTestId('btn-reject'))
+    fireEvent.change(screen.getByTestId('reject-reason-textarea'), { target: { value: 'Motif valide.' } })
+
+    await act(async () => { fireEvent.click(screen.getByTestId('reject-modal-submit')) })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('action-success')).toBeInTheDocument()
+      expect(screen.getByTestId('refresh-error')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('reject-modal-overlay')).not.toBeInTheDocument()
+    expect(mocks.rejectDealerRequestCommand).toHaveBeenCalledWith('req-pending', 'Motif valide.')
+  })
+})
+
+// ===========================================================================
 // §SEC — Sécurité : aucun appel Firestore write depuis le composant
 // ===========================================================================
 

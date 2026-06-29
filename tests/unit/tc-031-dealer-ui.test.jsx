@@ -552,7 +552,8 @@ describe('TC-031-NEW — NewDealerRequest', () => {
     mocks.createDealerRequest.mockReturnValue(new Promise(r => { resolve = r }))
 
     renderWithRouter(NewDealerRequest, {}, '/dealer/requests/new')
-    await waitFor(() => screen.getByTestId('new-dealer-request'))
+    // Attendre le formulaire chargé (select-store), pas seulement le conteneur
+    await waitFor(() => screen.getByTestId('select-store'))
 
     fireEvent.change(screen.getByTestId('select-store'), { target: { value: 'store-a' } })
     fireEvent.click(screen.getByTestId('radio-type-stock_add'))
@@ -570,11 +571,17 @@ describe('TC-031-NEW — NewDealerRequest', () => {
   })
 
   it('[NEW-14] double-clic confirmer → createDealerRequest appelé une seule fois', async () => {
+    // Cause du flaky (deux racines) :
+    // 1. waitFor('new-dealer-request') résolvait avant que les boutiques soient chargées
+    //    → select-store introuvable. Fix : attendre select-store lui-même.
+    // 2. fireEvent.click ne garantissait pas que React avait flushé disabled=true
+    //    avant le second clic. Fix : waitFor(btn.disabled) entre les deux clics.
     let resolve
     mocks.createDealerRequest.mockReturnValue(new Promise(r => { resolve = r }))
 
     renderWithRouter(NewDealerRequest, {}, '/dealer/requests/new')
-    await waitFor(() => screen.getByTestId('new-dealer-request'))
+    // Attendre le formulaire chargé (select-store), pas seulement le conteneur
+    await waitFor(() => screen.getByTestId('select-store'))
 
     fireEvent.change(screen.getByTestId('select-store'), { target: { value: 'store-a' } })
     fireEvent.click(screen.getByTestId('radio-type-stock_add'))
@@ -584,6 +591,8 @@ describe('TC-031-NEW — NewDealerRequest', () => {
     await waitFor(() => screen.getByTestId('btn-submit-confirm'))
     const btn = screen.getByTestId('btn-submit-confirm')
     fireEvent.click(btn)
+    // Attendre que React désactive le bouton (anti-double-clic) avant le second clic
+    await waitFor(() => expect(btn).toBeDisabled())
     fireEvent.click(btn)
 
     await act(async () => { resolve({ id: 'x' }) })
@@ -592,7 +601,8 @@ describe('TC-031-NEW — NewDealerRequest', () => {
 
   it('[NEW-15] bouton annuler formulaire → navigate vers /dealer/requests', async () => {
     renderWithRouter(NewDealerRequest, {}, '/dealer/requests/new')
-    await waitFor(() => screen.getByTestId('new-dealer-request'))
+    // btn-cancel-form n'existe qu'après le chargement des boutiques
+    await waitFor(() => screen.getByTestId('btn-cancel-form'))
 
     fireEvent.click(screen.getByTestId('btn-cancel-form'))
     expect(mocks.navigate).toHaveBeenCalledWith('/dealer/requests')

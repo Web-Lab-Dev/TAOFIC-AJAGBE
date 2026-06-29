@@ -697,6 +697,28 @@ describe('TC-035-CON — concurrence réelle', () => {
 // §PE — Effets partiels : aucune écriture lors d'une erreur dans la transaction
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Helper : vérifie l'absence d'effets partiels après un échec de handler.
+// expectedBalance = null → vérifie que le document balance n'a pas été créé.
+// expectedBalance = number → vérifie que Orange.stock vaut cette valeur.
+async function expectNoPartialEffects({ requestRef, expectedStatus, balanceRef, expectedBalance, auditCollectionRef }) {
+  if (requestRef && expectedStatus !== undefined) {
+    const reqSnap = await requestRef.get()
+    expect(reqSnap.data().status).toBe(expectedStatus)
+  }
+  if (balanceRef) {
+    const balSnap = await balanceRef.get()
+    if (expectedBalance === null) {
+      expect(balSnap.exists).toBe(false)
+    } else if (expectedBalance !== undefined) {
+      expect(balSnap.data().balances.Orange.stock).toBe(expectedBalance)
+    }
+  }
+  if (auditCollectionRef) {
+    const auditSnap = await auditCollectionRef.get()
+    expect(auditSnap.size).toBe(0)
+  }
+}
+
 describe('TC-035-PE — absence d\'effets partiels', () => {
   it('[PE-01] balance absente → demande inchangée, aucun audit', async () => {
     await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
@@ -711,6 +733,11 @@ describe('TC-035-PE — absence d\'effets partiels', () => {
     expect(reqSnap.data().status).toBe('pending')
     const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
     expect(auditSnap.size).toBe(0)
+    // Vérification absente auparavant : le document balance ne doit pas avoir été créé
+    await expectNoPartialEffects({
+      balanceRef: db.doc(`clients/${STORE_A}/networkBalances/current`),
+      expectedBalance: null,
+    })
   })
 
   it('[PE-02] balance décimale (100.5) → demande inchangée, solde inchangé, aucun audit', async () => {
@@ -751,6 +778,11 @@ describe('TC-035-PE — absence d\'effets partiels', () => {
     expect(reqSnap.data().status).toBe('pending')
     const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
     expect(auditSnap.size).toBe(0)
+    // Vérification absente auparavant : solde inchangé (stock resté à la valeur string)
+    await expectNoPartialEffects({
+      balanceRef: db.doc(`clients/${STORE_A}/networkBalances/current`),
+      expectedBalance: '50000', // la valeur string d'origine doit être préservée
+    })
   })
 
   it('[PE-04] overflow → demande inchangée, solde inchangé, aucun audit', async () => {
@@ -808,6 +840,11 @@ describe('TC-035-PE — absence d\'effets partiels', () => {
     expect(auditSnap.size).toBe(0)
     const auditSnapB = await db.collection(`clients/${STORE_B}/auditLogs`).get()
     expect(auditSnapB.size).toBe(0)
+    // Vérification absente auparavant : solde de STORE_A inchangé
+    await expectNoPartialEffects({
+      balanceRef: db.doc(`clients/${STORE_A}/networkBalances/current`),
+      expectedBalance: 50000,
+    })
   })
 
   it('[PE-07] demande corrompue (confirmedBy set) → solde inchangé, aucun audit', async () => {
@@ -823,6 +860,11 @@ describe('TC-035-PE — absence d\'effets partiels', () => {
     expect(balSnap.data().balances.Orange.stock).toBe(50000)
     const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
     expect(auditSnap.size).toBe(0)
+    // Vérification absente auparavant : statut demande inchangé malgré données corrompues
+    await expectNoPartialEffects({
+      requestRef: db.doc('dealerRequests/req-pe-7'),
+      expectedStatus: 'pending',
+    })
   })
 })
 

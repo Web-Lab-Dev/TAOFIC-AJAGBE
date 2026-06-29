@@ -450,3 +450,54 @@ describe('TC-037-AUTH — Auth, rôle et validations HTTP', () => {
     await signOutClient()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §E2E-INT — Erreurs internes (functions/internal)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TC-037-INT — erreurs internes via httpsCallable', () => {
+  it('[E2E-INT-01] solde corrompu (stock string) → functions/internal + INVALID_BALANCE_DATA, demande et solde inchangés, aucun audit', async () => {
+    await createAuthUser(STORE_ADMIN_UID, ADMIN_EMAIL, ADMIN_PASSWORD)
+    await seedProfile(STORE_ADMIN_UID, ADMIN_PROFILE)
+    await seedRequest('req-e2e-int-1', BASE_REQ)
+    // Solde corrompu : stock est une string → INVALID_BALANCE_DATA → functions/internal via wrapCallable
+    const corruptBalance = {
+      balances: { Orange: { stock: 'invalid_string', liquidite: 0 } },
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    }
+    await seedBalance(STORE_A, corruptBalance)
+
+    await signInClient(ADMIN_EMAIL, ADMIN_PASSWORD)
+    const callable = httpsCallable(clientFunctions, 'confirmDealerRequest')
+
+    try {
+      await callable({ requestId: 'req-e2e-int-1' })
+      expect.fail('Devrait lancer une erreur functions/internal')
+    } catch (err) {
+      // Code HTTP correct
+      expect(err.code).toBe('functions/internal')
+      // Code métier exposé dans details (pas de stack ni d'internals Admin SDK)
+      expect(err.details?.code).toBe('INVALID_BALANCE_DATA')
+      // Message ne contient ni stack trace ni références aux internals Firebase
+      expect(err.message).not.toMatch(/at /)
+      expect(err.message).not.toMatch(/Error:.*Error:/)
+      expect(err.message).not.toMatch(/firestore|admin|googleapis/i)
+    }
+
+    // Demande inchangée : toujours en attente
+    const reqSnap = await adminDb.doc('dealerRequests/req-e2e-int-1').get()
+    expect(reqSnap.data().status).toBe('pending')
+    expect(reqSnap.data().confirmedBy).toBeNull()
+    expect(reqSnap.data().confirmedAt).toBeNull()
+
+    // Solde inchangé : valeur corrompue préservée
+    const balSnap = await adminDb.doc(`clients/${STORE_A}/networkBalances/current`).get()
+    expect(balSnap.data().balances.Orange.stock).toBe('invalid_string')
+
+    // Aucun audit créé
+    const auditSnap = await adminDb.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+
+    await signOutClient()
+  })
+})
