@@ -17,7 +17,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, getDoc, getDocs, deleteDoc, updateDoc, collection } from 'firebase/firestore'
+import { doc, getDoc, getDocs, deleteDoc, updateDoc, setDoc, collection } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -311,5 +311,55 @@ describe('TC-010 — Lecture non paginée history (règles Firestore)', () => {
     const ctx = getAuthenticatedContext(testEnv, 'uid-member-bbb')
     const col = collection(ctx.firestore(), 'clients', 'store-test-aaa', 'history')
     await assertFails(getDocs(col))
+  })
+})
+
+describe('TC-V2-16-UTF8 — Valeurs corrompues retirées de validStatus/validTransaction', () => {
+  /**
+   * CARACTÉRISATION : avant correction V2-16, firestore.rules acceptait des
+   * valeurs corrompues en encodage Latin-1 ('DÃ©pÃ´t', 'CrÃ©dit', 'ValidÃ©e',
+   * 'RemboursÃ©e', 'AnnulÃ©e', 'Non TerminÃ©es') dans validTransaction(),
+   * validStatus() et isPendingStatus(). Ces séquences ne peuvent jamais être
+   * produites par un client correctement encodé en UTF-8 — elles ont été
+   * retirées. Les valeurs correctes (accentuées et non accentuées) restent
+   * acceptées.
+   */
+  it('[UTF8-01] update statut vers valeur corrompue "ValidÃ©e" → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
+    await assertFails(updateDoc(ref, { statut: 'ValidÃ©e' }))
+  })
+
+  it('[UTF8-02] update statut vers valeur correcte accentuée "Remboursée" → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
+    await assertSucceeds(updateDoc(ref, { statut: 'Remboursée' }))
+  })
+
+  it('[UTF8-03] update statut vers valeur correcte sans accent "Annulee" → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-aaa-001')
+    await assertSucceeds(updateDoc(ref, { statut: 'Annulee' }))
+  })
+
+  it('[UTF8-04] create draft avec statut corrompu "Non TerminÃ©es" → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'drafts', 'draft-utf8')
+    await assertFails(setDoc(ref, {
+      montant: 100, type: 'Dépôt', clientId: 'client-001', storeId: 'store-test-aaa', statut: 'Non TerminÃ©es',
+    }))
+  })
+
+  it('[UTF8-05] create history avec type corrompu "DÃ©pÃ´t" → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'uid-member-aaa')
+    const ref = doc(ctx.firestore(), 'clients', 'store-test-aaa', 'history', 'hist-utf8')
+    await assertFails(setDoc(ref, {
+      montant: 100, type: 'DÃ©pÃ´t', clientId: 'client-001', storeId: 'store-test-aaa', statut: 'Validée',
+    }))
   })
 })

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { resolveAndAssertAdminProject } from './lib/resolveAndAssertAdminProject.mjs'
 
 const sourceEmail = String(process.env.AKAYIS_SOURCE_EMAIL || '').trim().toLowerCase()
 const targetEmail = String(process.env.AKAYIS_TARGET_EMAIL || '').trim().toLowerCase()
@@ -18,8 +19,15 @@ if (!serviceAccountPath) {
   process.exit(1)
 }
 
+const serviceAccount = JSON.parse(await readFile(serviceAccountPath, 'utf8'))
+
+resolveAndAssertAdminProject({
+  serviceAccount,
+  envProjectId: process.env.GCLOUD_PROJECT,
+})
+
 initializeApp({
-  credential: cert(JSON.parse(await readFile(serviceAccountPath, 'utf8')))
+  credential: cert(serviceAccount)
 })
 
 const auth = getAuth()

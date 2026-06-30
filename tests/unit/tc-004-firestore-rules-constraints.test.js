@@ -10,30 +10,33 @@
  * Ces tests sont des tests documentaires/exécutables :
  *   - Chaque tableau de données est extrait VERBATIM de firestore.rules
  *   - Les assertions vérifient la cohérence interne de ces listes
- *   - Les formes homoglyphes et corrompues (UTF-8 mal encodé) sont
- *     explicitement couvertes et distinguées des formes correctes
  *
- * Source : firestore.rules lignes 35-67
+ * Source : firestore.rules
  *   function validTransaction(data) {
  *     return data.keys().hasAll(['type', 'montant', 'clientId']) &&
- *            data.type in ['Dépôt', 'Depot', 'Retrait', 'Crédit', 'Credit',
- *                          'DÃ©pÃ´t', 'CrÃ©dit'] &&
- *            data.montant is number && data.montant > 0 && data.montant <= 100000000 &&
+ *            data.type in ['Dépôt', 'Depot', 'Retrait', 'Crédit', 'Credit'] &&
+ *            data.montant is number && data.montant > 0 && data.montant == math.floor(data.montant) &&
  *            data.clientId is string && data.clientId.size() > 0;
  *   }
  *
  *   function validStatus(status) {
  *     return status in [
- *       'Non Terminées', 'Non Terminees', 'Non TerminÃ©es',
- *       'Validée', 'Validee', 'ValidÃ©e',
- *       'Remboursée', 'Remboursee', 'RemboursÃ©e',
- *       'Annulée', 'Annulee', 'AnnulÃ©e'
+ *       'Non Terminées', 'Non Terminees',
+ *       'Validée', 'Validee',
+ *       'Remboursée', 'Remboursee',
+ *       'Annulée', 'Annulee'
  *     ] || status.matches('^(Payé|Remboursé|Encaissé) par .+$');
  *   }
  *
  *   function isPendingStatus(status) {
- *     return status in ['Non Terminées', 'Non Terminees', 'Non TerminÃ©es'];
+ *     return status in ['Non Terminées', 'Non Terminees'];
  *   }
+ *
+ * MASTER-SEC-007 CORRIGÉ (V2-16) : les formes UTF-8 corrompues
+ * ('DÃ©pÃ´t', 'CrÃ©dit', 'Non TerminÃ©es', 'ValidÃ©e', 'RemboursÃ©e',
+ * 'AnnulÃ©e') ont été retirées des listes. Elles ne pouvaient jamais être
+ * produites par un client correctement encodé en UTF-8. Caractérisation
+ * de la suppression : tests/firestore/history.rules.test.js TC-V2-16-UTF8.
  *
  * Périmètre : ces tests NE simulent PAS un appel Firestore. Les tests
  * d'émulateur (appels allow/deny réels) sont couverts par TC-007 à TC-010
@@ -61,12 +64,8 @@ const rulesContent = readFileSync(resolve(__dirname, '../../firestore.rules'), '
 // ===========================================================================
 
 /**
- * Types acceptés par validTransaction() — firestore.rules ligne 37
+ * Types acceptés par validTransaction() — firestore.rules
  * VERBATIM depuis le fichier rules, caractères accentués inclus.
- *
- * ATTENTION : la liste contient des formes UTF-8 corrompues (MASTER-SEC-007).
- * 'DÃ©pÃ´t' et 'CrÃ©dit' sont des encodages latin-1 mal interprétés.
- * Ces formes sont dans les règles ACTUELLES — ne pas corriger en Lot 0.
  */
 const VALID_TYPES_FROM_RULES = [
   'Dépôt',    // forme correcte avec accent
@@ -74,37 +73,30 @@ const VALID_TYPES_FROM_RULES = [
   'Retrait',  // pas d'accent
   'Crédit',   // forme correcte avec accent
   'Credit',   // forme sans accent (variante de compatibilité)
-  'DÃ©pÃ´t', // FORME CORROMPUE (latin-1 mal encodé) — MASTER-SEC-007
-  'CrÃ©dit',  // FORME CORROMPUE (latin-1 mal encodé) — MASTER-SEC-007
 ]
 
 /**
- * Statuts acceptés dans la liste explicite de validStatus() — firestore.rules lignes 48-62
+ * Statuts acceptés dans la liste explicite de validStatus() — firestore.rules
  * (hors la branche regex `matches('^(Payé|Remboursé|Encaissé) par .+$')`)
  */
 const VALID_STATUSES_EXPLICIT_FROM_RULES = [
   'Non Terminées',    // forme correcte
   'Non Terminees',    // forme sans accent
-  'Non TerminÃ©es',  // FORME CORROMPUE — MASTER-SEC-007
   'Validée',          // forme correcte
   'Validee',          // forme sans accent
-  'ValidÃ©e',        // FORME CORROMPUE — MASTER-SEC-007
   'Remboursée',       // forme correcte
   'Remboursee',       // forme sans accent
-  'RemboursÃ©e',     // FORME CORROMPUE — MASTER-SEC-007
   'Annulée',          // forme correcte
   'Annulee',          // forme sans accent
-  'AnnulÃ©e',        // FORME CORROMPUE — MASTER-SEC-007
 ]
 
 /**
- * Statuts en attente (pending) — firestore.rules ligne 66
+ * Statuts en attente (pending) — firestore.rules
  * Utilisé par isPendingStatus() pour distinguer les drafts de l'historique.
  */
 const PENDING_STATUSES_FROM_RULES = [
   'Non Terminées',
   'Non Terminees',
-  'Non TerminÃ©es',
 ]
 
 /**
@@ -151,8 +143,8 @@ describe('TC-004 [firestore.rules] — Champs requis par validTransaction()', ()
 
 describe('TC-004 [firestore.rules vs helpers.js] — Types valides', () => {
   describe('firestore.rules — validTransaction() : liste des types acceptés', () => {
-    it('la liste contient exactement 7 valeurs', () => {
-      expect(VALID_TYPES_FROM_RULES).toHaveLength(7)
+    it('la liste contient exactement 5 valeurs', () => {
+      expect(VALID_TYPES_FROM_RULES).toHaveLength(5)
     })
 
     it('contient les formes correctes avec accents', () => {
@@ -171,11 +163,9 @@ describe('TC-004 [firestore.rules vs helpers.js] — Types valides', () => {
       expect(VALID_TYPES_FROM_RULES).not.toContain('retrait')
     })
 
-    it('contient les formes UTF-8 corrompues — MASTER-SEC-007 (comportement actuel à figer)', () => {
-      // Ces valeurs sont dans les règles actuelles.
-      // Ne pas corriger en Lot 0 — relève de Lot 3B/D7.
-      expect(VALID_TYPES_FROM_RULES).toContain('DÃ©pÃ´t')
-      expect(VALID_TYPES_FROM_RULES).toContain('CrÃ©dit')
+    it('ne contient plus les formes UTF-8 corrompues — MASTER-SEC-007 corrigé (V2-16)', () => {
+      expect(VALID_TYPES_FROM_RULES).not.toContain('DÃ©pÃ´t')
+      expect(VALID_TYPES_FROM_RULES).not.toContain('CrÃ©dit')
     })
   })
 
@@ -231,13 +221,10 @@ describe('TC-004 [firestore.rules vs helpers.js] — Types valides', () => {
       }
     })
 
-    it('les formes corrompues sont acceptées par les règles Firestore MAIS constituent une faille — MASTER-SEC-007', () => {
-      // DÃ©pÃ´t et CrÃ©dit sont dans la liste rules → ALLOW côté backend
-      // La fonction UI les accepte aussi (chaînes truthy)
-      // Comportement à corriger au Lot 3B — pas en Lot 0.
+    it('les formes corrompues ne sont plus acceptées par les règles Firestore — MASTER-SEC-007 corrigé (V2-16)', () => {
       const corruptedTypes = ['DÃ©pÃ´t', 'CrÃ©dit']
       for (const t of corruptedTypes) {
-        expect(VALID_TYPES_FROM_RULES).toContain(t)
+        expect(VALID_TYPES_FROM_RULES).not.toContain(t)
       }
     })
   })
@@ -295,8 +282,8 @@ describe('TC-004 [firestore.rules] — Contraintes numériques sur montant', () 
 // ===========================================================================
 
 describe('TC-004 [firestore.rules] — validStatus() : liste des statuts explicites', () => {
-  it('la liste explicite contient exactement 12 valeurs (4 familles × 3 formes)', () => {
-    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toHaveLength(12)
+  it('la liste explicite contient exactement 8 valeurs (4 familles × 2 formes)', () => {
+    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toHaveLength(8)
   })
 
   it('contient "Non Terminées" (forme correcte avec accents)', () => {
@@ -307,26 +294,29 @@ describe('TC-004 [firestore.rules] — validStatus() : liste des statuts explici
     expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Non Terminees')
   })
 
-  it('contient "Non TerminÃ©es" (forme corrompue — MASTER-SEC-007)', () => {
-    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Non TerminÃ©es')
+  it('ne contient plus "Non TerminÃ©es" (forme corrompue) — MASTER-SEC-007 corrigé (V2-16)', () => {
+    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).not.toContain('Non TerminÃ©es')
   })
 
-  it('contient "Validée", "Validee" et "ValidÃ©e"', () => {
+  it('contient "Validée" et "Validee"', () => {
     expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Validée')
     expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Validee')
-    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('ValidÃ©e')
   })
 
-  it('contient "Remboursée", "Remboursee" et "RemboursÃ©e"', () => {
+  it('contient "Remboursée" et "Remboursee"', () => {
     expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Remboursée')
     expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Remboursee')
-    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('RemboursÃ©e')
   })
 
-  it('contient "Annulée", "Annulee" et "AnnulÃ©e"', () => {
+  it('contient "Annulée" et "Annulee"', () => {
     expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Annulée')
     expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('Annulee')
-    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).toContain('AnnulÃ©e')
+  })
+
+  it('ne contient plus aucune forme corrompue — MASTER-SEC-007 corrigé (V2-16)', () => {
+    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).not.toContain('ValidÃ©e')
+    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).not.toContain('RemboursÃ©e')
+    expect(VALID_STATUSES_EXPLICIT_FROM_RULES).not.toContain('AnnulÃ©e')
   })
 })
 
@@ -396,8 +386,8 @@ describe('TC-004 [firestore.rules] — Statuts NON valides', () => {
 // ===========================================================================
 
 describe('TC-004 [firestore.rules] — isPendingStatus()', () => {
-  it('la liste des statuts pending contient exactement 3 valeurs', () => {
-    expect(PENDING_STATUSES_FROM_RULES).toHaveLength(3)
+  it('la liste des statuts pending contient exactement 2 valeurs', () => {
+    expect(PENDING_STATUSES_FROM_RULES).toHaveLength(2)
   })
 
   it('"Non Terminées" est un statut pending', () => {
@@ -408,8 +398,8 @@ describe('TC-004 [firestore.rules] — isPendingStatus()', () => {
     expect(PENDING_STATUSES_FROM_RULES).toContain('Non Terminees')
   })
 
-  it('"Non TerminÃ©es" (forme corrompue) est un statut pending — MASTER-SEC-007', () => {
-    expect(PENDING_STATUSES_FROM_RULES).toContain('Non TerminÃ©es')
+  it('ne contient plus "Non TerminÃ©es" (forme corrompue) — MASTER-SEC-007 corrigé (V2-16)', () => {
+    expect(PENDING_STATUSES_FROM_RULES).not.toContain('Non TerminÃ©es')
   })
 
   it('"Validée" n\'est PAS un statut pending', () => {

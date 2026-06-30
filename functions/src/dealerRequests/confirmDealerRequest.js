@@ -21,24 +21,11 @@ import {
   validateInputPayload,
   validateRequestId,
   validateRequestData,
+  validateProfileData,
   readCurrentBalance,
   getBalanceField,
   buildAuditEntry,
 } from './shared.js'
-
-function validateProfileData(profile) {
-  if (!profile.active) {
-    throw new DealerRequestError('PROFILE_INACTIVE', 'Votre compte est désactivé.')
-  }
-  if (profile.role !== 'store_admin') {
-    throw new DealerRequestError('ROLE_FORBIDDEN', 'Action réservée aux administrateurs de boutique.')
-  }
-  const storeId = typeof profile.storeId === 'string' ? profile.storeId.trim() : ''
-  if (!storeId) {
-    throw new DealerRequestError('STORE_ID_REQUIRED', 'Identifiant de boutique manquant dans votre profil.')
-  }
-  return storeId
-}
 
 export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────

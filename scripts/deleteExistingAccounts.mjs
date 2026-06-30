@@ -2,16 +2,24 @@ import { initializeApp, cert, applicationDefault } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { readFile } from 'node:fs/promises'
+import { resolveAndAssertAdminProject } from './lib/resolveAndAssertAdminProject.mjs'
 
 const execute = process.argv.includes('--execute')
 const confirmedDeleteAll = process.argv.includes('--confirm-delete-all')
 const allowDeleteAll = process.env.AKAYIS_ALLOW_DELETE_ALL_ACCOUNTS === 'true'
 const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
 
+const serviceAccount = serviceAccountPath
+  ? JSON.parse(await readFile(serviceAccountPath, 'utf8'))
+  : null
+
+resolveAndAssertAdminProject({
+  serviceAccount,
+  envProjectId: process.env.GCLOUD_PROJECT,
+})
+
 initializeApp({
-  credential: serviceAccountPath
-    ? cert(JSON.parse(await readFile(serviceAccountPath, 'utf8')))
-    : applicationDefault()
+  credential: serviceAccount ? cert(serviceAccount) : applicationDefault()
 })
 
 const auth = getAuth()

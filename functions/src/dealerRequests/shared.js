@@ -137,6 +137,24 @@ export function validateRequestData(reqData, actorStoreId) {
 }
 
 // ---------------------------------------------------------------------------
+// Validation du profil acteur (store_admin actif avec storeId)
+// ---------------------------------------------------------------------------
+
+export function validateProfileData(profile) {
+  if (!profile.active) {
+    throw new DealerRequestError('PROFILE_INACTIVE', 'Votre compte est désactivé.')
+  }
+  if (profile.role !== 'store_admin') {
+    throw new DealerRequestError('ROLE_FORBIDDEN', 'Action réservée aux administrateurs de boutique.')
+  }
+  const storeId = typeof profile.storeId === 'string' ? profile.storeId.trim() : ''
+  if (!storeId) {
+    throw new DealerRequestError('STORE_ID_REQUIRED', 'Identifiant de boutique manquant dans votre profil.')
+  }
+  return storeId
+}
+
+// ---------------------------------------------------------------------------
 // Lecture du solde courant depuis les données brutes du document
 // ---------------------------------------------------------------------------
 
