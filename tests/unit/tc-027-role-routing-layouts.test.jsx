@@ -97,12 +97,9 @@ vi.mock('../../src/pages/Profil', () => ({
   default: () => <div data-testid="page-profil">Profil</div>,
 }))
 
-// Mocks composants Layout Boutique (NetworkCardsDrawer, Chatbot)
+// Mocks composants Layout Boutique (NetworkCardsDrawer)
 vi.mock('../../src/components/network/NetworkCardsDrawer', () => ({
   default: () => <div data-testid="network-drawer">NetworkDrawer</div>,
-}))
-vi.mock('../../src/components/chatbot/Chatbot', () => ({
-  default: () => <div data-testid="chatbot">Chatbot</div>,
 }))
 vi.mock('../../src/components/NavBar', () => ({
   default: () => <nav data-testid="store-navbar">NavBar</nav>,
@@ -441,12 +438,6 @@ describe('TC-027-L — Layouts', () => {
     expect(screen.queryByTestId('network-drawer')).not.toBeInTheDocument()
   })
 
-  it('L-5 : AdminLayout n\'a pas Chatbot', () => {
-    useAuth.mockReturnValue(systemManagerCtx())
-    render(<MemoryRouter><AdminLayout /></MemoryRouter>)
-    expect(screen.queryByTestId('chatbot')).not.toBeInTheDocument()
-  })
-
   it('L-6 : AdminLayout n\'a pas la NavBar Boutique', () => {
     useAuth.mockReturnValue(systemManagerCtx())
     render(<MemoryRouter><AdminLayout /></MemoryRouter>)
@@ -480,12 +471,6 @@ describe('TC-027-L — Layouts', () => {
     useAuth.mockReturnValue(dealerCtx())
     render(<MemoryRouter><DealerLayout /></MemoryRouter>)
     expect(screen.queryByTestId('network-drawer')).not.toBeInTheDocument()
-  })
-
-  it('L-11 : DealerLayout n\'a pas Chatbot', () => {
-    useAuth.mockReturnValue(dealerCtx())
-    render(<MemoryRouter><DealerLayout /></MemoryRouter>)
-    expect(screen.queryByTestId('chatbot')).not.toBeInTheDocument()
   })
 
   it('L-12 : DealerLayout n\'a pas la NavBar Boutique', () => {
@@ -613,10 +598,6 @@ describe('TC-027-V — Régression Boutique (store_admin)', () => {
     expect(screen.getByTestId('network-drawer')).toBeInTheDocument()
   })
 
-  it('V-9 : Layout Boutique inclut Chatbot pour store_admin', () => {
-    renderBoutiqueRoutes('/')
-    expect(screen.getByTestId('chatbot')).toBeInTheDocument()
-  })
 })
 
 // ============================================================================

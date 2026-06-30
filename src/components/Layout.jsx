@@ -3,8 +3,6 @@ import { Outlet } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import NavBar from './NavBar'
 import NetworkCardsDrawer from './network/NetworkCardsDrawer'
-import Chatbot from './chatbot/Chatbot'
-
 function Layout({ children }) {
   const { themeClasses, backgroundImage } = useTheme()
   const [navbarHeight, setNavbarHeight] = useState(0)
@@ -88,8 +86,6 @@ function Layout({ children }) {
         </div>
       </main>
 
-      {/* Chatbot flottant */}
-      <Chatbot />
     </div>
   )
 }

@@ -154,9 +154,6 @@ vi.mock('../../src/components/NavBar', () => ({
 vi.mock('../../src/components/network/NetworkCardsDrawer', () => ({
   default: () => <div data-testid="network-drawer">Drawer</div>,
 }))
-vi.mock('../../src/components/chatbot/Chatbot', () => ({
-  default: () => <div data-testid="chatbot">Chatbot</div>,
-}))
 vi.mock('../../src/components/PWAInstallButton', () => ({
   default: () => null,
 }))
@@ -407,10 +404,9 @@ describe('TC-028-B — Wildcard et états bloqués', () => {
     expect(screen.queryByTestId('dealer-layout')).not.toBeInTheDocument()
   })
 
-  it('B-7 : system_manager → Layout Boutique et Chatbot absents', () => {
+  it('B-7 : system_manager → Layout Boutique absent', () => {
     renderApp(systemManagerCtx(), '/admin')
     expect(screen.queryByTestId('store-navbar')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('chatbot')).not.toBeInTheDocument()
     expect(screen.queryByTestId('network-drawer')).not.toBeInTheDocument()
   })
 })

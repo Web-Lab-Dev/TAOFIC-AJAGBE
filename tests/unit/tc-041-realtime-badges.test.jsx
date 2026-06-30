@@ -110,9 +110,6 @@ vi.mock('../../src/components/PWAInstallButton', () => ({
 vi.mock('../../src/components/network/NetworkCardsDrawer', () => ({
   default: () => null,
 }))
-vi.mock('../../src/components/chatbot/Chatbot', () => ({
-  default: () => null,
-}))
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal()

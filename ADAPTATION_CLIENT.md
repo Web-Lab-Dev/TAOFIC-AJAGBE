@@ -33,7 +33,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 ```
 
-Les variables Firebase ne doivent pas etre committees dans `netlify.toml` ou `vercel.json`. Les renseigner uniquement dans le dashboard Netlify/Vercel du client.
+Les variables Firebase ne doivent pas etre committees dans `vercel.json`. Les renseigner uniquement dans le dashboard Vercel du client.
 
 ## Isolation client / base de donnees
 
@@ -68,7 +68,7 @@ Les variables Firebase ne doivent pas etre committees dans `netlify.toml` ou `ve
 - Ne jamais reutiliser les anciennes cles d'un autre client.
 - Creer un nouveau projet Firebase par client.
 - Revoir `firestore.rules` avant production.
-- Remplacer les variables Firebase dans Vercel/Netlify, pas seulement dans `.env`.
+- Remplacer les variables Firebase dans Vercel, pas seulement dans `.env`.
 - Adapter les reseaux partout, car ils sont utilises dans les formulaires, tableaux, graphiques et exports.
 
 ## Verification des references client
@@ -86,7 +86,6 @@ Puis remplacer au minimum les occurrences dans :
 - `vite.config.js`
 - `package.json`
 - `package-lock.json`
-- `netlify.toml`
 - `vercel.json`
 - `src/components/Layout.jsx`
 - `src/components/auth/AuthSidebar.jsx`
