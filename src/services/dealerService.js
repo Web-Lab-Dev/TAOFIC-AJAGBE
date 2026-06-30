@@ -31,6 +31,7 @@ import {
   orderBy,
   limit,
   startAfter,
+  onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
@@ -200,6 +201,71 @@ export async function listDealerRequests({
     if (err.message && !err.code) throw err
     throw mapFirestoreError(err)
   }
+}
+
+// ---------------------------------------------------------------------------
+// subscribeDealerRequests — abonnement temps réel aux demandes du dealer (première page)
+//
+// La première page est maintenue en temps réel via onSnapshot.
+// Les pages supplémentaires utilisent listDealerRequests() avec curseur (getDocs).
+// Retourne la fonction unsubscribe — toujours appeler au démontage.
+//
+// Requêtes : identiques à listDealerRequests (§A et §B) — mêmes indexes.
+// ---------------------------------------------------------------------------
+
+export function subscribeDealerRequests({
+  currentUser,
+  userProfile,
+  statusFilter = null,
+  onUpdate,
+  onError,
+} = {}) {
+  validateDealerContext(currentUser, userProfile)
+
+  const constraints = [where('dealerUid', '==', currentUser.uid)]
+  if (statusFilter) constraints.push(where('status', '==', statusFilter))
+  constraints.push(orderBy('createdAt', 'desc'))
+  constraints.push(limit(DEALER_REQUESTS_PAGE_SIZE + 1))
+
+  const q = query(collection(db, DEALER_REQUESTS_COLLECTION), ...constraints)
+  return onSnapshot(
+    q,
+    (snap) => {
+      const hasMore = snap.docs.length > DEALER_REQUESTS_PAGE_SIZE
+      const visibleDocs = hasMore ? snap.docs.slice(0, DEALER_REQUESTS_PAGE_SIZE) : snap.docs
+      onUpdate({
+        requests: visibleDocs.map(d => ({ id: d.id, ...d.data() })),
+        lastDoc: visibleDocs.at(-1) ?? null,
+        hasMore,
+      })
+    },
+    (err) => onError?.(mapFirestoreError(err))
+  )
+}
+
+// ---------------------------------------------------------------------------
+// subscribeDealerPendingCount — abonnement léger au nombre de demandes pending
+//
+// Requête : dealerUid == uid + status == 'pending' (pas d'orderBy, pas de limit)
+// → utilise l'index composite dealerUid + status existant.
+// Retourne la fonction unsubscribe — toujours appeler au démontage.
+// ---------------------------------------------------------------------------
+
+export function subscribeDealerPendingCount({ currentUser, userProfile, onUpdate } = {}) {
+  if (
+    !currentUser?.uid ||
+    !userProfile?.active ||
+    userProfile?.role !== AUTH_ROLES.DEALER
+  ) {
+    onUpdate?.(0)
+    return () => {}
+  }
+  const q = query(
+    collection(db, DEALER_REQUESTS_COLLECTION),
+    where('dealerUid', '==', currentUser.uid),
+    where('status', '==', 'pending'),
+  )
+  return onSnapshot(q, (snap) => onUpdate(snap.size), () => onUpdate(0))
 }
 
 // ---------------------------------------------------------------------------

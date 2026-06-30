@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   listActiveStores: vi.fn(),
   getStoreBalances: vi.fn(),
   listDealerRequests: vi.fn(),
+  subscribeDealerRequests: vi.fn(),
   createDealerRequest: vi.fn(),
   parseDealerAmount: vi.fn(v => {
     const s = String(v ?? '').trim()
@@ -78,6 +79,7 @@ vi.mock('../../src/services/dealerService', () => ({
   listActiveStores: mocks.listActiveStores,
   getStoreBalances: mocks.getStoreBalances,
   listDealerRequests: mocks.listDealerRequests,
+  subscribeDealerRequests: mocks.subscribeDealerRequests,
   createDealerRequest: mocks.createDealerRequest,
   parseDealerAmount: mocks.parseDealerAmount,
 }))
@@ -159,6 +161,11 @@ beforeEach(() => {
     if (!/^[0-9]+$/.test(s)) return null
     const n = Number(s)
     return Number.isSafeInteger(n) && n > 0 ? n : null
+  })
+  // Défaut subscribe : liste vide, résolu immédiatement
+  mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+    onUpdate({ requests: [], lastDoc: null, hasMore: false })
+    return vi.fn()
   })
 })
 
@@ -615,22 +622,20 @@ describe('TC-031-NEW — NewDealerRequest', () => {
 
 describe('TC-031-REQS — DealerRequests', () => {
   it('[REQS-01] état initial → affiche le composant', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult([]))
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     expect(screen.getByTestId('dealer-requests')).toBeInTheDocument()
   })
 
   it('[REQS-02] bouton nouvelle demande → navigate vers /dealer/requests/new', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult([]))
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => screen.getByTestId('btn-new-request'))
     fireEvent.click(screen.getByTestId('btn-new-request'))
     expect(mocks.navigate).toHaveBeenCalledWith('/dealer/requests/new')
   })
 
-  it('[REQS-03] chargement → état de chargement visible', async () => {
-    let resolve
-    mocks.listDealerRequests.mockReturnValue(new Promise(r => { resolve = r }))
+  it('[REQS-03] chargement → état de chargement visible (subscribe en attente)', async () => {
+    // Subscribe qui ne rappelle jamais onUpdate → loading reste true
+    mocks.subscribeDealerRequests.mockImplementation(() => vi.fn())
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => {
       const container = screen.getByTestId('dealer-requests')
@@ -638,11 +643,13 @@ describe('TC-031-REQS — DealerRequests', () => {
       const hasSpinner = !!container.querySelector('.animate-spin')
       expect(hasBusy || hasSpinner).toBe(true)
     })
-    await act(async () => { resolve(makeReqResult([])) })
   })
 
   it('[REQS-04] chargement réussi — objets plats (pas de data()) → tableau affiché', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult(REQS))
+    mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeReqResult(REQS))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => {
       expect(screen.getByTestId('requests-table')).toBeInTheDocument()
@@ -651,28 +658,36 @@ describe('TC-031-REQS — DealerRequests', () => {
   })
 
   it('[REQS-05] statut pending → badge "En attente"', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult(REQS))
+    mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeReqResult(REQS))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => screen.getByTestId('request-row-req-1'))
     expect(screen.getByTestId('status-badge-pending')).toBeInTheDocument()
   })
 
   it('[REQS-06] statut confirmed → badge "Confirmée"', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult(REQS))
+    mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeReqResult(REQS))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => screen.getByTestId('request-row-req-2'))
     expect(screen.getByTestId('status-badge-confirmed')).toBeInTheDocument()
   })
 
   it('[REQS-07] statut rejected → badge "Rejetée"', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult(REQS))
+    mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeReqResult(REQS))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => screen.getByTestId('request-row-req-3'))
     expect(screen.getByTestId('status-badge-rejected')).toBeInTheDocument()
   })
 
   it('[REQS-08] liste vide → empty state visible', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult([]))
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toBeInTheDocument()
@@ -680,7 +695,10 @@ describe('TC-031-REQS — DealerRequests', () => {
   })
 
   it('[REQS-09] erreur service → message d\'erreur', async () => {
-    mocks.listDealerRequests.mockRejectedValue(new Error('Accès refusé'))
+    mocks.subscribeDealerRequests.mockImplementation(({ onError }) => {
+      onError(new Error('Accès refusé'))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => {
       expect(screen.getByTestId('dealer-requests').textContent).toMatch(/erreur|accès refusé|impossible/i)
@@ -688,31 +706,33 @@ describe('TC-031-REQS — DealerRequests', () => {
   })
 
   it('[REQS-10] hasMore=true → bouton "Voir plus" visible', async () => {
-    mocks.listDealerRequests
-      .mockResolvedValueOnce(makeReqResult(REQS, true))
-      .mockResolvedValueOnce(makeReqResult([], false))
-
+    mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeReqResult(REQS, true))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => {
       expect(screen.getByTestId('btn-load-more')).toBeInTheDocument()
     })
   })
 
-  it('[REQS-11] filtre statut "pending" → listDealerRequests appelé avec statusFilter=pending', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult([]))
+  it('[REQS-11] filtre statut "pending" → subscribeDealerRequests appelé avec statusFilter=pending', async () => {
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => screen.getByTestId('filter-status'))
 
     fireEvent.change(screen.getByTestId('filter-status'), { target: { value: 'pending' } })
 
     await waitFor(() => {
-      const calls = mocks.listDealerRequests.mock.calls
+      const calls = mocks.subscribeDealerRequests.mock.calls
       expect(calls.some(c => c[0]?.statusFilter === 'pending')).toBe(true)
     })
   })
 
   it('[REQS-12] aucun bouton modifier ou supprimer', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult(REQS))
+    mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeReqResult(REQS))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => screen.getByTestId('requests-table'))
 
@@ -724,7 +744,10 @@ describe('TC-031-REQS — DealerRequests', () => {
   })
 
   it('[REQS-13] filtre store affiche uniquement la boutique recherchée', async () => {
-    mocks.listDealerRequests.mockResolvedValue(makeReqResult(REQS))
+    mocks.subscribeDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeReqResult(REQS))
+      return vi.fn()
+    })
     renderWithRouter(DealerRequests, {}, '/dealer/requests')
     await waitFor(() => screen.getByTestId('requests-table'))
 

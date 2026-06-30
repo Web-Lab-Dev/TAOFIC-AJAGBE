@@ -31,6 +31,7 @@ import {
   orderBy,
   limit,
   startAfter,
+  onSnapshot,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { AUTH_ROLES } from '../constants/authMessages'
@@ -139,6 +140,78 @@ export async function listStoreAdminDealerRequests({
     if (err.message && !err.code) throw err
     throw mapFirestoreError(err)
   }
+}
+
+// ---------------------------------------------------------------------------
+// subscribeStoreAdminDealerRequests — abonnement temps réel (première page)
+//
+// Retourne la fonction unsubscribe — toujours appeler au démontage.
+// Requêtes identiques à listStoreAdminDealerRequests (§A–§D) — mêmes indexes.
+// ---------------------------------------------------------------------------
+
+export function subscribeStoreAdminDealerRequests({
+  currentUser,
+  userProfile,
+  statusFilter = null,
+  typeFilter = null,
+  onUpdate,
+  onError,
+} = {}) {
+  validateStoreAdminContext(currentUser, userProfile)
+
+  if (statusFilter && !Object.values(DEALER_REQUEST_STATUSES).includes(statusFilter)) {
+    throw new Error('Statut inconnu.')
+  }
+  if (typeFilter && !Object.values(DEALER_REQUEST_TYPES).includes(typeFilter)) {
+    throw new Error('Type de demande inconnu.')
+  }
+
+  const constraints = [where('targetStoreId', '==', userProfile.storeId)]
+  if (statusFilter) constraints.push(where('status', '==', statusFilter))
+  if (typeFilter) constraints.push(where('requestType', '==', typeFilter))
+  constraints.push(orderBy('createdAt', 'desc'))
+  constraints.push(limit(STORE_DEALER_REQUESTS_PAGE_SIZE + 1))
+
+  const q = query(collection(db, DEALER_REQUESTS_COLLECTION), ...constraints)
+  return onSnapshot(
+    q,
+    (snap) => {
+      const hasMore = snap.docs.length > STORE_DEALER_REQUESTS_PAGE_SIZE
+      const visibleDocs = hasMore ? snap.docs.slice(0, STORE_DEALER_REQUESTS_PAGE_SIZE) : snap.docs
+      onUpdate({
+        requests: visibleDocs.map(d => ({ id: d.id, ...d.data() })),
+        lastDoc: visibleDocs.at(-1) ?? null,
+        hasMore,
+      })
+    },
+    (err) => onError?.(mapFirestoreError(err))
+  )
+}
+
+// ---------------------------------------------------------------------------
+// subscribeStorePendingCount — abonnement léger au nombre de demandes pending boutique
+//
+// Requête : targetStoreId == storeId + status == 'pending'.
+// → utilise l'index composite targetStoreId + status existant.
+// Retourne la fonction unsubscribe — toujours appeler au démontage.
+// ---------------------------------------------------------------------------
+
+export function subscribeStorePendingCount({ currentUser, userProfile, onUpdate } = {}) {
+  if (
+    !currentUser?.uid ||
+    !userProfile?.active ||
+    userProfile?.role !== AUTH_ROLES.STORE_ADMIN ||
+    !userProfile?.storeId
+  ) {
+    onUpdate?.(0)
+    return () => {}
+  }
+  const q = query(
+    collection(db, DEALER_REQUESTS_COLLECTION),
+    where('targetStoreId', '==', userProfile.storeId),
+    where('status', '==', 'pending'),
+  )
+  return onSnapshot(q, (snap) => onUpdate(snap.size), () => onUpdate(0))
 }
 
 // ---------------------------------------------------------------------------

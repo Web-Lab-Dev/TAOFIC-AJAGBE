@@ -1,8 +1,12 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { listStoreAdminDealerRequests } from '../../services/storeAdminDealerService'
+import {
+  listStoreAdminDealerRequests,
+  subscribeStoreAdminDealerRequests,
+} from '../../services/storeAdminDealerService'
 import { formatStoredAmount } from '../../utils/formatCurrency'
+import { mergeUniqueRequests } from '../../utils/mergeRequests'
 import { formatFirestoreDate } from '../../utils/formatFirestoreDate'
 import {
   DEALER_REQUEST_STATUS_LABELS,
@@ -60,54 +64,105 @@ function StoreAdminDealerRequests() {
   const { currentUser, userProfile } = useAuth()
   const navigate = useNavigate()
 
-  const [requests, setRequests] = useState([])
-  const [lastDoc, setLastDoc] = useState(null)
+  // Première page — mise à jour temps réel via onSnapshot
+  const [realtimeRequests, setRealtimeRequests] = useState([])
+  // Pages supplémentaires — chargées via getDocs avec curseur
+  const [extraRequests, setExtraRequests] = useState([])
   const [hasMore, setHasMore] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
   const [hasLoaded, setHasLoaded] = useState(false)
+  // refreshKey force la re-souscription sans changer les filtres (bouton Actualiser)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [dealerSearch, setDealerSearch] = useState('')
 
+  // Curseurs Firestore — séparés pour éviter qu'un nouveau snapshot n'écrase
+  // le curseur d'une page supplémentaire déjà chargée.
+  const realtimeLastDocRef = useRef(null)     // dernier doc du snapshot (première page)
+  const paginationLastDocRef = useRef(null)   // dernier doc de la dernière page extra
+  // Indique si au moins un loadMore a réussi, indépendamment de la valeur du curseur.
+  const hasLoadedExtraPagesRef = useRef(false)
+  // Génération du contexte : incrémentée à chaque reset (filtre / user / profil / refreshKey).
+  const requestGenerationRef = useRef(0)
+  // Identifiant de l'opération loadMore en cours : protège le finally.
+  const loadMoreOperationRef = useRef(0)
+
   // ---------------------------------------------------------------------------
-  // Chargement initial / rechargement (réinitialise tout)
+  // Abonnement temps réel — première page
   // ---------------------------------------------------------------------------
 
-  const loadRequests = useCallback(async (status, type) => {
-    setLoading(true)
-    setError(null)
-    setRequests([])
-    setLastDoc(null)
+  useEffect(() => {
+    requestGenerationRef.current += 1
+    setLoadingMore(false)
+    setRealtimeRequests([])
+    setExtraRequests([])
     setHasMore(false)
+    setLoading(true)
+    setHasLoaded(false)
+    setError(null)
+    realtimeLastDocRef.current = null
+    paginationLastDocRef.current = null
+    hasLoadedExtraPagesRef.current = false
+
+    let unsubscribe
     try {
-      const result = await listStoreAdminDealerRequests({
+      unsubscribe = subscribeStoreAdminDealerRequests({
         currentUser,
         userProfile,
-        statusFilter: status || null,
-        typeFilter: type || null,
-        lastDoc: null,
+        statusFilter: statusFilter || null,
+        typeFilter: typeFilter || null,
+        onUpdate: ({ requests, lastDoc, hasMore: more }) => {
+          setRealtimeRequests(requests)
+          realtimeLastDocRef.current = lastDoc
+          // Ne mettre à jour hasMore depuis le snapshot que si aucune page extra
+          // n'a encore été chargée ; après, c'est le loadMore qui gère hasMore.
+          if (!hasLoadedExtraPagesRef.current) {
+            setHasMore(more)
+          }
+          setLoading(false)
+          setHasLoaded(true)
+        },
+        onError: (err) => {
+          setError(err.message)
+          setLoading(false)
+          setHasLoaded(true)
+        },
       })
-      setRequests(result.requests)
-      setLastDoc(result.lastDoc)
-      setHasMore(result.hasMore)
-      setHasLoaded(true)
     } catch (err) {
       setError(err.message)
-      setHasLoaded(true)
-    } finally {
       setLoading(false)
+      setHasLoaded(true)
     }
-  }, [currentUser, userProfile])
+
+    return () => {
+      requestGenerationRef.current += 1
+      loadMoreOperationRef.current += 1
+      unsubscribe?.()
+    }
+  }, [statusFilter, typeFilter, refreshKey, currentUser, userProfile])
 
   // ---------------------------------------------------------------------------
   // Chargement page suivante
   // ---------------------------------------------------------------------------
 
   const loadMore = useCallback(async () => {
-    if (!lastDoc || loadingMore) return
+    // Pagination commencée et curseur épuisé → dernière page déjà atteinte,
+    // ne pas repartir depuis realtimeLastDocRef.
+    if (hasLoadedExtraPagesRef.current && paginationLastDocRef.current === null) return
+    // Avant le premier loadMore : curseur du snapshot.
+    // Après au moins un loadMore : curseur de la dernière page extra.
+    const cursorDoc = hasLoadedExtraPagesRef.current
+      ? paginationLastDocRef.current
+      : realtimeLastDocRef.current
+    if (!cursorDoc || loadingMore) return
+
+    const generationAtStart = requestGenerationRef.current
+    const operationId = ++loadMoreOperationRef.current
+
     setLoadingMore(true)
     try {
       const result = await listStoreAdminDealerRequests({
@@ -115,38 +170,46 @@ function StoreAdminDealerRequests() {
         userProfile,
         statusFilter: statusFilter || null,
         typeFilter: typeFilter || null,
-        lastDoc,
+        lastDoc: cursorDoc,
       })
-      setRequests(prev => [...prev, ...result.requests])
-      setLastDoc(result.lastDoc)
+      if (generationAtStart !== requestGenerationRef.current) return
+      setExtraRequests(prev => [...prev, ...result.requests])
+      hasLoadedExtraPagesRef.current = true
+      paginationLastDocRef.current = result.lastDoc
       setHasMore(result.hasMore)
     } catch (err) {
-      // L'erreur ne supprime pas les demandes déjà chargées
+      if (generationAtStart !== requestGenerationRef.current) return
       setError(err.message)
     } finally {
-      setLoadingMore(false)
+      if (
+        generationAtStart === requestGenerationRef.current &&
+        operationId === loadMoreOperationRef.current
+      ) {
+        setLoadingMore(false)
+      }
     }
-  }, [currentUser, userProfile, statusFilter, typeFilter, lastDoc, loadingMore])
-
-  useEffect(() => { loadRequests('', '') }, [loadRequests])
+  }, [currentUser, userProfile, statusFilter, typeFilter, loadingMore])
 
   // ---------------------------------------------------------------------------
-  // Changement de filtre → réinitialisation complète
+  // Changements de filtre → re-souscription via useEffect
   // ---------------------------------------------------------------------------
 
   function handleStatusChange(value) {
     setStatusFilter(value)
-    loadRequests(value, typeFilter)
   }
 
   function handleTypeChange(value) {
     setTypeFilter(value)
-    loadRequests(statusFilter, value)
   }
 
   // ---------------------------------------------------------------------------
-  // Filtre local sur le nom du Dealer (sur les résultats déjà chargés)
+  // Fusion première page (temps réel) + pages supplémentaires, sans doublons
   // ---------------------------------------------------------------------------
+
+  const requests = useMemo(
+    () => mergeUniqueRequests(realtimeRequests, extraRequests),
+    [realtimeRequests, extraRequests],
+  )
 
   const filtered = dealerSearch.trim()
     ? requests.filter(r =>
@@ -166,7 +229,7 @@ function StoreAdminDealerRequests() {
         <h1 className="text-xl font-bold text-gray-800">Demandes Dealer</h1>
         <button
           type="button"
-          onClick={() => loadRequests(statusFilter, typeFilter)}
+          onClick={() => { setExtraRequests([]); setRefreshKey(k => k + 1) }}
           disabled={loading}
           className="rounded bg-gray-100 border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 transition-colors"
           aria-label="Actualiser la liste"
@@ -260,7 +323,7 @@ function StoreAdminDealerRequests() {
           <p className="text-sm">{error}</p>
           <button
             type="button"
-            onClick={() => loadRequests(statusFilter, typeFilter)}
+            onClick={() => setRefreshKey(k => k + 1)}
             className="mt-3 rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 transition-colors"
             data-testid="btn-retry"
           >

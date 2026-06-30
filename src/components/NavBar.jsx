@@ -2,13 +2,32 @@ import { useState, useEffect } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { STORE_NAV_ITEMS } from '../constants/navigation'
 import { useTheme } from '../context/ThemeContext.jsx'
+import { useAuth } from '../context/AuthContext'
+import { subscribeStorePendingCount } from '../services/storeAdminDealerService'
 import PWAInstallButton from './PWAInstallButton'
+
+const DEALER_REQUESTS_PATH = '/dealer-requests'
+
+function PendingBadge({ count }) {
+  if (!count) return null
+  return (
+    <span
+      className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none min-w-[1.2rem]"
+      aria-label={`${count} demande${count > 1 ? 's' : ''} en attente`}
+      data-testid="store-pending-badge"
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
 
 function NavBar() {
   const navigate = useNavigate()
   const location = useLocation()
   const { themeClasses } = useTheme()
+  const { currentUser, userProfile } = useAuth()
   const [isSticky, setIsSticky] = useState(false)
+  const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,6 +40,16 @@ function NavBar() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  useEffect(() => {
+    setPendingCount(0)
+    const unsub = subscribeStorePendingCount({
+      currentUser,
+      userProfile,
+      onUpdate: setPendingCount,
+    })
+    return unsub
+  }, [currentUser, userProfile])
 
   return (
     <nav
@@ -40,12 +69,15 @@ function NavBar() {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `px-4 py-3 text-white font-medium transition-colors duration-200 hover:bg-black/20 ${
+                  `px-4 py-3 text-white font-medium transition-colors duration-200 hover:bg-black/20 inline-flex items-center ${
                     isActive ? 'bg-black/30 border-b-2 border-white/50' : ''
                   }`
                 }
               >
                 {item.name}
+                {item.path === DEALER_REQUESTS_PATH && (
+                  <PendingBadge count={pendingCount} />
+                )}
               </NavLink>
             ))}
           </div>
@@ -60,11 +92,14 @@ function NavBar() {
             className={`min-w-0 flex-1 py-3 px-4 ${themeClasses.navbar} text-white border border-white/20 rounded focus:outline-none`}
             onChange={(e) => navigate(e.target.value)}
             value={location.pathname}
+            aria-label="Navigation principale"
           >
             <option value="" disabled>Sélectionner une page</option>
             {STORE_NAV_ITEMS.map((item) => (
               <option key={item.path} value={item.path}>
-                {item.name}
+                {item.path === DEALER_REQUESTS_PATH && pendingCount > 0
+                  ? `${item.name} (${pendingCount > 99 ? '99+' : pendingCount})`
+                  : item.name}
               </option>
             ))}
           </select>

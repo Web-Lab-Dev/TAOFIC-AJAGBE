@@ -1,9 +1,35 @@
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { DEALER_NAV_ITEMS } from '../constants/navigation'
+import { subscribeDealerPendingCount } from '../services/dealerService'
+
+function PendingBadge({ count }) {
+  if (!count) return null
+  return (
+    <span
+      className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none min-w-[1.2rem]"
+      aria-label={`${count} demande${count > 1 ? 's' : ''} en attente`}
+      data-testid="dealer-pending-badge"
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
 
 function DealerLayout() {
-  const { logout, userProfile } = useAuth()
+  const { logout, userProfile, currentUser } = useAuth()
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    setPendingCount(0)
+    const unsub = subscribeDealerPendingCount({
+      currentUser,
+      userProfile,
+      onUpdate: setPendingCount,
+    })
+    return unsub
+  }, [currentUser, userProfile])
 
   return (
     <div className="min-h-screen bg-gray-100" data-testid="dealer-layout">
@@ -38,12 +64,15 @@ function DealerLayout() {
                 to={item.path}
                 end={item.path === '/dealer'}
                 className={({ isActive }) =>
-                  `px-4 py-3 text-white font-medium transition-colors duration-200 hover:bg-black/20 whitespace-nowrap ${
+                  `px-4 py-3 text-white font-medium transition-colors duration-200 hover:bg-black/20 whitespace-nowrap inline-flex items-center ${
                     isActive ? 'bg-black/30 border-b-2 border-white/50' : ''
                   }`
                 }
               >
                 {item.name}
+                {item.path === '/dealer/requests' && (
+                  <PendingBadge count={pendingCount} />
+                )}
               </NavLink>
             ))}
           </div>

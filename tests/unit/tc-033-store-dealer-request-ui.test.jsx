@@ -19,6 +19,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 const mocks = vi.hoisted(() => ({
   listStoreAdminDealerRequests: vi.fn(),
+  subscribeStoreAdminDealerRequests: vi.fn(),
   getStoreAdminDealerRequestById: vi.fn(),
   useAuth: vi.fn(),
   navigate: vi.fn(),
@@ -71,6 +72,7 @@ vi.mock('../../src/services/storeDealerRequestCommandService', () => ({
 
 vi.mock('../../src/services/storeAdminDealerService', () => ({
   listStoreAdminDealerRequests: mocks.listStoreAdminDealerRequests,
+  subscribeStoreAdminDealerRequests: mocks.subscribeStoreAdminDealerRequests,
   getStoreAdminDealerRequestById: mocks.getStoreAdminDealerRequestById,
 }))
 
@@ -187,6 +189,11 @@ function renderDetails(requestId = 'req-1') {
 beforeEach(() => {
   vi.resetAllMocks()
   mocks.useAuth.mockReturnValue(STORE_ADMIN_AUTH)
+  // Défaut subscribe : liste vide, résolu immédiatement
+  mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+    onUpdate({ requests: [], lastDoc: null, hasMore: false })
+    return vi.fn()
+  })
 })
 
 // ===========================================================================
@@ -195,30 +202,30 @@ beforeEach(() => {
 
 describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
   it('[LIST-01] état initial → composant rendu', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
     renderList()
     expect(screen.getByTestId('store-dealer-requests')).toBeInTheDocument()
   })
 
-  it('[LIST-02] chargement → aria-busy visible', async () => {
-    let resolve
-    mocks.listStoreAdminDealerRequests.mockReturnValue(new Promise(r => { resolve = r }))
+  it('[LIST-02] chargement → aria-busy visible (subscribe en attente)', async () => {
+    // Subscribe qui ne rappelle jamais onUpdate → loading reste true
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(() => vi.fn())
     renderList()
     await waitFor(() => {
       const c = screen.getByTestId('store-dealer-requests')
       expect(!!c.querySelector('[aria-busy="true"]') || !!c.querySelector('.animate-pulse')).toBe(true)
     })
-    await act(async () => { resolve(makeListResult([])) })
   })
 
   it('[LIST-03] liste vide → empty state visible', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
     renderList()
     await waitFor(() => expect(screen.getByTestId('empty-state')).toBeInTheDocument())
   })
 
   it('[LIST-04] erreur service → message d\'erreur', async () => {
-    mocks.listStoreAdminDealerRequests.mockRejectedValue(new Error('Accès refusé'))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onError }) => {
+      onError(new Error('Accès refusé'))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => {
       expect(screen.getByTestId('store-dealer-requests').textContent).toMatch(/erreur|accès|impossible/i)
@@ -226,7 +233,10 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
   })
 
   it('[LIST-05] demandes rendues — tableau présent avec lignes', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult(REQS))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult(REQS))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => {
       expect(screen.getByTestId('requests-table')).toBeInTheDocument()
@@ -237,48 +247,69 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
 
   it('[LIST-06] objets plats (pas de data()) rendu sans erreur', async () => {
     const flatReqs = [{ ...REQS[0] }]
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult(flatReqs))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult(flatReqs))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => expect(screen.getByTestId('request-row-req-1')).toBeInTheDocument())
   })
 
   it('[LIST-07] montant formaté en FCFA', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([REQS[0]]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([REQS[0]]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toMatch(/50.000 FCFA|50 000 FCFA/)
   })
 
   it('[LIST-08] statut pending → badge "En attente"', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([REQS[0]]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([REQS[0]]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('status-badge-pending'))
     expect(screen.getByTestId('status-badge-pending').textContent).toBe('En attente')
   })
 
   it('[LIST-09] statut confirmed → badge "Confirmée"', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([REQS[1]]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([REQS[1]]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('status-badge-confirmed'))
     expect(screen.getByTestId('status-badge-confirmed').textContent).toBe('Confirmée')
   })
 
   it('[LIST-10] statut rejected → badge "Rejetée"', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([REQS[2]]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([REQS[2]]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('status-badge-rejected'))
     expect(screen.getByTestId('status-badge-rejected').textContent).toBe('Rejetée')
   })
 
   it('[LIST-11] type stock_add → "Ajout de stock"', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([REQS[0]]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([REQS[0]]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Ajout de stock')
   })
 
   it('[LIST-12] type liquidity_add → "Ajout de liquidité"', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([REQS[1]]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([REQS[1]]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Ajout de liquidité')
@@ -286,7 +317,10 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
 
   it('[LIST-13] statut inconnu → "Statut inconnu" affiché', async () => {
     const req = { ...REQS[0], id: 'req-unknown', status: 'ghost_status' }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Statut inconnu')
@@ -294,7 +328,10 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
 
   it('[LIST-14] données incomplètes — dealerName absent → "Dealer inconnu"', async () => {
     const req = { ...REQS[0], id: 'req-no-name', dealerName: undefined }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Dealer inconnu')
@@ -302,7 +339,10 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
 
   it('[LIST-15] montant null → "Montant indisponible" (pas "0 FCFA")', async () => {
     const req = { ...REQS[0], id: 'req-no-amount', amount: null }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     const text = screen.getByTestId('store-dealer-requests').textContent
@@ -310,47 +350,45 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
     expect(text).not.toContain('0 FCFA')
   })
 
-  it('[LIST-16] filtre statut → listStoreAdminDealerRequests appelé avec statusFilter=pending', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
+  it('[LIST-16] filtre statut → subscribeStoreAdminDealerRequests appelé avec statusFilter=pending', async () => {
     renderList()
     await waitFor(() => screen.getByTestId('filter-status'))
 
     fireEvent.change(screen.getByTestId('filter-status'), { target: { value: 'pending' } })
 
     await waitFor(() => {
-      expect(mocks.listStoreAdminDealerRequests.mock.calls.some(c => c[0]?.statusFilter === 'pending')).toBe(true)
+      expect(mocks.subscribeStoreAdminDealerRequests.mock.calls.some(c => c[0]?.statusFilter === 'pending')).toBe(true)
     })
   })
 
-  it('[LIST-17] filtre type → listStoreAdminDealerRequests appelé avec typeFilter=stock_add', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
+  it('[LIST-17] filtre type → subscribeStoreAdminDealerRequests appelé avec typeFilter=stock_add', async () => {
     renderList()
     await waitFor(() => screen.getByTestId('filter-type'))
 
     fireEvent.change(screen.getByTestId('filter-type'), { target: { value: 'stock_add' } })
 
     await waitFor(() => {
-      expect(mocks.listStoreAdminDealerRequests.mock.calls.some(c => c[0]?.typeFilter === 'stock_add')).toBe(true)
+      expect(mocks.subscribeStoreAdminDealerRequests.mock.calls.some(c => c[0]?.typeFilter === 'stock_add')).toBe(true)
     })
   })
 
-  it('[LIST-18] changement de filtre → liste réinitialisée (nouveau chargement)', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
+  it('[LIST-18] changement de filtre → subscribe rappelé (re-souscription)', async () => {
     renderList()
     await waitFor(() => screen.getByTestId('filter-status'))
 
-    const callsBefore = mocks.listStoreAdminDealerRequests.mock.calls.length
+    const callsBefore = mocks.subscribeStoreAdminDealerRequests.mock.calls.length
     fireEvent.change(screen.getByTestId('filter-status'), { target: { value: 'pending' } })
 
     await waitFor(() => {
-      expect(mocks.listStoreAdminDealerRequests.mock.calls.length).toBeGreaterThan(callsBefore)
+      expect(mocks.subscribeStoreAdminDealerRequests.mock.calls.length).toBeGreaterThan(callsBefore)
     })
   })
 
   it('[LIST-19] hasMore=true → bouton "Charger plus" visible', async () => {
-    mocks.listStoreAdminDealerRequests
-      .mockResolvedValueOnce(makeListResult(REQS, true))
-      .mockResolvedValueOnce(makeListResult([], false))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult(REQS, true))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => expect(screen.getByTestId('btn-load-more')).toBeInTheDocument())
   })
@@ -359,43 +397,45 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
     let resolveLoadMore
     const pendingLoadMore = new Promise(r => { resolveLoadMore = r })
 
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult(REQS, true))
+      return vi.fn()
+    })
     mocks.listStoreAdminDealerRequests
-      .mockResolvedValueOnce(makeListResult(REQS, true))
       .mockReturnValueOnce(pendingLoadMore)
       .mockResolvedValue(makeListResult([], false))
 
     renderList()
     await waitFor(() => screen.getByTestId('btn-load-more'))
 
-    // Premier clic → loadMore démarre (pendingLoadMore en attente)
     fireEvent.click(screen.getByTestId('btn-load-more'))
 
-    // Second clic immédiat pendant le chargement — le bouton doit être disabled
     const btn = screen.getByTestId('btn-load-more')
     fireEvent.click(btn)
 
-    // Résoudre le premier loadMore
     await act(async () => { resolveLoadMore(makeListResult([], false)) })
 
-    // Le service n'a été appelé que 2 fois (initial + 1 loadMore), pas 3
-    expect(mocks.listStoreAdminDealerRequests.mock.calls.length).toBeLessThanOrEqual(2)
+    // listStoreAdminDealerRequests (loadMore) appelé au plus 1 fois
+    expect(mocks.listStoreAdminDealerRequests.mock.calls.length).toBeLessThanOrEqual(1)
   })
 
-  it('[LIST-21] bouton actualiser → recharge la liste', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
+  it('[LIST-21] bouton actualiser → re-souscription déclenchée', async () => {
     renderList()
     await waitFor(() => screen.getByTestId('btn-refresh'))
 
-    const callsBefore = mocks.listStoreAdminDealerRequests.mock.calls.length
+    const callsBefore = mocks.subscribeStoreAdminDealerRequests.mock.calls.length
     fireEvent.click(screen.getByTestId('btn-refresh'))
 
     await waitFor(() => {
-      expect(mocks.listStoreAdminDealerRequests.mock.calls.length).toBeGreaterThan(callsBefore)
+      expect(mocks.subscribeStoreAdminDealerRequests.mock.calls.length).toBeGreaterThan(callsBefore)
     })
   })
 
   it('[LIST-22] bouton "Voir le détail" → navigate vers /dealer-requests/:id', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([REQS[0]]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([REQS[0]]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('btn-detail-req-1'))
     fireEvent.click(screen.getByTestId('btn-detail-req-1'))
@@ -403,7 +443,10 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
   })
 
   it('[LIST-23] aucun bouton Confirmer, Rejeter, Modifier, Supprimer', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult(REQS))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult(REQS))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
 
@@ -415,14 +458,12 @@ describe('TC-033-LIST — StoreAdminDealerRequests (liste)', () => {
   })
 
   it('[LIST-24] label filtre statut accessible', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
     renderList()
     await waitFor(() => screen.getByTestId('filter-status'))
     expect(screen.getByLabelText(/statut/i)).toBeInTheDocument()
   })
 
   it('[LIST-25] label filtre type accessible', async () => {
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([]))
     renderList()
     await waitFor(() => screen.getByTestId('filter-type'))
     expect(screen.getByLabelText(/type/i)).toBeInTheDocument()
@@ -564,7 +605,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
   // Valeurs valides
   it('[AMT-01] amount=0 → "0 FCFA" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-amt0', amount: 0 }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('0 FCFA')
@@ -572,7 +616,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-02] amount=1000 → formaté en FCFA (liste)', async () => {
     const req = { ...REQS[0], id: 'req-amt1000', amount: 1000 }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     // fr-FR utilise un espace insecable comme separateur de milliers
@@ -582,7 +629,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
   // Valeurs invalides — liste
   it('[AMT-03] amount="" → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-str', amount: '' }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -590,7 +640,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-04] amount="   " → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-spaces', amount: '   ' }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -598,7 +651,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-05] amount="1000" (string) → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-strnum', amount: '1000' }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -606,7 +662,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-06] amount=false → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-bool', amount: false }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -614,7 +673,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-07] amount=null → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-null2', amount: null }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -622,7 +684,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-08] amount=undefined → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-undef', amount: undefined }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -630,7 +695,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-09] amount=NaN → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-nan', amount: NaN }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -638,7 +706,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-10] amount=Infinity → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-inf', amount: Infinity }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -646,7 +717,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-11] amount=-1 → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-neg', amount: -1 }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -654,7 +728,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-12] amount=1.5 → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-dec', amount: 1.5 }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
@@ -662,7 +739,10 @@ describe('TC-033-AMT — Robustesse affichage montant (liste + détail)', () => 
 
   it('[AMT-13] amount={} → "Montant indisponible" (liste)', async () => {
     const req = { ...REQS[0], id: 'req-obj', amount: {} }
-    mocks.listStoreAdminDealerRequests.mockResolvedValue(makeListResult([req]))
+    mocks.subscribeStoreAdminDealerRequests.mockImplementation(({ onUpdate }) => {
+      onUpdate(makeListResult([req]))
+      return vi.fn()
+    })
     renderList()
     await waitFor(() => screen.getByTestId('requests-table'))
     expect(screen.getByTestId('store-dealer-requests').textContent).toContain('Montant indisponible')
