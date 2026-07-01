@@ -199,7 +199,7 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(result.user)
       setLoading(false)
 
-      return result
+      return { ...result, role: profile.role }
     } catch (err) {
       const errorMessage = getAuthErrorMessage(err.code, err.message)
       setError(errorMessage)

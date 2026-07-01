@@ -18,6 +18,9 @@ import { onCall } from 'firebase-functions/v2/https'
 import { wrapCallable } from './callable.js'
 import { confirmDealerRequestHandler } from './dealerRequests/confirmDealerRequest.js'
 import { rejectDealerRequestHandler } from './dealerRequests/rejectDealerRequest.js'
+import { createDealerClosureHandler } from './closures/createDealerClosure.js'
+import { confirmDealerClosureHandler } from './closures/confirmDealerClosure.js'
+import { rejectDealerClosureHandler } from './closures/rejectDealerClosure.js'
 
 // Garde idempotente : évite "App named '[DEFAULT]' already exists" lors des imports
 // dans les tests d'intégration (TC-036) qui s'exécutent après TC-035 dans le même processus.
@@ -33,4 +36,19 @@ export const confirmDealerRequest = onCall(
 export const rejectDealerRequest = onCall(
   { region: 'europe-west1', enforceAppCheck: false },
   wrapCallable(rejectDealerRequestHandler, deps)
+)
+
+export const createDealerClosure = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(createDealerClosureHandler, deps)
+)
+
+export const confirmDealerClosure = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(confirmDealerClosureHandler, deps)
+)
+
+export const rejectDealerClosure = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(rejectDealerClosureHandler, deps)
 )

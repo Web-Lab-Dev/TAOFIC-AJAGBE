@@ -111,14 +111,16 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────
 
     function validDealerRequestKeys(data) {
-      let k = ['dealerUid', 'dealerEmail', 'dealerName',
-               'targetStoreId', 'targetStoreName',
-               'requestType', 'network', 'amount',
-               'status', 'createdAt', 'updatedAt',
-               'confirmedBy', 'confirmedAt',
-               'rejectedBy', 'rejectedAt', 'rejectionReason',
-               'previousBalance', 'newBalance'];
-      return data.keys().hasAll(k) && data.keys().hasOnly(k);
+      // Clés requises communes à tous les types
+      let required = ['dealerUid', 'dealerEmail', 'dealerName',
+                      'targetStoreId', 'targetStoreName',
+                      'requestType', 'network', 'amount',
+                      'status', 'createdAt', 'updatedAt',
+                      'confirmedBy', 'confirmedAt',
+                      'rejectedBy', 'rejectedAt', 'rejectionReason',
+                      'previousBalance', 'newBalance',
+                      'liquidityAmount'];
+      return data.keys().hasAll(required) && data.keys().hasOnly(required);
     }
 
     function validDealerRequest(data) {
@@ -131,7 +133,7 @@ service cloud.firestore {
         data.dealerName is string && data.dealerName.size() > 0 &&
         data.dealerName == profile().name &&
         data.status == 'pending' &&
-        data.requestType in ['stock_add', 'liquidity_add'] &&
+        data.requestType in ['stock_add', 'liquidity_add', 'open_day'] &&
         data.network == 'Orange' &&
         data.amount is int && data.amount > 0 &&
         data.targetStoreId is string && data.targetStoreId.size() > 0 &&
@@ -140,6 +142,10 @@ service cloud.firestore {
         data.confirmedBy == null && data.confirmedAt == null &&
         data.rejectedBy == null && data.rejectedAt == null &&
         data.rejectionReason == null && data.previousBalance == null && data.newBalance == null &&
+        // liquidityAmount : requis pour open_day (int > 0), null pour les autres types
+        (data.requestType == 'open_day'
+          ? (data.liquidityAmount is int && data.liquidityAmount > 0)
+          : data.liquidityAmount == null) &&
         exists(/databases/$(database)/documents/stores/$(data.targetStoreId)) &&
         storeDoc(data.targetStoreId).active == true &&
         storeDoc(data.targetStoreId).name is string &&
@@ -218,7 +224,13 @@ service cloud.firestore {
 
     // ─────────────────────────────────────────────────────────────
     // Demandes Dealer
-    // update/delete réservés à une future Cloud Function Admin SDK
+    // update/delete réservés aux Cloud Functions (Admin SDK)
+    //
+    // Politique d'accès Dealer (choix métier validé) :
+    //   Le rôle dealer est GLOBAL — il approvisionne toutes les boutiques.
+    //   Accès autorisé : stores (toutes actives), networkBalances, ses propres dealerRequests.
+    //   Accès refusé   : clients/{storeId}/history, drafts, globalClients, auditLogs,
+    //                    profils caissières, dealerRequests d'un autre Dealer.
     // ─────────────────────────────────────────────────────────────
 
     match /dealerRequests/{requestId} {
@@ -230,6 +242,19 @@ service cloud.firestore {
 
       allow update: if false;
       allow delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Clôtures Dealer
+    // Toutes les écritures via Cloud Functions (Admin SDK).
+    // Dealer lit ses propres clôtures ; boutique lit celles qui la ciblent.
+    // ─────────────────────────────────────────────────────────────
+
+    match /dealerClosures/{closureId} {
+      allow read: if isDealer() && resource.data.dealerUid == request.auth.uid;
+      allow read: if isStoreAdmin(resource.data.targetStoreId);
+      allow read: if isSystemManager();
+      allow create, update, delete: if false;
     }
 
     // ─────────────────────────────────────────────────────────────

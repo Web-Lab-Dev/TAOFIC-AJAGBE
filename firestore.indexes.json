@@ -68,6 +68,40 @@
         { "fieldPath": "requestType", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "dealerClosures",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dealerUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dealerClosures",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dealerUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dealerClosures",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetStoreId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dealerClosures",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetStoreId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

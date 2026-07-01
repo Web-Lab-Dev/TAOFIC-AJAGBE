@@ -11,7 +11,7 @@
 
 import { DealerRequestError } from '../errors.js'
 
-const VALID_REQUEST_TYPES = new Set(['stock_add', 'liquidity_add'])
+const VALID_REQUEST_TYPES = new Set(['stock_add', 'liquidity_add', 'open_day'])
 const VALID_NETWORKS = new Set(['Orange'])
 
 // ---------------------------------------------------------------------------
@@ -120,6 +120,19 @@ export function validateRequestData(reqData, actorStoreId) {
   if (!Number.isSafeInteger(reqData.amount) || reqData.amount <= 0) {
     throw new DealerRequestError('INVALID_REQUEST_DATA', 'Montant invalide : entier positif sûr requis.')
   }
+  // Validation liquidityAmount selon le type :
+  //   - open_day : entier positif sûr obligatoire
+  //   - stock_add / liquidity_add : null ou undefined acceptés (undefined = doc historique 18 champs)
+  //     toute autre valeur (y compris un entier positif) est refusée
+  if (reqData.requestType === 'open_day') {
+    if (!Number.isSafeInteger(reqData.liquidityAmount) || reqData.liquidityAmount <= 0) {
+      throw new DealerRequestError('INVALID_REQUEST_DATA', 'liquidityAmount invalide pour open_day : entier positif sûr requis.')
+    }
+  } else {
+    if (reqData.liquidityAmount !== undefined && reqData.liquidityAmount !== null) {
+      throw new DealerRequestError('INVALID_REQUEST_DATA', 'liquidityAmount doit être null pour ce type de demande.')
+    }
+  }
   // Vérifie que les champs de réponse sont null (demande propre en attente)
   const responseFields = [
     'confirmedBy', 'confirmedAt',
@@ -190,11 +203,14 @@ export function readCurrentBalance(balanceData, requestType) {
 
 // ---------------------------------------------------------------------------
 // Nom du champ balance selon le type de demande
+// Retourne null pour open_day (les deux champs sont mis à jour ensemble).
 // ---------------------------------------------------------------------------
 
 export function getBalanceField(requestType) {
   // Note orthographique : le champ Firestore est "liquidite" (sans accent)
-  return requestType === 'stock_add' ? 'stock' : 'liquidite'
+  if (requestType === 'stock_add') return 'stock'
+  if (requestType === 'liquidity_add') return 'liquidite'
+  return null // open_day — traitement spécifique dans le handler
 }
 
 // ---------------------------------------------------------------------------
@@ -212,10 +228,12 @@ export function buildAuditEntry({
   reqData,
   previousBalance,
   newBalance,
+  previousLiquidityBalance = null,
+  newLiquidityBalance = null,
   rejectionReason,
   createdAt,
 }) {
-  return {
+  const entry = {
     action,
     actorUid,
     actorEmail:      actorEmail      ?? null,
@@ -234,4 +252,10 @@ export function buildAuditEntry({
     rejectionReason: rejectionReason  ?? null,
     createdAt,
   }
+  // Pour open_day : conserver les deux variations financières (stock + liquidité)
+  if (reqData.requestType === 'open_day') {
+    entry.previousLiquidityBalance = previousLiquidityBalance ?? null
+    entry.newLiquidityBalance      = newLiquidityBalance      ?? null
+  }
+  return entry
 }

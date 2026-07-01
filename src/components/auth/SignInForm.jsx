@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useFormValidation } from '../../hooks/useFormValidation'
 import { AUTH_LABELS, AUTH_PLACEHOLDERS } from '../../constants/authMessages'
 import { AUTH_STYLES, THEME_VARIANTS } from '../../constants/authStyles'
+import { getDefaultRouteForRole } from '../../utils/roleRouting'
 import ForgotPasswordModal from './ForgotPasswordModal'
 
 function SignInForm({ onToggle }) {
@@ -32,8 +33,8 @@ function SignInForm({ onToggle }) {
     e.preventDefault()
 
     const result = await handleFormSubmit(async (formValues) => {
-      await signin(formValues.email, formValues.password)
-      navigate('/profil')
+      const { role } = await signin(formValues.email, formValues.password)
+      navigate(getDefaultRouteForRole(role) || '/')
     })
 
     if (!result.success && result.error) {

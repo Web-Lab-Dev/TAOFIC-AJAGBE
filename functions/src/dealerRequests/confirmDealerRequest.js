@@ -78,56 +78,88 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
         throw new DealerRequestError('BALANCE_NOT_FOUND', 'Document de soldes introuvable pour cette boutique.')
       }
 
-      const previousBalance = readCurrentBalance(balSnap.data(), reqData.requestType)
-      const newBalance      = previousBalance + reqData.amount
+      const now = FieldValue.serverTimestamp()
 
-      if (!Number.isSafeInteger(newBalance)) {
-        throw new DealerRequestError(
-          'BALANCE_OVERFLOW',
-          'Le solde résultant dépasse la limite des entiers sûrs.'
-        )
+      let previousBalance, newBalance, balUpdatePayload
+      let previousLiquidityBalance = null
+      let newLiquidityBalance      = null
+
+      if (reqData.requestType === 'open_day') {
+        // Ouverture du jour : définit stock ET liquidité (pas d'addition)
+        const stockAmount     = reqData.amount
+        const liquiditeAmount = reqData.liquidityAmount
+        if (!Number.isSafeInteger(stockAmount) || stockAmount <= 0) {
+          throw new DealerRequestError('INVALID_REQUEST_DATA', 'Montant stock invalide pour open_day.')
+        }
+        if (!Number.isSafeInteger(liquiditeAmount) || liquiditeAmount <= 0) {
+          throw new DealerRequestError('INVALID_REQUEST_DATA', 'Montant liquidité invalide pour open_day.')
+        }
+        // Lire les deux soldes précédents pour la piste d'audit complète
+        previousBalance          = readCurrentBalance(balSnap.data(), 'stock_add')
+        newBalance               = stockAmount
+        previousLiquidityBalance = readCurrentBalance(balSnap.data(), 'liquidity_add')
+        newLiquidityBalance      = liquiditeAmount
+
+        balUpdatePayload = {
+          'balances.Orange.stock':     stockAmount,
+          'balances.Orange.liquidite': liquiditeAmount,
+          updatedAt: now,
+        }
+      } else {
+        const balField  = getBalanceField(reqData.requestType)
+        previousBalance = readCurrentBalance(balSnap.data(), reqData.requestType)
+        newBalance      = previousBalance + reqData.amount
+
+        if (!Number.isSafeInteger(newBalance)) {
+          throw new DealerRequestError(
+            'BALANCE_OVERFLOW',
+            'Le solde résultant dépasse la limite des entiers sûrs.'
+          )
+        }
+        balUpdatePayload = {
+          [`balances.Orange.${balField}`]: newBalance,
+          updatedAt: now,
+        }
       }
 
-      const now      = FieldValue.serverTimestamp()
-      const balField = getBalanceField(reqData.requestType)
-
-      // Mise à jour de la demande
+      // Mise à jour de la demande (les champs liquidity sont null pour stock_add/liquidity_add)
       t.update(reqRef, {
-        status:          'confirmed',
-        updatedAt:       now,
-        confirmedBy:     actorUid,
-        confirmedAt:     now,
-        rejectedBy:      null,
-        rejectedAt:      null,
-        rejectionReason: null,
+        status:                  'confirmed',
+        updatedAt:               now,
+        confirmedBy:             actorUid,
+        confirmedAt:             now,
+        rejectedBy:              null,
+        rejectedAt:              null,
+        rejectionReason:         null,
         previousBalance,
         newBalance,
+        previousLiquidityBalance,
+        newLiquidityBalance,
       })
 
       // Mise à jour du solde (chemin pointé pour préserver les autres réseaux)
-      t.update(balRef, {
-        [`balances.Orange.${balField}`]: newBalance,
-        updatedAt: now,
-      })
+      t.update(balRef, balUpdatePayload)
 
       // Piste d'audit dans clients/{storeId}/auditLogs
       const auditRef = db.collection(`clients/${actorStoreId}/auditLogs`).doc()
       t.set(auditRef, buildAuditEntry({
-        action:          'DEALER_REQUEST_CONFIRMED',
+        action:                  'DEALER_REQUEST_CONFIRMED',
         actorUid,
-        actorEmail:      txProfile.email  ?? null,
-        actorName:       txProfile.name   ?? null,
-        actorRole:       'store_admin',
+        actorEmail:              txProfile.email  ?? null,
+        actorName:               txProfile.name   ?? null,
+        actorRole:               'store_admin',
         actorStoreId,
         requestId,
         reqData,
         previousBalance,
         newBalance,
-        rejectionReason: null,
-        createdAt:       now,
+        previousLiquidityBalance,
+        newLiquidityBalance,
+        rejectionReason:         null,
+        createdAt:               now,
       }))
 
-      return { previousBalance, newBalance }
+      return { previousBalance, newBalance, previousLiquidityBalance, newLiquidityBalance }
     })
   } catch (err) {
     if (err instanceof DealerRequestError) throw err
@@ -135,9 +167,11 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
   }
 
   return {
-    success:         true,
+    success:                 true,
     requestId,
-    previousBalance: result.previousBalance,
-    newBalance:      result.newBalance,
+    previousBalance:         result.previousBalance,
+    newBalance:              result.newBalance,
+    previousLiquidityBalance: result.previousLiquidityBalance,
+    newLiquidityBalance:     result.newLiquidityBalance,
   }
 }

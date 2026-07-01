@@ -1,11 +1,13 @@
 export const DEALER_REQUEST_TYPES = Object.freeze({
   STOCK_ADD: 'stock_add',
   LIQUIDITY_ADD: 'liquidity_add',
+  OPEN_DAY: 'open_day',
 })
 
 export const DEALER_REQUEST_TYPE_LABELS = Object.freeze({
   stock_add: 'Ajout de stock',
   liquidity_add: 'Ajout de liquidité',
+  open_day: 'Ouverture du jour',
 })
 
 export const DEALER_REQUEST_STATUSES = Object.freeze({

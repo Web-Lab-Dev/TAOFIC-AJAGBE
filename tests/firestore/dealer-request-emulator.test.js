@@ -2,7 +2,7 @@
  * TC-EMU-DEALER — Test d'intégration émulateur : createDealerRequest
  *
  * Vérifie, en conditions réelles Firestore :
- *   1. Création d'exactement un document dealerRequests avec les 18 champs et status=pending
+ *   1. Création d'exactement un document dealerRequests avec les 19 champs et status=pending
  *   2. Le document networkBalances/current de la boutique n'est PAS modifié
  *   3. Aucun autre document créé sous clients/{storeId}
  *   4. Aucun document créé sous stores/{storeId} (boutique inchangée)
@@ -62,7 +62,7 @@ const BALANCE_DATA = {
   },
 }
 
-// Payload identique à ce que createDealerRequest envoie (18 champs)
+// Payload identique à ce que createDealerRequest envoie (19 champs)
 function buildRequestPayload() {
   return {
     dealerUid: DEALER_UID,
@@ -73,6 +73,7 @@ function buildRequestPayload() {
     requestType: 'stock_add',
     network: 'Orange',
     amount: 50000,
+    liquidityAmount: null,
     status: 'pending',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -120,7 +121,7 @@ describe('TC-EMU-DEALER — Intégration createDealerRequest (émulateur)', () =
     await seedDocument(testEnv, `clients/${STORE_ID}/networkBalances`, 'current', BALANCE_DATA)
   }
 
-  it('[EMU-01] création d\'une demande dealer — exactement un document dealerRequests avec 18 champs et status=pending', async () => {
+  it('[EMU-01] création d\'une demande dealer — exactement un document dealerRequests avec 19 champs et status=pending', async () => {
     await seedFixtures()
 
     const dealerCtx = testEnv.authenticatedContext(DEALER_UID)
@@ -143,11 +144,11 @@ describe('TC-EMU-DEALER — Intégration createDealerRequest (émulateur)', () =
       // Status = pending
       expect(data.status).toBe('pending')
 
-      // 18 champs attendus
+      // 19 champs attendus (liquidityAmount ajouté en V2-18)
       const EXPECTED_FIELDS = [
         'dealerUid', 'dealerEmail', 'dealerName',
         'targetStoreId', 'targetStoreName',
-        'requestType', 'network', 'amount', 'status',
+        'requestType', 'network', 'amount', 'liquidityAmount', 'status',
         'createdAt', 'updatedAt',
         'confirmedBy', 'confirmedAt',
         'rejectedBy', 'rejectedAt', 'rejectionReason',
@@ -163,6 +164,7 @@ describe('TC-EMU-DEALER — Intégration createDealerRequest (émulateur)', () =
       expect(data.network).toBe('Orange')
 
       // Champs null obligatoires
+      expect(data.liquidityAmount).toBeNull()
       expect(data.confirmedBy).toBeNull()
       expect(data.confirmedAt).toBeNull()
       expect(data.rejectedBy).toBeNull()

@@ -92,6 +92,7 @@ const BASE_REQUEST = {
   requestType: 'stock_add',
   network: 'Orange',
   amount: 10000,
+  liquidityAmount: null,
   status: 'pending',
   confirmedBy: null,
   confirmedAt: null,
@@ -1288,5 +1289,111 @@ describe('TC-V24-AMT — Montant : absence de plafond métier caractérisée', (
     await seedAll()
     const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
     await assertSucceeds(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-amt'), validRequest({ amount: 1000000000 })))
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// TC-V24-LQA — Validation liquidityAmount
+// Contrat : null pour stock_add / liquidity_add, int > 0 pour open_day
+// ─────────────────────────────────────────────────────────────
+
+describe('TC-V24-LQA — Validation liquidityAmount', () => {
+  it('[LQA-01] liquidityAmount null + requestType stock_add → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertSucceeds(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-01'),
+      validRequest({ requestType: 'stock_add', liquidityAmount: null })))
+  })
+
+  it('[LQA-02] liquidityAmount null + requestType liquidity_add → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertSucceeds(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-02'),
+      validRequest({ requestType: 'liquidity_add', liquidityAmount: null })))
+  })
+
+  it('[LQA-03] liquidityAmount champ absent (obligatoire) → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    const data = validRequest()
+    delete data.liquidityAmount
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-03'), data))
+  })
+
+  it('[LQA-04] liquidityAmount = "string" + stock_add → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-04'),
+      validRequest({ liquidityAmount: 'abc' })))
+  })
+
+  it('[LQA-05] liquidityAmount = -1 + stock_add → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-05'),
+      validRequest({ liquidityAmount: -1 })))
+  })
+
+  it('[LQA-06] liquidityAmount = 1.5 (décimal) + stock_add → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-06'),
+      validRequest({ liquidityAmount: 1.5 })))
+  })
+
+  it('[LQA-07] liquidityAmount = 0 + stock_add → deny (non null et non int > 0)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-07'),
+      validRequest({ liquidityAmount: 0 })))
+  })
+
+  it('[LQA-08] liquidityAmount = 50000 + requestType stock_add → deny (doit être null pour types standard)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-08'),
+      validRequest({ requestType: 'stock_add', liquidityAmount: 50000 })))
+  })
+
+  it('[LQA-09] liquidityAmount = 50000 + requestType liquidity_add → deny (doit être null pour types standard)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-09'),
+      validRequest({ requestType: 'liquidity_add', liquidityAmount: 50000 })))
+  })
+
+  it('[LQA-10] open_day + liquidityAmount int > 0 → allow', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertSucceeds(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-10'),
+      validRequest({ requestType: 'open_day', liquidityAmount: 75000 })))
+  })
+
+  it('[LQA-11] open_day + liquidityAmount null → deny (obligatoire pour open_day)', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-11'),
+      validRequest({ requestType: 'open_day', liquidityAmount: null })))
+  })
+
+  it('[LQA-12] open_day + liquidityAmount = 0 → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-12'),
+      validRequest({ requestType: 'open_day', liquidityAmount: 0 })))
+  })
+
+  it('[LQA-13] open_day + liquidityAmount négatif → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-13'),
+      validRequest({ requestType: 'open_day', liquidityAmount: -5000 })))
+  })
+
+  it('[LQA-14] open_day + liquidityAmount string → deny', async () => {
+    await seedAll()
+    const ctx = getAuthenticatedContext(testEnv, 'dealer-a-uid')
+    await assertFails(setDoc(doc(ctx.firestore(), 'dealerRequests', 'r-lqa-14'),
+      validRequest({ requestType: 'open_day', liquidityAmount: '75000' })))
   })
 })

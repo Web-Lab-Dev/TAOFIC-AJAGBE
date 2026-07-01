@@ -413,7 +413,7 @@ describe('TC-027-L — Layouts', () => {
     )
     expect(screen.getByTestId('admin-layout')).toBeInTheDocument()
     expect(screen.getByTestId('admin-nav')).toBeInTheDocument()
-    expect(screen.getByText('Tableau de bord')).toBeInTheDocument()
+    expect(screen.getByText('Vue générale')).toBeInTheDocument()
     expect(screen.getByText('Boutiques')).toBeInTheDocument()
     expect(screen.getByText('Profil')).toBeInTheDocument()
   })
@@ -450,7 +450,7 @@ describe('TC-027-L — Layouts', () => {
     render(<MemoryRouter><DealerLayout /></MemoryRouter>)
     expect(screen.getByTestId('dealer-layout')).toBeInTheDocument()
     expect(screen.getByTestId('dealer-nav')).toBeInTheDocument()
-    expect(screen.getByText('Demandes')).toBeInTheDocument()
+    expect(screen.getByText('Ravitaillements')).toBeInTheDocument()
   })
 
   it('L-8 : DealerLayout contient bouton déconnexion', () => {

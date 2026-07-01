@@ -337,7 +337,8 @@ describe('TC-030-CREATE — Création réussie', () => {
     expect(payload.rejectionReason).toBeNull()
     expect(payload.previousBalance).toBeNull()
     expect(payload.newBalance).toBeNull()
-    expect(Object.keys(payload).length).toBe(18)
+    expect(payload.liquidityAmount).toBeNull()
+    expect(Object.keys(payload).length).toBe(19)
     expect(result.id).toBe('new-req-id')
   })
 

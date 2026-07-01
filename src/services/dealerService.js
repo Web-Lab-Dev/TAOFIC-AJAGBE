@@ -283,6 +283,7 @@ export async function createDealerRequest({
   targetStoreId,
   requestType,
   amount,
+  liquidityAmount = null,
 } = {}) {
   // Validation contexte dealer
   validateDealerContext(currentUser, userProfile)
@@ -301,6 +302,15 @@ export async function createDealerRequest({
   const parsedAmount = parseDealerAmount(amount)
   if (parsedAmount === null) {
     throw new Error('Montant invalide : entier strictement positif requis.')
+  }
+
+  // Pour open_day : liquidityAmount obligatoire et valide
+  let parsedLiquidityAmount = null
+  if (requestType === DEALER_REQUEST_TYPES.OPEN_DAY) {
+    parsedLiquidityAmount = parseDealerAmount(liquidityAmount)
+    if (parsedLiquidityAmount === null) {
+      throw new Error('Montant liquidité invalide pour l\'ouverture du jour.')
+    }
   }
 
   // Charger la boutique pour valider qu'elle est active et récupérer son nom
@@ -333,6 +343,7 @@ export async function createDealerRequest({
     requestType,
     network: DEALER_NETWORK,
     amount: parsedAmount,
+    liquidityAmount: parsedLiquidityAmount,
     status: 'pending',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

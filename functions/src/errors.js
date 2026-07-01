@@ -19,6 +19,16 @@ export const HTTP_CODES = {
   INVALID_BALANCE_DATA:     'internal',
   BALANCE_OVERFLOW:         'failed-precondition',
   TRANSACTION_FAILED:       'internal',
+  // Clôtures Dealer
+  STORE_NOT_FOUND:          'not-found',
+  STORE_INACTIVE:           'failed-precondition',
+  INVALID_CLOSURE_DATA:     'invalid-argument',
+  INVALID_CLOSURE_ID:       'invalid-argument',
+  REASON_REQUIRED:          'invalid-argument',
+  CLOSURE_ALREADY_EXISTS:   'failed-precondition',
+  CLOSURE_NOT_FOUND:        'not-found',
+  CLOSURE_STORE_MISMATCH:   'permission-denied',
+  CLOSURE_NOT_PENDING:      'failed-precondition',
 }
 
 export class DealerRequestError extends Error {

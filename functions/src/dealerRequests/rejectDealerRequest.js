@@ -69,17 +69,19 @@ export async function rejectDealerRequestHandler(request, { db, FieldValue }) {
 
       const now = FieldValue.serverTimestamp()
 
-      // Mise à jour de la demande (pas de changement de solde)
+      // Mise à jour de la demande (aucun changement de solde au rejet)
       t.update(reqRef, {
-        status:          'rejected',
-        updatedAt:       now,
-        rejectedBy:      actorUid,
-        rejectedAt:      now,
+        status:                  'rejected',
+        updatedAt:               now,
+        rejectedBy:              actorUid,
+        rejectedAt:              now,
         rejectionReason,
-        confirmedBy:     null,
-        confirmedAt:     null,
-        previousBalance: null,
-        newBalance:      null,
+        confirmedBy:             null,
+        confirmedAt:             null,
+        previousBalance:         null,
+        newBalance:              null,
+        previousLiquidityBalance: null,
+        newLiquidityBalance:     null,
       })
 
       // Piste d'audit dans clients/{storeId}/auditLogs

@@ -79,7 +79,13 @@ describe('TC-036-WRA — exports callable de index.js', () => {
   })
 
   it('[WRA-05] aucun export non prévu dans index.js', () => {
-    const allowedExports = new Set(['confirmDealerRequest', 'rejectDealerRequest'])
+    const allowedExports = new Set([
+      'confirmDealerRequest',
+      'rejectDealerRequest',
+      'createDealerClosure',
+      'confirmDealerClosure',
+      'rejectDealerClosure',
+    ])
     for (const key of Object.keys(indexModule)) {
       expect(
         allowedExports.has(key),
