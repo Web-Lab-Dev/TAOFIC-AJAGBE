@@ -273,6 +273,13 @@ service cloud.firestore {
         allow update: if isStoreMember(storeId) &&
           validStoreScopedTransaction(request.resource.data, storeId);
         allow delete: if isStoreMember(storeId);
+
+        // Règlements (paiements et remboursements par tranche)
+        // Écriture exclusivement par les Cloud Functions (Admin SDK).
+        match /settlements/{settlementId} {
+          allow read: if isStoreMember(storeId) || isSystemManager();
+          allow write: if false;
+        }
       }
 
       match /history/{historyId} {
@@ -285,6 +292,13 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'updatedAt', 'notes']) &&
           validStatus(request.resource.data.statut);
         allow delete: if false;
+
+        // Règlements archivés (copiés depuis drafts lors du paiement final)
+        // Écriture exclusivement par les Cloud Functions (Admin SDK).
+        match /settlements/{settlementId} {
+          allow read: if isStoreMember(storeId) || isSystemManager();
+          allow write: if false;
+        }
       }
 
       match /networkBalances/{balanceId} {

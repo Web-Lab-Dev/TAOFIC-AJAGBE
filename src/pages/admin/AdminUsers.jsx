@@ -183,7 +183,7 @@ function AdminUsers() {
           )}
 
           <p className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
-            La création, suspension ou réaffectation d'un compte nécessite une Cloud Function Admin SDK (V2.1). Cette vue est en lecture seule.
+            La création, la suspension ou la réaffectation d'un compte doit être effectuée par l'administrateur système. Cette vue est en lecture seule.
           </p>
         </>
       )}

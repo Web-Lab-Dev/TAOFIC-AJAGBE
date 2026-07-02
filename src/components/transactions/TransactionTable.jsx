@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, memo, useCallback } from 'react'
+﻿import { useState, useRef, useEffect, useMemo, memo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useTransactions } from '../../context/transactions.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
@@ -7,9 +7,10 @@ import { getClientName, formatTransactionDateTime } from '../../utils/helpers.js
 import { TransactionRowSkeleton } from '../ui/LoadingSkeleton.jsx'
 import OptimisticToast from '../ui/OptimisticToast.jsx'
 import logger from '../../utils/logger.js'
+import { generateIdempotencyKey } from '../../services/settlementService.js'
 
 const TransactionTable = memo(function TransactionTable() {
-  const { pendingTransactions, getActionButtons, getTransactionStyles, validateTransaction, startEditTransaction, loading } = useTransactions()
+  const { pendingTransactions, getActionButtons, getTransactionStyles, addPaymentTranche, addRefundTranche, startEditTransaction, loading } = useTransactions()
   const { themeClasses } = useTheme()
 
   // Déduplicateur pour éviter les erreurs de clés React
@@ -28,7 +29,16 @@ const TransactionTable = memo(function TransactionTable() {
   const [currentActionType, setCurrentActionType] = useState(null)
   const [processingActions, setProcessingActions] = useState(new Set())
   const [rollbackToast, setRollbackToast] = useState({ show: false, message: '', type: 'info' })
+  const [dropdownStep, setDropdownStep] = useState(1)
+  const [selectedMethod, setSelectedMethod] = useState(null)
+  const [settlementAmount, setSettlementAmount] = useState('')
+  const [amountError, setAmountError] = useState('')
   const _buttonRefs = useRef({})
+  // Clés d'idempotence stables par action utilisateur.
+  // Format de la clé ref : `${draftId}-${actionType}-${method}-${amount}`
+  // La clé est générée au moment du premier Confirmer et réutilisée pour les retries.
+  // Elle est supprimée après succès confirmé ou recréée si le payload change.
+  const pendingKeyRef = useRef({})
 
 
   const handleActionClick = useCallback((transactionId, actionType, event) => {
@@ -47,6 +57,10 @@ const TransactionTable = memo(function TransactionTable() {
       if (activeDropdown === transactionId) {
         setActiveDropdown(null)
         setCurrentActionType(null)
+        setDropdownStep(1)
+        setSelectedMethod(null)
+        setSettlementAmount('')
+        setAmountError('')
       } else {
         const button = event.currentTarget
         const rect = button.getBoundingClientRect()
@@ -57,78 +71,116 @@ const TransactionTable = memo(function TransactionTable() {
         setDropdownPosition(position)
         setActiveDropdown(transactionId)
         setCurrentActionType(actionType)
+        setDropdownStep(1)
+        setSelectedMethod(null)
+        setSettlementAmount('')
+        setAmountError('')
       }
     }
   }, [pendingTransactions, startEditTransaction, activeDropdown, setActiveDropdown, setCurrentActionType, setDropdownPosition, processingActions])
 
-  const handlePaymentMethodSelect = useCallback(async (transactionId, method, actionType) => {
-    // Vérifier si cette action est déjà en cours de traitement
+  const handlePaymentMethodSelect = useCallback(async (transactionId, method, actionType, amount, idempotencyKey) => {
     const actionKey = `${transactionId}-${actionType}-${method}`
     if (processingActions.has(actionKey)) return
 
-    // Marquer l'action comme en cours de traitement
     setProcessingActions(prev => new Set(prev).add(actionKey))
 
     try {
-      // Trouver la transaction pour récupérer les données
       const transaction = pendingTransactions.find(t => t.id === transactionId)
       if (!transaction) return
 
       setActiveDropdown(null)
       setCurrentActionType(null)
+      setDropdownStep(1)
+      setSelectedMethod(null)
+      setSettlementAmount('')
+      setAmountError('')
 
-      // Déterminer le statut basé sur l'action et la méthode
-      let statusText
-      if (actionType === 'payerPar') {
-        statusText = `Payé par ${method}`
-      } else if (actionType === 'rembourser') {
-        statusText = `Remboursé par ${method}`
-      } else if (actionType === 'encaisser') {
-        statusText = `Encaissé par ${method}`
+      if (actionType === 'rembourser') {
+        await addRefundTranche(transactionId, amount, method, idempotencyKey)
       } else {
-        statusText = 'Validée'
+        await addPaymentTranche(transactionId, amount, method, idempotencyKey)
       }
 
-      const confirmationMessage = [
-        'Confirmer cette transaction ?',
-        '',
-        `Client: ${getClientName(transaction.client)}`,
-        `Nature: ${transaction.type}`,
-        `Montant: ${(Number(transaction.montant) || 0).toLocaleString('fr-FR')} FCFA`,
-        `Réseau: ${transaction.reseau}`,
-        `Statut: ${statusText}`
-      ].join('\n')
-
-      if (!window.confirm(confirmationMessage)) {
-        return
-      }
-
-      const success = await validateTransaction(transactionId, statusText, method)
-      if (!success) {
-        throw new Error('La transaction n’a pas pu être déplacée vers l’historique')
-      }
+      // Succès : supprimer la clé (la prochaine action génèrera une nouvelle clé)
+      const fingerprint = `${transactionId}-${actionType}-${method}-${amount}`
+      delete pendingKeyRef.current[fingerprint]
     } catch (error) {
-      logger.user.error('Transaction validation', error)
+      logger.user.error('Settlement error', error)
 
       setRollbackToast({
         show: true,
-        message: error?.message || `Erreur de synchronisation - operation non enregistree`,
+        message: error?.message || 'Erreur de synchronisation — opération non enregistrée',
         type: 'rollback'
       })
 
       setTimeout(() => {
         setRollbackToast({ show: false, message: '', type: 'info' })
       }, 4000)
+      // En cas d'erreur réseau incertaine, la clé est conservée dans pendingKeyRef
+      // pour qu'un retry utilise exactement la même clé (idempotence client).
     } finally {
-      // Retirer l'action de la liste des actions en cours
       setProcessingActions(prev => {
         const newSet = new Set(prev)
         newSet.delete(actionKey)
         return newSet
       })
     }
-  }, [processingActions, setProcessingActions, pendingTransactions, validateTransaction, setActiveDropdown, setCurrentActionType])
+  }, [processingActions, pendingTransactions, addPaymentTranche, addRefundTranche, setActiveDropdown, setCurrentActionType])
 
+
+  const handleMethodChosen = useCallback((method) => {
+    const transaction = pendingTransactions.find(t => t.id === activeDropdown)
+    const defaultAmount = transaction
+      ? String(transaction.remainingAmount ?? transaction.montant)
+      : ''
+    setSelectedMethod(method)
+    setSettlementAmount(defaultAmount)
+    setAmountError('')
+    setDropdownStep(2)
+  }, [pendingTransactions, activeDropdown])
+
+  const handleConfirmPayment = useCallback(async () => {
+    const amount = parseInt(settlementAmount, 10)
+    if (!amount || amount < 500) {
+      setAmountError('Montant invalide (minimum 500 FCFA, entier)')
+      return
+    }
+    const transaction = pendingTransactions.find(t => t.id === activeDropdown)
+
+    // Validation du maximum selon le type d'action
+    if (currentActionType !== 'rembourser') {
+      // Paiement : max = remainingAmount (ou montant pour ancien draft)
+      const maxPayment = transaction ? (transaction.remainingAmount ?? transaction.montant) : Infinity
+      if (amount > maxPayment) {
+        setAmountError(`Maximum : ${maxPayment.toLocaleString('fr-FR')} FCFA (reste dû)`)
+        return
+      }
+    } else {
+      // Remboursement : max = paidAmount - refundedAmount (net payé)
+      if (transaction && transaction.paidAmount != null) {
+        const netPaid = (transaction.paidAmount ?? 0) - (transaction.refundedAmount ?? 0)
+        if (amount > netPaid) {
+          setAmountError(`Maximum remboursable : ${netPaid.toLocaleString('fr-FR')} FCFA`)
+          return
+        }
+        if (netPaid <= 0) {
+          setAmountError('Aucun montant remboursable (net payé = 0)')
+          return
+        }
+      }
+    }
+
+    // Clé d'idempotence stable : générée une fois par (draftId, actionType, method, amount)
+    // et réutilisée pour les retries de cette même action.
+    const fingerprint = `${activeDropdown}-${currentActionType}-${selectedMethod}-${amount}`
+    if (!pendingKeyRef.current[fingerprint]) {
+      pendingKeyRef.current[fingerprint] = generateIdempotencyKey()
+    }
+    const idempotencyKey = pendingKeyRef.current[fingerprint]
+
+    await handlePaymentMethodSelect(activeDropdown, selectedMethod, currentActionType, amount, idempotencyKey)
+  }, [settlementAmount, selectedMethod, activeDropdown, currentActionType, pendingTransactions, handlePaymentMethodSelect])
 
   // Fermer le dropdown quand on clique ailleurs
   useEffect(() => {
@@ -141,6 +193,10 @@ const TransactionTable = memo(function TransactionTable() {
       if (!event.target.closest('.dropdown-container')) {
         setActiveDropdown(null)
         setCurrentActionType(null)
+        setDropdownStep(1)
+        setSelectedMethod(null)
+        setSettlementAmount('')
+        setAmountError('')
       }
     }
     
@@ -222,7 +278,12 @@ const TransactionTable = memo(function TransactionTable() {
                         {transaction.reseau} ({transaction.code})
                       </td>
                       <td className={`border border-green-300 px-4 py-3 text-base font-medium ${styles.textColor}`}>
-                        {(Number(transaction.montant) || 0).toLocaleString('fr-FR')} FCFA
+                        <span>{(Number(transaction.montant) || 0).toLocaleString('fr-FR')} FCFA</span>
+                        {transaction.settlementStatus === 'partial' && transaction.remainingAmount != null && (
+                          <div className="text-xs font-normal text-orange-600 mt-0.5">
+                            Reste : {Number(transaction.remainingAmount).toLocaleString('fr-FR')} FCFA
+                          </div>
+                        )}
                       </td>
                       <td className="border border-green-300 px-4 py-3 text-base">
                         <div className="flex gap-2 justify-center">
@@ -277,44 +338,144 @@ const TransactionTable = memo(function TransactionTable() {
       </div>
 
 
-      {/* Dropdown modal élégant */}
+      {/* Dropdown modal — 2 étapes */}
       {activeDropdown && createPortal(
-        <div 
+        <div
           className="fixed bg-white border border-gray-300 rounded-lg shadow-lg dropdown-container"
+          onClick={(e) => e.stopPropagation()}
           style={{
-            top: Math.max(10, Math.min(dropdownPosition.top, window.innerHeight - 250)),
-            left: Math.max(10, Math.min(dropdownPosition.left, window.innerWidth - 220)),
+            top: Math.max(10, Math.min(dropdownPosition.top, window.innerHeight - 300)),
+            left: Math.max(10, Math.min(dropdownPosition.left, window.innerWidth - 240)),
             zIndex: 9999,
-            minWidth: '200px'
+            minWidth: '220px'
           }}
         >
-          {/* En-tête du modal */}
-          <div className="bg-gray-100 px-4 py-2 rounded-t-lg border-b border-gray-200">
-            <p className="text-sm font-medium text-gray-700">Sélectionner méthode</p>
-          </div>
-          
-          {/* Options de paiement */}
-          <div className="py-1">
-            {PAYMENT_METHODS.map((method) => {
-              const actionKey = `${activeDropdown}-${currentActionType}-${method}`
-              const isProcessing = processingActions.has(actionKey)
+          {dropdownStep === 1 ? (
+            <>
+              {/* Étape 1 : sélection de la méthode */}
+              <div className="bg-gray-100 px-4 py-2 rounded-t-lg border-b border-gray-200">
+                <p className="text-sm font-medium text-gray-700">Sélectionner méthode</p>
+              </div>
+              <div className="py-1">
+                {PAYMENT_METHODS.map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => handleMethodChosen(method)}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Étape 2 : saisie du montant */}
+              {(() => {
+                const t = pendingTransactions.find(tx => tx.id === activeDropdown)
+                return (
+                  <>
+                    <div className="bg-gray-100 px-4 py-2 rounded-t-lg border-b border-gray-200 flex items-center gap-2">
+                      <button
+                        onClick={() => { setDropdownStep(1); setAmountError('') }}
+                        className="text-gray-500 hover:text-gray-800 text-base leading-none"
+                        aria-label="Retour"
+                      >
+                        ←
+                      </button>
+                      <p className="text-sm font-medium text-gray-700">{selectedMethod}</p>
+                    </div>
+                    {t && (
+                      <div className="px-4 pt-2 pb-1 border-b border-gray-100 space-y-0.5">
+                        <p className="text-xs text-gray-700 font-medium truncate">{getClientName(t.client)}</p>
+                        <p className="text-[11px] text-gray-400">{t.type}{t.reseau ? ` · ${t.reseau}` : ''}</p>
+                        {/* Résumé financier */}
+                        <div className="pt-1 space-y-0.5">
+                          <p className="text-[11px] text-gray-500">
+                            Total : {(Number(t.montant) || 0).toLocaleString('fr-FR')} FCFA
+                          </p>
+                          {t.settlementStatus === 'partial' && t.paidAmount != null && (
+                            <>
+                              <p className="text-[11px] text-blue-600">
+                                Payé : {Number(t.paidAmount).toLocaleString('fr-FR')} FCFA
+                              </p>
+                              {(t.refundedAmount ?? 0) > 0 && (
+                                <p className="text-[11px] text-purple-600">
+                                  Remboursé : {Number(t.refundedAmount).toLocaleString('fr-FR')} FCFA
+                                </p>
+                              )}
+                              {currentActionType !== 'rembourser' ? (
+                                <p className="text-[11px] text-orange-600 font-medium">
+                                  Reste dû : {Number(t.remainingAmount).toLocaleString('fr-FR')} FCFA
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-green-700 font-medium">
+                                  Remboursable : {Math.max(0, (t.paidAmount ?? 0) - (t.refundedAmount ?? 0)).toLocaleString('fr-FR')} FCFA
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
 
-              return (
+              <div className="px-4 py-3">
+                <p className="text-xs text-gray-500 mb-2">Montant (FCFA)</p>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const current = parseInt(settlementAmount, 10) || 0
+                      const next = Math.max(500, current - 500)
+                      setSettlementAmount(String(next))
+                      setAmountError('')
+                    }}
+                    className="w-9 h-9 flex items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-100 text-lg font-bold select-none"
+                  >
+                    −
+                  </button>
+
+                  <input
+                    type="number"
+                    min="500"
+                    step="500"
+                    value={settlementAmount}
+                    onChange={(e) => {
+                      setSettlementAmount(e.target.value)
+                      setAmountError('')
+                    }}
+                    className="flex-1 min-w-0 text-center border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+
+                  <button
+                    onClick={() => {
+                      const current = parseInt(settlementAmount, 10) || 0
+                      setSettlementAmount(String(current + 500))
+                      setAmountError('')
+                    }}
+                    className="w-9 h-9 flex items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-100 text-lg font-bold select-none"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {amountError && (
+                  <p className="text-xs text-red-500 mt-1">{amountError}</p>
+                )}
+
                 <button
-                  key={method}
-                  onClick={() => handlePaymentMethodSelect(activeDropdown, method, currentActionType)}
-                  disabled={isProcessing}
-                  className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                    isProcessing
-                      ? 'text-gray-400 cursor-not-allowed bg-gray-50'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                  onClick={handleConfirmPayment}
+                  disabled={[...processingActions].some(k => k.startsWith(`${activeDropdown}-`))}
+                  className="mt-3 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium py-2 rounded transition-colors"
                 >
-                  {isProcessing ? `${method} (traitement...)` : method}
+                  {[...processingActions].some(k => k.startsWith(`${activeDropdown}-`)) ? 'Traitement...' : 'Confirmer'}
                 </button>
-              )
-            })}
-          </div>
+              </div>
+            </>
+          )}
         </div>,
         document.body
       )}

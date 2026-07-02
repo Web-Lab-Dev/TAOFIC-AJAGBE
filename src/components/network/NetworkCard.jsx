@@ -1,10 +1,13 @@
 import { useState, useCallback, memo } from 'react'
 import { NETWORK_CONFIG, formatAmountWithCurrency } from '../../constants/networkConfig'
 import { useNetworkCards } from '../../hooks/useNetworkCards'
+import { useAuth } from '../../context/AuthContext'
 
 function NetworkCard({ network, stockAmount, liquiditeAmount }) {
   const config = NETWORK_CONFIG[network]
   const { updateStock, updateLiquidity } = useNetworkCards()
+  const { userProfile } = useAuth()
+  const canEdit = userProfile?.role === 'dealer'
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -67,10 +70,11 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
   }, [editValue, isLiquiditeCard, network, updateStock, updateLiquidity])
 
   const startEditing = useCallback(() => {
+    if (!canEdit) return
     setIsEditing(true)
     setErrorMessage('')
     setEditValue(displayAmount.toString())
-  }, [displayAmount])
+  }, [canEdit, displayAmount])
 
   const handleInputChange = useCallback((e) => {
     setEditValue(e.target.value)
@@ -160,19 +164,23 @@ function NetworkCard({ network, stockAmount, liquiditeAmount }) {
             <p className="text-2xl font-black leading-none text-slate-950">
               {amount}
             </p>
-            <button
-              type="button"
-              onClick={startEditing}
-              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700"
-              aria-label={`Modifier ${config.name}`}
-            >
-              Modifier
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={startEditing}
+                className="rounded border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700"
+                aria-label={`Modifier ${config.name}`}
+              >
+                Modifier
+              </button>
+            )}
           </div>
         )}
-        <p className={`mt-1 text-[10px] font-medium ${errorMessage ? 'text-red-500' : 'text-slate-400'}`}>
-          {errorMessage || 'Solde modifiable'}
-        </p>
+        {(errorMessage || canEdit) && (
+          <p className={`mt-1 text-[10px] font-medium ${errorMessage ? 'text-red-500' : 'text-slate-400'}`}>
+            {errorMessage || 'Solde modifiable'}
+          </p>
+        )}
       </div>
     </div>
   )

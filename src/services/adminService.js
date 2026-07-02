@@ -41,6 +41,7 @@ const PAGE = 25
 function mapErr(err) {
   if (err?.code === 'permission-denied') return new Error('Accès refusé. Vérifiez vos permissions.')
   if (err?.code === 'unavailable') return new Error('Service indisponible. Réessayez.')
+  if (err?.code === 'failed-precondition') return new Error('Index Firestore manquant — déployez firestore.indexes.json.')
   if (import.meta.env.DEV) console.error('[adminService]', err)
   return new Error('Une erreur inattendue s\'est produite.')
 }
@@ -271,34 +272,54 @@ export async function listAllClients({ lastDoc = null, search = '', storeId = ''
 // Historique consolidé (collectionGroup)
 // ──────────────────────────────────────────────────────────────────────────────
 
-export async function listConsolidatedHistory({ lastDoc = null, search = '' } = {}) {
+export async function listConsolidatedHistory({ lastDoc = null, search = '', storeNameMap = null } = {}) {
   try {
-    const constraints = [
-      orderBy('createdAt', 'desc'),
-      limit(PAGE + 1),
-    ]
-    if (lastDoc) constraints.push(startAfter(lastDoc))
+    // Pas d'orderBy sur collectionGroup : Firestore n'auto-crée pas d'index COLLECTION_GROUP
+    // pour un champ simple. On trie côté client après chaque page.
+    const constraints = [limit(PAGE + 1)]
+    if (lastDoc) constraints.splice(0, 0, startAfter(lastDoc))
 
-    const snap = await getDocs(query(collectionGroup(db, 'history'), ...constraints))
+    const fetches = [getDocs(query(collectionGroup(db, 'history'), ...constraints))]
+    if (!storeNameMap) fetches.push(getDocs(query(collection(db, 'stores'), limit(200))))
+
+    const [snap, storesSnap] = await Promise.all(fetches)
+
+    const resolvedMap = storeNameMap ?? (() => {
+      const m = {}
+      storesSnap.docs.forEach(d => { m[d.id] = d.data().name ?? d.id })
+      return m
+    })()
+
     const hasMore = snap.docs.length > PAGE
-    const docs = hasMore ? snap.docs.slice(0, PAGE) : snap.docs
-    let records = docs.map(d => {
-      const parts = d.ref.path.split('/')
-      const storeId = parts[1] ?? null
-      return { id: d.id, storeId, ...d.data() }
-    })
+    const rawDocs = hasMore ? snap.docs.slice(0, PAGE) : snap.docs
+
+    let records = rawDocs
+      .map(d => {
+        const parts = d.ref.path.split('/')
+        const storeId = parts[1] ?? null
+        const storeName = storeId ? (resolvedMap[storeId] ?? storeId) : '—'
+        return { id: d.id, storeId, storeName, ...d.data() }
+      })
+      .sort((a, b) => {
+        const ta = a.createdAt?.toMillis?.() ?? (a.createdAt ? new Date(a.createdAt).getTime() : 0)
+        const tb = b.createdAt?.toMillis?.() ?? (b.createdAt ? new Date(b.createdAt).getTime() : 0)
+        return tb - ta
+      })
+
+    const lastRawDoc = rawDocs.at(-1) ?? null
 
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       records = records.filter(r =>
         r.clientId?.toLowerCase().includes(q) ||
         r.clientNom?.toLowerCase().includes(q) ||
+        r.storeName?.toLowerCase().includes(q) ||
         r.storeId?.toLowerCase().includes(q) ||
         r.nom?.toLowerCase().includes(q)
       )
     }
 
-    return { records, lastDoc: docs.at(-1) ?? null, hasMore }
+    return { records, lastDoc: lastRawDoc, hasMore, storeNameMap: resolvedMap }
   } catch (err) {
     throw mapErr(err)
   }

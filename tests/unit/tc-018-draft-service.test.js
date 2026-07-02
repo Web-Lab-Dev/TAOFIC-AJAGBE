@@ -799,9 +799,9 @@ describe('TC-018-I — Façade FirestoreService : délégation à DraftService',
     expect(mockDraftSvc.addTransaction).toHaveBeenCalledWith(depositDraft)
   })
 
-  it('validateTransaction délègue à draftService.validateTransaction avec les 3 paramètres', async () => {
-    await firestoreSvc.validateTransaction('draft-001', 'Payé par Cash', 'Cash')
-    expect(mockDraftSvc.validateTransaction).toHaveBeenCalledWith('draft-001', 'Payé par Cash', 'Cash')
+  it('validateTransaction délègue à draftService.validateTransaction avec les 4 paramètres', async () => {
+    await firestoreSvc.validateTransaction('draft-001', 'Payé par Cash', 'Cash', 5000)
+    expect(mockDraftSvc.validateTransaction).toHaveBeenCalledWith('draft-001', 'Payé par Cash', 'Cash', 5000)
   })
 
   it('les méthodes non-draft ne sont pas impactées (addClient toujours fonctionnel)', async () => {

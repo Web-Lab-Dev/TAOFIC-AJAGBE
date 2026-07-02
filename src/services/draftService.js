@@ -246,7 +246,7 @@ export class DraftService {
   // validateTransaction
   // ---------------------------------------------------------------------------
 
-  async validateTransaction(draftId, customStatus = 'Validée', selectedPaymentMethod = null) {
+  async validateTransaction(draftId, customStatus = 'Validée', selectedPaymentMethod = null, amountOverride = null) {
     try {
       this._requireActiveStore()
 
@@ -269,6 +269,11 @@ export class DraftService {
 
       // 2b. Valider le montant FCFA (entier strictement positif)
       validateFcfaAmount(transactionData.montant, 'validateTransaction')
+
+      // 2c. Valider le montant de règlement si fourni
+      if (amountOverride !== null) {
+        validateFcfaAmount(amountOverride, 'validateTransaction.amountOverride')
+      }
 
       // 3. Extraire la méthode de paiement du statut si pas fournie explicitement
       let effectivePaymentMethod = selectedPaymentMethod
@@ -294,8 +299,13 @@ export class DraftService {
         const balanceRef = this._getNetworkBalanceDocRef()
         const balanceSnap = await tx.get(balanceRef)
         const currentBalances = normalizeNetworkBalances(balanceSnap.exists() ? balanceSnap.data() : {})
+
+        // Montant effectif de règlement (peut différer du montant d'origine)
+        const effectiveAmount = amountOverride !== null ? amountOverride : lockedTransactionData.montant
+        const dataForImpact = { ...lockedTransactionData, montant: effectiveAmount }
+
         const nextBalances = effectivePaymentMethod
-          ? applySettlementImpact(currentBalances, lockedTransactionData, effectivePaymentMethod)
+          ? applySettlementImpact(currentBalances, dataForImpact, effectivePaymentMethod)
           : currentBalances
         const now = serverTimestamp()
         const historyData = {
@@ -303,6 +313,14 @@ export class DraftService {
           statut: customStatus,
           paymentMethod: effectivePaymentMethod,
           effectiveNetwork: effectiveNetworkMapped,
+          settlementAmount: effectiveAmount,
+          // Champs de règlement pour cohérence historique (paiement unique complet)
+          originalAmount:   lockedTransactionData.montant,
+          paidAmount:       effectiveAmount,
+          refundedAmount:   0,
+          remainingAmount:  0,
+          settlementStatus: 'settled',
+          settlementUpdatedAt: now,
           validatedAt: now,
           updatedAt: now
         }

@@ -63,8 +63,14 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('../../src/config/firebase', () => ({
   auth: {},
   db: {},
+  functions: {},
   firebaseInfo: { projectId: 'test', isDev: true, useEmulators: false },
   default: {},
+}))
+
+vi.mock('../../src/services/settlementService', () => ({
+  addTransactionPayment: vi.fn(() => Promise.resolve({ success: true, fullySettled: false })),
+  addTransactionRefund:  vi.fn(() => Promise.resolve({ success: true })),
 }))
 
 vi.mock('../../src/services/firestore', () => ({

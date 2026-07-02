@@ -21,6 +21,8 @@ import { rejectDealerRequestHandler } from './dealerRequests/rejectDealerRequest
 import { createDealerClosureHandler } from './closures/createDealerClosure.js'
 import { confirmDealerClosureHandler } from './closures/confirmDealerClosure.js'
 import { rejectDealerClosureHandler } from './closures/rejectDealerClosure.js'
+import { addTransactionPaymentHandler } from './settlements/addTransactionPayment.js'
+import { addTransactionRefundHandler } from './settlements/addTransactionRefund.js'
 
 // Garde idempotente : évite "App named '[DEFAULT]' already exists" lors des imports
 // dans les tests d'intégration (TC-036) qui s'exécutent après TC-035 dans le même processus.
@@ -51,4 +53,14 @@ export const confirmDealerClosure = onCall(
 export const rejectDealerClosure = onCall(
   { region: 'europe-west1', enforceAppCheck: false },
   wrapCallable(rejectDealerClosureHandler, deps)
+)
+
+export const addTransactionPayment = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(addTransactionPaymentHandler, deps)
+)
+
+export const addTransactionRefund = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(addTransactionRefundHandler, deps)
 )

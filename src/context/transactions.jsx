@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { getTransactionStyles, getAvailableActions } from '../utils/helpers.js'
 import { STORAGE_KEYS } from '../constants/index.js'
 import { firestoreService } from '../services/firestore'
+import { addTransactionPayment, addTransactionRefund } from '../services/settlementService'
 import { AuthContext } from './AuthContext'
 
 const TransactionsContext = createContext()
@@ -159,24 +160,44 @@ export const TransactionsProvider = ({ children }) => {
     }
   }, [])
 
-  const validateTransaction = useCallback(async (id, customStatus = 'Validée', selectedPaymentMethod = null) => {
+  const validateTransaction = useCallback(async (id, customStatus = 'Validée', selectedPaymentMethod = null, amountOverride = null) => {
     try {
       setError(null)
 
-      const success = await firestoreService.validateTransaction(id, customStatus, selectedPaymentMethod)
+      const success = await firestoreService.validateTransaction(id, customStatus, selectedPaymentMethod, amountOverride)
       if (!success) {
         console.warn(`Transaction ${id} n'a pas pu être validée (probablement déjà supprimée)`)
         return false
       }
 
-      // L'impact des transactions validées avec méthode de paiement est maintenant géré
-      // DIRECTEMENT par les boutons dans TransactionTable.jsx
-      // Plus besoin de logique d'impact ici !
-
       return true
     } catch (error) {
       console.error('Erreur lors de la validation de la transaction:', error)
       setError(error.message)
+      throw error
+    }
+  }, [])
+
+  const addPaymentTranche = useCallback(async (draftId, amount, paymentMethod, idempotencyKey) => {
+    try {
+      setError(null)
+      await addTransactionPayment({ draftId, amount, paymentMethod, idempotencyKey })
+      return true
+    } catch (error) {
+      console.error('Erreur de règlement (paiement):', error)
+      setError(error?.message || 'Erreur lors du paiement')
+      throw error
+    }
+  }, [])
+
+  const addRefundTranche = useCallback(async (draftId, amount, paymentMethod, idempotencyKey) => {
+    try {
+      setError(null)
+      await addTransactionRefund({ draftId, amount, paymentMethod, idempotencyKey })
+      return true
+    } catch (error) {
+      console.error('Erreur de règlement (remboursement):', error)
+      setError(error?.message || 'Erreur lors du remboursement')
       throw error
     }
   }, [])
@@ -225,6 +246,8 @@ export const TransactionsProvider = ({ children }) => {
     addTransaction,
     updateTransaction,
     validateTransaction,
+    addPaymentTranche,
+    addRefundTranche,
     deleteTransaction,
     startEditTransaction,
     clearEditTransaction,

@@ -812,7 +812,10 @@ export class FirestoreService {
   // CLIENTS
   async getClients() {
     this.requireActiveStore()
-    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS)
+    return this.getCollection(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
+      orderByField: 'createdAt',
+      orderDirection: 'desc'
+    })
   }
 
   async addClient(clientData) {
@@ -916,8 +919,8 @@ export class FirestoreService {
   }
 
   // VALIDATION DE TRANSACTION (Drafts → History) — délègue à DraftService
-  async validateTransaction(draftId, customStatus = 'Validée', selectedPaymentMethod = null) {
-    return this._draftService.validateTransaction(draftId, customStatus, selectedPaymentMethod)
+  async validateTransaction(draftId, customStatus = 'Validée', selectedPaymentMethod = null, amountOverride = null) {
+    return this._draftService.validateTransaction(draftId, customStatus, selectedPaymentMethod, amountOverride)
   }
 
   // MIGRATION DES DONNÉES LOCALSTORAGE

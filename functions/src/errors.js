@@ -20,15 +20,26 @@ export const HTTP_CODES = {
   BALANCE_OVERFLOW:         'failed-precondition',
   TRANSACTION_FAILED:       'internal',
   // Clôtures Dealer
-  STORE_NOT_FOUND:          'not-found',
-  STORE_INACTIVE:           'failed-precondition',
-  INVALID_CLOSURE_DATA:     'invalid-argument',
-  INVALID_CLOSURE_ID:       'invalid-argument',
-  REASON_REQUIRED:          'invalid-argument',
-  CLOSURE_ALREADY_EXISTS:   'failed-precondition',
-  CLOSURE_NOT_FOUND:        'not-found',
-  CLOSURE_STORE_MISMATCH:   'permission-denied',
-  CLOSURE_NOT_PENDING:      'failed-precondition',
+  STORE_NOT_FOUND:              'not-found',
+  STORE_INACTIVE:               'failed-precondition',
+  INVALID_CLOSURE_DATA:         'invalid-argument',
+  INVALID_CLOSURE_ID:           'invalid-argument',
+  REASON_REQUIRED:              'invalid-argument',
+  CLOSURE_ALREADY_EXISTS:       'failed-precondition',
+  CLOSURE_NOT_FOUND:            'not-found',
+  CLOSURE_STORE_MISMATCH:       'permission-denied',
+  CLOSURE_NOT_PENDING:          'failed-precondition',
+  // Règlements (settlements)
+  SETTLEMENT_DRAFT_NOT_FOUND:   'not-found',
+  SETTLEMENT_ALREADY_SETTLED:   'failed-precondition',
+  SETTLEMENT_EXCEEDS_REMAINING: 'failed-precondition',
+  REFUND_EXCEEDS_PAID:          'failed-precondition',
+  INVALID_SETTLEMENT_AMOUNT:    'invalid-argument',
+  INVALID_PAYMENT_METHOD:       'invalid-argument',
+  SETTLEMENT_STORE_MISMATCH:    'permission-denied',
+  SETTLEMENT_DATA_INVALID:      'invalid-argument',
+  // Même clé d'idempotence, payload différent (montant ou méthode)
+  IDEMPOTENCY_CONFLICT:         'failed-precondition',
 }
 
 export class DealerRequestError extends Error {

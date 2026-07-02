@@ -297,7 +297,6 @@ function DealerDayOpen() {
 
         <div className="mt-5 rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-700">
           La boutique doit confirmer la réception avant que les soldes ne soient mis à jour.
-          La confirmation est effectuée via la Cloud Function <code>confirmDealerRequest</code>.
         </div>
       </div>
     </div>

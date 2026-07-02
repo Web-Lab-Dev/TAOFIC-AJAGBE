@@ -89,8 +89,7 @@ function StoreDetail({ store, onClose }) {
         )}
 
         <p className="mt-6 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
-          La modification, suspension ou réactivation d'une boutique nécessite une action
-          Cloud Function Admin SDK (V2.1). La vue ci-dessus est en lecture seule.
+          La modification, la suspension ou la réactivation d'une boutique doit être effectuée par l'administrateur système. Cette vue est en lecture seule.
         </p>
       </div>
     </div>

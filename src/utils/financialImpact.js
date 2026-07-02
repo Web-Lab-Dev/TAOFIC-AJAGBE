@@ -427,7 +427,27 @@ export function reverseHistoryTransactionImpact(currentBalances, historyData) {
     throw new Error(`Type de transaction non reconnu pour le renversement : ${type}`)
   }
 
-  // Path 2 avec règlement : annuler le règlement puis l'impact pending
+  // Path 3 multi-tranches : utiliser settlementSummary.netByNetwork pour inverser exactement
+  // chaque impact réseau (paid - refunded = impact net réel).
+  const netByNetwork = historyData.settlementSummary?.netByNetwork
+  if (netByNetwork && Object.keys(netByNetwork).length > 0) {
+    let next = { ...currentBalances }
+    for (const [network, { paid = 0, refunded = 0 }] of Object.entries(netByNetwork)) {
+      const net = paid - refunded
+      if (net === 0) continue
+      // L'impact settlement initial : dépôt/crédit → stock[network] += net ; retrait → stock[network] -= net
+      const settlementDelta = isWithdrawalType(type) ? -net : net
+      if (network === 'Liquidite') {
+        next = applyLiquidityDelta(next, -settlementDelta)
+      } else {
+        next = adjustBalanceValue(next, network, 'stock', -settlementDelta)
+      }
+    }
+    // Inverser l'impact pending initial (stock du réseau d'origine)
+    return reversePendingOnlyImpact(next, type, reseau, amount)
+  }
+
+  // Path 2 avec règlement mono-méthode : annuler le règlement puis l'impact pending
   if (paymentMethod) {
     const settlementDelta = isWithdrawalType(type) ? -amount : amount
     let next

@@ -182,9 +182,7 @@ function AdminAlerts() {
           <li>Boutiques inactives {">"} 0</li>
         </ul>
         <p className="mt-3 text-xs text-gray-400">
-          Alertes calculées à partir des données Firestore lisibles par system_manager.
-          Scores de crédit, alertes d'agents et alertes de clôture reportés en V2.1
-          (calcul backend requis).
+          Scores de crédit, alertes d'agents et alertes de clôture seront disponibles prochainement.
         </p>
       </div>
     </div>
