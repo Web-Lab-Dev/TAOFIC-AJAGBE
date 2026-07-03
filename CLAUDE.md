@@ -4,7 +4,6 @@ Cette application est actuellement utilisée par un client réel.
 
 ## Interdictions absolues
 
-- Ne jamais exécuter git push.
 - Ne jamais créer de pull request distante.
 - Ne jamais déployer sur Firebase, Vercel ou Netlify.
 - Ne jamais utiliser les identifiants de production.
