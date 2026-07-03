@@ -1,9 +1,31 @@
 import { useState, useEffect, useContext, createContext } from 'react'
 import { STORAGE_KEYS } from '../constants'
 import { firestoreService } from '../services/firestore'
+import { parsefrenchDate } from '../utils/helpers.js'
 import { AuthContext } from './AuthContext'
 
 export const ClientsContext = createContext()
+
+/**
+ * Horodatage (ms) d'enregistrement d'un client, pour le tri décroissant
+ * (le dernier enregistré en haut). Priorité au Timestamp Firestore `createdAt` ;
+ * repli sur `dateAjout` (format FR "JJ/MM/AAAA"). L'abonnement temps réel
+ * (`subscribeToClients`) ne pose pas d'`orderBy` → on trie côté client, sans
+ * dépendre d'un index ni exclure les anciens documents sans `createdAt`.
+ */
+const clientTimestamp = (c) => {
+  if (c?.createdAt?.toMillis) return c.createdAt.toMillis()
+  if (c?.createdAt) {
+    const t = new Date(c.createdAt).getTime()
+    if (!Number.isNaN(t)) return t
+  }
+  const parsed = parsefrenchDate(c?.dateAjout)
+  return parsed ? parsed.getTime() : 0
+}
+
+/** Tri décroissant par date d'enregistrement. Exporté pour test. */
+export const sortClientsByRegistrationDesc = (list) =>
+  [...list].sort((a, b) => clientTimestamp(b) - clientTimestamp(a))
 
 export function ClientsProvider({ children }) {
   const { currentUser: user, userProfile, activeStore, loading: authLoading } = useContext(AuthContext)
@@ -61,7 +83,8 @@ export function ClientsProvider({ children }) {
               array.findIndex(c => c.id === client.id) === index
             )
 
-            setClients(uniqueClients)
+            // Tri décroissant : le dernier client enregistré apparaît en haut.
+            setClients(sortClientsByRegistrationDesc(uniqueClients))
             setLoading(false)
             setError(null)
           }
