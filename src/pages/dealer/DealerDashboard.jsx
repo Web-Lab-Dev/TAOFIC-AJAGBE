@@ -9,6 +9,8 @@ import ErrorState from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
 import StatusBadge from '../../components/ui/StatusBadge'
 import { SkeletonCards } from '../../components/ui/SkeletonList'
+import RejectionRemarkButton from '../../components/ui/RejectionRemarkButton'
+import { DEALER_REQUEST_STATUSES } from '../../constants/dealerConstants'
 
 const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
 const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité', open_day: 'Ouverture' }
@@ -148,6 +150,7 @@ function DealerDashboard() {
                     <th className="pb-2 pr-4">Type</th>
                     <th className="pb-2 pr-4">Montant</th>
                     <th className="pb-2 pr-4">Statut</th>
+                    <th className="pb-2 pr-4">Remarque</th>
                     <th className="pb-2">Date</th>
                   </tr>
                 </thead>
@@ -159,6 +162,13 @@ function DealerDashboard() {
                       <td className="py-2 pr-4 font-medium text-gray-800 whitespace-nowrap">{formatCurrency(r.amount)}</td>
                       <td className="py-2 pr-4 whitespace-nowrap">
                         <StatusBadge status={r.status} label={STATUS_LABELS[r.status] ?? r.status} />
+                      </td>
+                      <td className="py-2 pr-4 whitespace-nowrap">
+                        <RejectionRemarkButton
+                          storeName={r.targetStoreName}
+                          reason={r.status === DEALER_REQUEST_STATUSES.REJECTED ? r.rejectionReason : null}
+                          testId={`remark-btn-${r.id}`}
+                        />
                       </td>
                       <td className="py-2 text-gray-400 text-xs whitespace-nowrap">{formatDate(r.createdAt)}</td>
                     </tr>

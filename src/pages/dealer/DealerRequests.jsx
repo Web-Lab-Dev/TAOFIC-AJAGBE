@@ -10,6 +10,7 @@ import {
   DEALER_REQUEST_STATUSES,
   DEALER_NETWORK,
 } from '../../constants/dealerConstants'
+import RejectionRemarkButton from '../../components/ui/RejectionRemarkButton'
 
 // ---------------------------------------------------------------------------
 // Statut badge
@@ -369,6 +370,9 @@ function DealerRequests() {
                     Statut
                   </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Remarque
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
                   </th>
                 </tr>
@@ -391,6 +395,13 @@ function DealerRequests() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={req.status} />
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <RejectionRemarkButton
+                        storeName={req.targetStoreName}
+                        reason={req.status === DEALER_REQUEST_STATUSES.REJECTED ? req.rejectionReason : null}
+                        testId={`remark-btn-${req.id}`}
+                      />
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">
                       {formatDate(req.createdAt)}
                     </td>
@@ -399,23 +410,6 @@ function DealerRequests() {
               </tbody>
             </table>
           </div>
-
-          {/* Motif de rejet si présent */}
-          {filtered.some(r => r.rejectionReason) && (
-            <div className="mt-4 space-y-2">
-              {filtered
-                .filter(r => r.rejectionReason)
-                .map(r => (
-                  <div
-                    key={r.id}
-                    className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700"
-                    data-testid={`rejection-${r.id}`}
-                  >
-                    <span className="font-medium">{r.targetStoreName}</span> : {r.rejectionReason}
-                  </div>
-                ))}
-            </div>
-          )}
 
           {/* Pagination Firestore */}
           {hasMore && (
