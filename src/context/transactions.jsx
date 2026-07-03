@@ -1,11 +1,31 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { getTransactionStyles, getAvailableActions } from '../utils/helpers.js'
+import { getTransactionStyles, getAvailableActions, parsefrenchDate } from '../utils/helpers.js'
 import { STORAGE_KEYS } from '../constants/index.js'
 import { firestoreService } from '../services/firestore'
 import { addTransactionPayment, addTransactionRefund } from '../services/settlementService'
 import { AuthContext } from './AuthContext'
 
 const TransactionsContext = createContext()
+
+/**
+ * Horodatage (ms) d'un élément d'historique pour le tri décroissant.
+ * Priorité au Timestamp Firestore `createdAt` ; repli sur la date FR `date`
+ * ("DD/MM/YYYY HH:mm"). On ne dépend d'aucun orderBy Firestore (le service
+ * n'en pose pas volontairement, pour inclure TOUS les éléments).
+ */
+const historyTimestamp = (item) => {
+  if (item?.createdAt?.toMillis) return item.createdAt.toMillis()
+  if (item?.createdAt) {
+    const t = new Date(item.createdAt).getTime()
+    if (!Number.isNaN(t)) return t
+  }
+  const parsed = parsefrenchDate(item?.date)
+  return parsed ? parsed.getTime() : 0
+}
+
+/** Tri décroissant (le dernier enregistré en haut). Exporté pour test. */
+export const sortHistoryDesc = (list) =>
+  [...list].sort((a, b) => historyTimestamp(b) - historyTimestamp(a))
 
 export const useTransactions = () => {
   const context = useContext(TransactionsContext)
@@ -84,7 +104,8 @@ export const TransactionsProvider = ({ children }) => {
             const uniqueHistory = historyData.filter((history, index, array) =>
               array.findIndex(h => h.id === history.id) === index
             )
-            setCompletedTransactions(uniqueHistory)
+            // Tri décroissant par date d'enregistrement : le dernier en haut.
+            setCompletedTransactions(sortHistoryDesc(uniqueHistory))
           }
         })
 
@@ -101,7 +122,8 @@ export const TransactionsProvider = ({ children }) => {
             const savedPending = localStorage.getItem(STORAGE_KEYS.PENDING_TRANSACTIONS)
             const savedCompleted = localStorage.getItem(STORAGE_KEYS.COMPLETED_TRANSACTIONS)
             setPendingTransactions(savedPending ? JSON.parse(savedPending) : [])
-            setCompletedTransactions(savedCompleted ? JSON.parse(savedCompleted) : [])
+            // Même tri décroissant qu'en mode nominal, pour une cohérence d'affichage.
+            setCompletedTransactions(savedCompleted ? sortHistoryDesc(JSON.parse(savedCompleted)) : [])
           } catch {
             setPendingTransactions([])
             setCompletedTransactions([])

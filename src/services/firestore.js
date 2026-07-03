@@ -825,11 +825,36 @@ export class FirestoreService {
       throw new Error('Boutique active non disponible pour la création du client')
     }
 
+    // Anti-doublon : un même numéro/code agent (champ `orange`) ne peut être enregistré
+    // qu'une seule fois par boutique. On ignore les valeurs vides (champ facultatif).
+    // La collection `clients` est globale et isolée par `registeredStoreId` ⇒ on filtre
+    // sur les deux champs (deux égalités → aucun index composite requis).
+    const agentCode = String(clientData?.orange ?? '').trim()
+    if (agentCode) {
+      const existing = await this.getCollection(
+        FIRESTORE_CONFIG.COLLECTIONS.CLIENTS,
+        {
+          where: [
+            { field: 'orange', operator: '==', value: agentCode },
+            { field: 'registeredStoreId', operator: '==', value: activeStore.id },
+          ],
+          limitCount: 1,
+        },
+        false, // pas de cache : on veut l'état réel avant écriture
+      )
+      if (existing.length > 0) {
+        throw new Error('Un client avec ce numéro/code agent existe déjà dans cette boutique.')
+      }
+    }
+
     // Les champs d'appartenance à la boutique sont toujours imposés par le service
     // (jamais hérités des données du formulaire) pour aligner avec la règle Firestore :
     //   allow create: if ... request.resource.data.registeredStoreId == profile().storeId
     return this.addDocument(FIRESTORE_CONFIG.COLLECTIONS.CLIENTS, {
       ...clientData,
+      // On stocke le numéro/code agent normalisé (trim) pour que l'anti-doublon
+      // ci-dessus, qui compare la valeur trimmée, reste fiable dans le temps.
+      ...(clientData?.orange !== undefined ? { orange: agentCode } : {}),
       registeredStoreId: activeStore.id,
       registeredStoreName: activeStore.name,
       dateAjout: new Date().toLocaleDateString('fr-FR')

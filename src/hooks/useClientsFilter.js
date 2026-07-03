@@ -6,10 +6,17 @@ export const useClientsFilter = (clients) => {
   const [selectedMonth, setSelectedMonth] = useState('Tous les mois')
 
   const filteredClients = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase()
     return clients.filter(client => {
-      const matchesSearch = client.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           client.prenom.toLowerCase().includes(searchTerm.toLowerCase())
-      
+      // Recherche sur : nom, prénom, numéro/code agent (champ `orange`) et numéro personnel.
+      // Champs potentiellement absents → coalescer en chaîne vide avant toLowerCase().
+      const matchesSearch = !search || [
+        client.nom,
+        client.prenom,
+        client.orange,
+        client.numeroPersonnel,
+      ].some(field => String(field ?? '').toLowerCase().includes(search))
+
       let matchesMonth = true
       if (selectedMonth !== 'Tous les mois') {
         const selectedMonthNumber = MONTHS[selectedMonth]
