@@ -114,30 +114,6 @@ function DealerDashboard() {
         )}
       </section>
 
-      {/* Raccourcis */}
-      <section aria-labelledby="shortcuts-heading" className="mb-8">
-        <h2 id="shortcuts-heading" className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
-          Actions rapides
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Ouverture du jour', path: '/dealer/open-day', color: 'bg-green-600' },
-            { label: 'Nouveau ravitaillement', path: '/dealer/requests/new', color: 'bg-teal-600' },
-            { label: 'Voir les boutiques', path: '/dealer/stores', color: 'bg-blue-600' },
-            { label: 'Historique', path: '/dealer/history', color: 'bg-gray-600' },
-          ].map(s => (
-            <button
-              key={s.path}
-              type="button"
-              onClick={() => navigate(s.path)}
-              className={`${s.color} rounded-xl px-4 py-3 text-sm font-medium text-white hover:opacity-90 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500 text-left`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
       {/* Demandes récentes */}
       <section aria-labelledby="recent-heading">
         <div className="flex items-center justify-between mb-4">

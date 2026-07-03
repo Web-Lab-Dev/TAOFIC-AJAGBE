@@ -25,7 +25,6 @@ function DealerStoreCard({ store, balances, balanceError, isLoading }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold text-gray-800">{store.name}</h3>
-          <p className="text-xs text-gray-400 mt-0.5">{store.id}</p>
         </div>
         <span className="flex-shrink-0 inline-block rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
           Active

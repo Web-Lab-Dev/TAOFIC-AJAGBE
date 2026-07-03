@@ -299,13 +299,6 @@ function AdminDashboard() {
               onClick={() => navigate('/admin/dealer')}
               accent="bg-emerald-50"
             />
-            <ActionCard
-              icon="🔔"
-              label="Alertes réseau"
-              desc="Consulter les alertes actives"
-              onClick={() => navigate('/admin/alerts')}
-              accent="bg-amber-50"
-            />
           </div>
         </section>
 

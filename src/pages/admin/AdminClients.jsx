@@ -104,7 +104,6 @@ function AdminClients() {
                   <th className="px-4 py-3">Prénom</th>
                   <th className="px-4 py-3">Téléphone</th>
                   <th className="px-4 py-3">Boutique d'origine</th>
-                  <th className="px-4 py-3">ID boutique</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -114,7 +113,6 @@ function AdminClients() {
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{c.prenom ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">{c.numeroPersonnel || '—'}</td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{c.registeredStoreName ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap font-mono text-xs">{c.registeredStoreId ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

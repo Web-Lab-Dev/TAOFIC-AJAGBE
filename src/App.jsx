@@ -33,7 +33,6 @@ import AdminUsers from './pages/admin/AdminUsers.jsx'
 import AdminDealer from './pages/admin/AdminDealer.jsx'
 import AdminClients from './pages/admin/AdminClients.jsx'
 import AdminHistory from './pages/admin/AdminHistory.jsx'
-import AdminAlerts from './pages/admin/AdminAlerts.jsx'
 import AdminReports from './pages/admin/AdminReports.jsx'
 
 // Pages Dealer
@@ -41,11 +40,8 @@ import DealerDashboard from './pages/dealer/DealerDashboard.jsx'
 import DealerStores from './pages/dealer/DealerStores.jsx'
 import DealerRequests from './pages/dealer/DealerRequests.jsx'
 import NewDealerRequest from './pages/dealer/NewDealerRequest.jsx'
-import DealerDayOpen from './pages/dealer/DealerDayOpen.jsx'
 import DealerHistory from './pages/dealer/DealerHistory.jsx'
-import DealerAlerts from './pages/dealer/DealerAlerts.jsx'
 import DealerProfile from './pages/dealer/DealerProfile.jsx'
-import DealerClosures from './pages/dealer/DealerClosures.jsx'
 
 // Pages Boutique — extensions V2
 import StoreAdminClosures from './pages/store/StoreAdminClosures.jsx'
@@ -133,7 +129,6 @@ export function AppContent() {
         <Route path="/admin/clients" element={<AdminClients />} />
         <Route path="/admin/history" element={<AdminHistory />} />
         <Route path="/admin/reports" element={<AdminReports />} />
-        <Route path="/admin/alerts" element={<AdminAlerts />} />
         <Route path="/admin/profile" element={<AdminProfile />} />
       </Route>
 
@@ -147,12 +142,9 @@ export function AppContent() {
       >
         <Route path="/dealer" element={<DealerDashboard />} />
         <Route path="/dealer/stores" element={<DealerStores />} />
-        <Route path="/dealer/open-day" element={<DealerDayOpen />} />
         <Route path="/dealer/requests" element={<DealerRequests />} />
         <Route path="/dealer/requests/new" element={<NewDealerRequest />} />
-        <Route path="/dealer/closures" element={<DealerClosures />} />
         <Route path="/dealer/history" element={<DealerHistory />} />
-        <Route path="/dealer/alerts" element={<DealerAlerts />} />
         <Route path="/dealer/profile" element={<DealerProfile />} />
       </Route>
 

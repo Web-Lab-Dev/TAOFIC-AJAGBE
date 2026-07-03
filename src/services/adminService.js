@@ -325,6 +325,56 @@ export async function listConsolidatedHistory({ lastDoc = null, search = '', sto
   }
 }
 
+// Liste des boutiques (id + nom) pour alimenter un sélecteur de filtre.
+// Retourne la map id→nom (compatible avec listConsolidatedHistory) et une
+// liste triée par nom prête pour un <select>.
+export async function listStoreOptions() {
+  try {
+    const snap = await getDocs(query(collection(db, 'stores'), limit(200)))
+    const map = {}
+    const options = []
+    snap.docs.forEach(d => {
+      const name = d.data().name ?? d.id
+      map[d.id] = name
+      options.push({ id: d.id, name })
+    })
+    options.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    return { map, options }
+  } catch (err) {
+    throw mapErr(err)
+  }
+}
+
+// Historique d'UNE boutique, requêté directement sur sa sous-collection
+// `clients/{storeId}/history` (côté serveur) — contrairement au filtre
+// client-side de listConsolidatedHistory, ceci renvoie TOUT l'historique de la
+// boutique (paginé), pas seulement les lignes présentes dans la page courante.
+// Pas d'orderBy Firestore (certains docs anciens peuvent ne pas avoir createdAt) :
+// on trie côté client par page, comme listConsolidatedHistory.
+export async function listStoreHistory({ storeId, storeName = null, lastDoc = null } = {}) {
+  if (!storeId) throw new Error('storeId requis pour listStoreHistory.')
+  try {
+    const constraints = [limit(PAGE + 1)]
+    if (lastDoc) constraints.splice(0, 0, startAfter(lastDoc))
+
+    const snap = await getDocs(query(collection(db, 'clients', storeId, 'history'), ...constraints))
+    const hasMore = snap.docs.length > PAGE
+    const rawDocs = hasMore ? snap.docs.slice(0, PAGE) : snap.docs
+
+    const records = rawDocs
+      .map(d => ({ id: d.id, storeId, storeName: storeName ?? storeId, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.createdAt?.toMillis?.() ?? (a.createdAt ? new Date(a.createdAt).getTime() : 0)
+        const tb = b.createdAt?.toMillis?.() ?? (b.createdAt ? new Date(b.createdAt).getTime() : 0)
+        return tb - ta
+      })
+
+    return { records, lastDoc: rawDocs.at(-1) ?? null, hasMore }
+  } catch (err) {
+    throw mapErr(err)
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Soldes réseau par boutique (collectionGroup networkBalances)
 // ──────────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { listConsolidatedHistory } from '../../services/adminService'
+import { listConsolidatedHistory, listStoreHistory, listStoreOptions } from '../../services/adminService'
 import { formatCurrency } from '../../utils/formatCurrency'
 import EmptyState from '../../components/ui/EmptyState'
 import ErrorState from '../../components/ui/ErrorState'
@@ -25,6 +25,8 @@ function statusVariant(statut) {
 function AdminHistory() {
   const [records, setRecords]         = useState([])
   const [storeNameMap, setStoreNameMap] = useState(null)
+  const [storeOptions, setStoreOptions] = useState([])
+  const [storeFilter, setStoreFilter] = useState('') // '' = toutes les boutiques
   const [hasMore, setHasMore]         = useState(false)
   const [loading, setLoading]         = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -32,6 +34,19 @@ function AdminHistory() {
   const [search, setSearch]           = useState('')
 
   const lastDocRef = useRef(null)
+
+  // Chargement (une fois) de la liste des boutiques pour le sélecteur de filtre.
+  useEffect(() => {
+    let cancelled = false
+    listStoreOptions()
+      .then(({ map, options }) => {
+        if (cancelled) return
+        setStoreNameMap(map)
+        setStoreOptions(options)
+      })
+      .catch(() => { /* le sélecteur reste vide ; l'historique consolidé fonctionne */ })
+    return () => { cancelled = true }
+  }, [])
 
   const load = useCallback(async (reset, currentStoreMap = null) => {
     if (reset) {
@@ -45,11 +60,20 @@ function AdminHistory() {
     setError(null)
 
     try {
-      const result = await listConsolidatedHistory({
-        lastDoc: reset ? null : lastDocRef.current,
-        search,
-        storeNameMap: currentStoreMap,
-      })
+      // Filtre par boutique → requête serveur dédiée sur la sous-collection de
+      // la boutique (tout son historique). Sinon → historique consolidé.
+      const result = storeFilter
+        ? await listStoreHistory({
+            storeId: storeFilter,
+            storeName: (currentStoreMap ?? storeNameMap)?.[storeFilter],
+            lastDoc: reset ? null : lastDocRef.current,
+          })
+        : await listConsolidatedHistory({
+            lastDoc: reset ? null : lastDocRef.current,
+            search,
+            storeNameMap: currentStoreMap ?? storeNameMap,
+          })
+
       if (reset) {
         setRecords(result.records)
         if (result.storeNameMap) setStoreNameMap(result.storeNameMap)
@@ -72,16 +96,29 @@ function AdminHistory() {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [search])
+  }, [search, storeFilter, storeNameMap])
 
   useEffect(() => {
     load(true, storeNameMap)
-  }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, storeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(() => {
-    setStoreNameMap(null)
-    load(true, null)
-  }, [load])
+    load(true, storeNameMap)
+  }, [load, storeNameMap])
+
+  // Quand une boutique est sélectionnée, `search` affine côté client la liste
+  // (déjà complète pour cette boutique). En vue consolidée, le filtrage `search`
+  // est fait par le service (limité à la page courante).
+  const visibleRecords = storeFilter && search.trim()
+    ? records.filter(r => {
+        const q = search.trim().toLowerCase()
+        return (
+          r.clientNom?.toLowerCase().includes(q) ||
+          r.nom?.toLowerCase().includes(q) ||
+          r.type?.toLowerCase().includes(q)
+        )
+      })
+    : records
 
   return (
     <div data-testid="admin-history" className="min-h-screen bg-gray-50/60">
@@ -109,29 +146,61 @@ function AdminHistory() {
 
       <div className="max-w-7xl mx-auto px-6 pb-10 space-y-5">
 
-        {/* ── Recherche ─────────────────────────────────────────────────────── */}
-        <div>
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher agent, boutique…"
-            className="w-full max-w-md rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
-            aria-label="Rechercher dans la page courante"
-          />
-          <p className="mt-1 text-[11px] text-gray-400">Recherche dans la page courante (25 résultats max)</p>
+        {/* ── Filtres ───────────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-start gap-3">
+          <div>
+            <select
+              value={storeFilter}
+              onChange={e => setStoreFilter(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+              aria-label="Filtrer par boutique"
+            >
+              <option value="">Toutes les boutiques</option>
+              {storeOptions.map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-gray-400">
+              {storeFilter
+                ? 'Historique complet de la boutique sélectionnée'
+                : 'Toutes boutiques — chargées par pages de 25'}
+            </p>
+          </div>
+          <div>
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher agent, client…"
+              className="w-full max-w-md rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+              aria-label="Rechercher"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">
+              {storeFilter
+                ? 'Affine la liste de la boutique'
+                : 'Recherche dans la page courante (25 résultats max)'}
+            </p>
+          </div>
         </div>
 
         {/* ── États ─────────────────────────────────────────────────────────── */}
         {loading && <SkeletonTable rows={8} cols={6} />}
         {error && <ErrorState message={error} onRetry={refresh} />}
-        {!loading && !error && records.length === 0 && (
+        {/* Vide ET rien de plus à charger → aucune donnée. Si `hasMore`, on
+            garde le bouton « Charger plus » accessible (voir bloc suivant). */}
+        {!loading && !error && visibleRecords.length === 0 && !hasMore && (
           <EmptyState title="Aucune transaction" message="Aucune transaction ne correspond aux critères sélectionnés." />
         )}
 
         {/* ── Tableau ───────────────────────────────────────────────────────── */}
-        {!loading && !error && records.length > 0 && (
+        {!loading && !error && (visibleRecords.length > 0 || hasMore) && (
           <>
+            {visibleRecords.length === 0 && hasMore && (
+              <p className="rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500">
+                Aucun résultat dans la portion chargée. Chargez plus pour poursuivre la recherche.
+              </p>
+            )}
+            {visibleRecords.length > 0 && (
             <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
               <table className="min-w-full divide-y divide-gray-100 text-sm">
                 <thead className="bg-gray-50/80">
@@ -145,7 +214,7 @@ function AdminHistory() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {records.map(r => (
+                  {visibleRecords.map(r => (
                     <tr key={r.id + (r.storeId ?? '')} className="hover:bg-gray-50/60 transition-colors">
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <p className="text-sm font-semibold text-gray-800 truncate max-w-[140px]">{r.storeName ?? r.storeId ?? '—'}</p>
@@ -159,16 +228,17 @@ function AdminHistory() {
                           <StatusBadge status={statusVariant(r.statut)} label={r.statut} />
                         ) : '—'}
                       </td>
-                      <td className="px-5 py-3.5 text-gray-600 whitespace-nowrap text-xs">{r.clientNom ?? r.clientId ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-gray-600 whitespace-nowrap text-xs">{r.clientNom ?? '—'}</td>
                       <td className="px-5 py-3.5 text-gray-400 text-xs whitespace-nowrap">{formatDate(r.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            )}
 
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">{records.length} résultat{records.length > 1 ? 's' : ''} chargé{records.length > 1 ? 's' : ''}</p>
+              <p className="text-xs text-gray-400">{visibleRecords.length} résultat{visibleRecords.length > 1 ? 's' : ''} affiché{visibleRecords.length > 1 ? 's' : ''}</p>
               {hasMore && (
                 <button
                   type="button"

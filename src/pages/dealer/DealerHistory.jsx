@@ -38,6 +38,7 @@ function DealerHistory() {
   const [error, setError]             = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [storeSearch, setStoreSearch]   = useState('')
+  const [remarkModal, setRemarkModal]   = useState(null) // { storeName, reason } | null
 
   const load = useCallback(async (reset = true) => {
     if (!currentUser || !userProfile) return
@@ -130,6 +131,7 @@ function DealerHistory() {
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Montant</th>
                   <th className="px-4 py-3">Statut</th>
+                  <th className="px-4 py-3">Remarque</th>
                   <th className="px-4 py-3">Solde après</th>
                   <th className="px-4 py-3">Date</th>
                 </tr>
@@ -143,6 +145,25 @@ function DealerHistory() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={r.status} label={DEALER_REQUEST_STATUS_LABELS[r.status] ?? r.status} />
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {r.status === DEALER_REQUEST_STATUSES.REJECTED && r.rejectionReason ? (
+                        <button
+                          type="button"
+                          onClick={() => setRemarkModal({ storeName: r.targetStoreName, reason: r.rejectionReason })}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                          aria-label={`Voir la remarque de rejet de ${r.targetStoreName}`}
+                          data-testid={`remark-btn-${r.id}`}
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          Voir
+                        </button>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                       {r.newBalance != null ? formatCurrency(r.newBalance) : '—'}
                     </td>
@@ -152,16 +173,6 @@ function DealerHistory() {
               </tbody>
             </table>
           </div>
-
-          {filtered.some(r => r.rejectionReason) && (
-            <div className="mt-3 space-y-1">
-              {filtered.filter(r => r.rejectionReason).map(r => (
-                <div key={r.id} className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
-                  <span className="font-medium">{r.targetStoreName}</span> : {r.rejectionReason}
-                </div>
-              ))}
-            </div>
-          )}
 
           {hasMore && (
             <div className="mt-4 text-center">
@@ -176,6 +187,55 @@ function DealerHistory() {
             </div>
           )}
         </>
+      )}
+
+      {/* Modal — remarque de rejet d'une boutique */}
+      {remarkModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remark-modal-title"
+          onClick={() => setRemarkModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+              <div>
+                <h2 id="remark-modal-title" className="text-base font-semibold text-gray-900">
+                  Remarque de rejet
+                </h2>
+                <p className="mt-0.5 text-xs text-gray-500">{remarkModal.storeName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRemarkModal(null)}
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+                aria-label="Fermer"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="whitespace-pre-wrap rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {remarkModal.reason}
+              </p>
+            </div>
+            <div className="flex justify-end border-t border-gray-100 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setRemarkModal(null)}
+                className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

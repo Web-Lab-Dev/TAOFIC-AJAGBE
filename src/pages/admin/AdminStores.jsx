@@ -37,7 +37,6 @@ function StoreDetail({ store, onClose }) {
         <div className="flex items-start justify-between mb-5">
           <div>
             <h2 id="store-detail-title" className="text-lg font-bold text-gray-900">{store.name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">ID : {store.id}</p>
           </div>
           <button
             onClick={onClose}
@@ -217,7 +216,6 @@ function AdminStores() {
               <thead className="bg-gray-50">
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   <th className="px-4 py-3">Nom</th>
-                  <th className="px-4 py-3">ID</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Statut</th>
                   <th className="px-4 py-3">Actions</th>
@@ -227,7 +225,6 @@ function AdminStores() {
                 {stores.map(store => (
                   <tr key={store.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{store.name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{store.id}</td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{store.email ?? '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge
