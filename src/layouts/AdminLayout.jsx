@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ADMIN_NAV_ITEMS } from '../constants/navigation'
+import { BRAND, getRoleAccent } from '../constants/workspaceTheme'
+import WorkspaceTopbar from '../components/ui/WorkspaceTopbar'
+
+const ACCENT = getRoleAccent('admin')
 
 const SECTIONS = [
   { key: 'main', label: 'Principal' },
@@ -17,7 +21,7 @@ function SidebarNav({ onClose }) {
         if (!items.length) return null
         return (
           <div key={sec.key} className="mb-3">
-            <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-blue-300">
+            <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest ${ACCENT.section}`}>
               {sec.label}
             </p>
             {items.map(item => (
@@ -28,9 +32,7 @@ function SidebarNav({ onClose }) {
                 onClick={onClose}
                 className={({ isActive }) =>
                   `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-blue-700 text-white'
-                      : 'text-blue-100 hover:bg-blue-800/60 hover:text-white'
+                    isActive ? BRAND.navActive : BRAND.navIdle
                   }`
                 }
               >
@@ -52,21 +54,22 @@ function AdminLayout() {
     <div className="min-h-screen bg-gray-50" data-testid="admin-layout">
       {/* ── Sidebar desktop ──────────────────────────────────────────────────── */}
       <aside
-        className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-blue-900 shadow-xl lg:flex"
+        className={`fixed inset-y-0 left-0 z-30 hidden w-60 flex-col ${BRAND.sidebar} shadow-xl lg:flex`}
         aria-label="Barre latérale"
       >
-        <div className="flex h-16 flex-shrink-0 items-center gap-3 px-5 border-b border-blue-800">
+        <div className={`h-1 ${ACCENT.bar}`} aria-hidden="true" />
+        <div className={`flex h-16 flex-shrink-0 items-center gap-3 px-5 border-b ${BRAND.sidebarBorder}`}>
           <div>
             <p className="text-lg font-bold text-white leading-none">AKAYIS</p>
-            <p className="text-[11px] text-blue-300 leading-none mt-0.5">Administration</p>
+            <p className={`text-[11px] ${BRAND.sidebarMuted} leading-none mt-0.5`}>Administration</p>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           <SidebarNav onClose={() => {}} />
         </div>
-        <div className="flex-shrink-0 border-t border-blue-800 px-3 py-3">
+        <div className={`flex-shrink-0 border-t ${BRAND.sidebarBorder} px-3 py-3`}>
           {userProfile?.name && (
-            <p className="mb-2 truncate px-3 text-xs text-blue-300">{userProfile.name}</p>
+            <p className={`mb-2 truncate px-3 text-xs ${BRAND.sidebarMuted}`}>{userProfile.name}</p>
           )}
           <button
             onClick={logout}
@@ -85,12 +88,12 @@ function AdminLayout() {
             onClick={() => setSidebarOpen(false)}
             aria-hidden="true"
           />
-          <aside className="absolute inset-y-0 left-0 w-64 flex flex-col bg-blue-900 shadow-xl">
-            <div className="flex h-16 flex-shrink-0 items-center justify-between px-5 border-b border-blue-800">
+          <aside className={`absolute inset-y-0 left-0 w-64 flex flex-col ${BRAND.sidebar} shadow-xl`}>
+            <div className={`flex h-16 flex-shrink-0 items-center justify-between px-5 border-b ${BRAND.sidebarBorder}`}>
               <p className="text-lg font-bold text-white">AKAYIS Admin</p>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="rounded p-1 text-blue-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className={`rounded p-1 text-green-200 hover:text-white focus:outline-none focus-visible:ring-2 ${ACCENT.ring}`}
                 aria-label="Fermer le menu"
               >
                 ✕
@@ -99,9 +102,9 @@ function AdminLayout() {
             <div className="flex-1 overflow-y-auto">
               <SidebarNav onClose={() => setSidebarOpen(false)} />
             </div>
-            <div className="flex-shrink-0 border-t border-blue-800 px-3 py-3">
+            <div className={`flex-shrink-0 border-t ${BRAND.sidebarBorder} px-3 py-3`}>
               {userProfile?.name && (
-                <p className="mb-2 truncate px-3 text-xs text-blue-300">{userProfile.name}</p>
+                <p className={`mb-2 truncate px-3 text-xs ${BRAND.sidebarMuted}`}>{userProfile.name}</p>
               )}
               <button
                 onClick={logout}
@@ -118,19 +121,20 @@ function AdminLayout() {
       <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-gray-200 bg-white px-4 shadow-sm lg:hidden">
         <button
           onClick={() => setSidebarOpen(true)}
-          className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           aria-label="Ouvrir le menu"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <p className="font-bold text-blue-900">AKAYIS Admin</p>
+        <p className="font-bold text-green-900">AKAYIS Admin</p>
       </header>
 
       {/* ── Contenu principal ─────────────────────────────────────────────────── */}
       <div className="lg:pl-60">
         <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8">
+          <WorkspaceTopbar role="admin" />
           <Outlet />
         </main>
       </div>

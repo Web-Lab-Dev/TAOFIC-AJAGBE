@@ -1,19 +1,29 @@
+/**
+ * StatCard — tuile KPI des espaces Gérant & Dealer.
+ *
+ * Alignée sur l'esthétique des cartes de l'espace Boutique (DashboardCard) :
+ * dégradé léger `from-{couleur}-50 to-white`, coin `rounded-2xl`, accent coloré
+ * discret, valeur en gris foncé. API inchangée pour ne pas réécrire les pages.
+ */
 function StatCard({ label, value, sub, color = 'blue', icon, loading = false, onClick }) {
+  // Classes complètes (statiques) pour rester détectables par Tailwind JIT.
   const colorMap = {
-    blue:   'bg-blue-50 text-blue-700 border-blue-100',
-    green:  'bg-green-50 text-green-700 border-green-100',
-    amber:  'bg-amber-50 text-amber-700 border-amber-100',
-    red:    'bg-red-50 text-red-700 border-red-100',
-    gray:   'bg-gray-50 text-gray-700 border-gray-100',
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-    teal:   'bg-teal-50 text-teal-700 border-teal-100',
+    blue:   { grad: 'from-blue-50',   accent: 'text-blue-600',   iconBg: 'bg-blue-100' },
+    green:  { grad: 'from-green-50',  accent: 'text-green-600',  iconBg: 'bg-green-100' },
+    amber:  { grad: 'from-amber-50',  accent: 'text-amber-600',  iconBg: 'bg-amber-100' },
+    red:    { grad: 'from-red-50',    accent: 'text-red-600',    iconBg: 'bg-red-100' },
+    gray:   { grad: 'from-gray-50',   accent: 'text-gray-600',   iconBg: 'bg-gray-100' },
+    indigo: { grad: 'from-indigo-50', accent: 'text-indigo-600', iconBg: 'bg-indigo-100' },
+    teal:   { grad: 'from-teal-50',   accent: 'text-teal-600',   iconBg: 'bg-teal-100' },
   }
 
-  const cls = colorMap[color] ?? colorMap.blue
+  const c = colorMap[color] ?? colorMap.blue
 
   return (
     <div
-      className={`rounded-xl border p-5 ${cls} ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      className={`bg-gradient-to-br ${c.grad} to-white rounded-2xl border border-gray-100 shadow-sm p-5 transition-shadow ${
+        onClick ? 'cursor-pointer hover:shadow-md' : ''
+      }`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
@@ -21,18 +31,20 @@ function StatCard({ label, value, sub, color = 'blue', icon, loading = false, on
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide opacity-70 truncate">{label}</p>
+          <p className={`text-xs font-medium uppercase tracking-wide ${c.accent} truncate`}>{label}</p>
           {loading ? (
-            <div className="mt-2 h-7 w-24 animate-pulse rounded bg-current opacity-20" />
+            <div className="mt-2 h-7 w-24 animate-pulse rounded bg-gray-200" />
           ) : (
-            <p className="mt-1 text-2xl font-bold truncate">{value ?? '—'}</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900 truncate">{value ?? '—'}</p>
           )}
           {sub && !loading && (
-            <p className="mt-1 text-xs opacity-60 truncate">{sub}</p>
+            <p className="mt-1 text-xs text-gray-500 truncate">{sub}</p>
           )}
         </div>
         {icon && (
-          <span className="flex-shrink-0 text-2xl opacity-60" aria-hidden="true">{icon}</span>
+          <span className={`flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-lg ${c.iconBg} text-xl`} aria-hidden="true">
+            {icon}
+          </span>
         )}
       </div>
     </div>

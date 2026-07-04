@@ -35,7 +35,7 @@ function RequestDetail({ req, onClose }) {
       >
         <div className="flex items-start justify-between mb-4">
           <h2 id="req-detail-title" className="text-lg font-bold text-gray-900">Détail de la demande</h2>
-          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Fermer">✕</button>
+          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500" aria-label="Fermer">✕</button>
         </div>
 
         <dl className="divide-y divide-gray-100 text-sm">
@@ -119,7 +119,7 @@ function AdminDealer() {
             type="button"
             onClick={() => load(true)}
             disabled={loading}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           >
             {loading ? 'Chargement…' : 'Actualiser'}
           </button>
@@ -131,7 +131,7 @@ function AdminDealer() {
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
           aria-label="Filtrer par statut"
         >
           {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -141,7 +141,7 @@ function AdminDealer() {
           value={dealerSearch}
           onChange={e => setDealerSearch(e.target.value)}
           placeholder="Dealer (nom ou email)…"
-          className="flex-1 min-w-40 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+          className="flex-1 min-w-40 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
           aria-label="Rechercher par dealer dans la page courante"
           title="Recherche dans la page courante (25 résultats max)"
         />
@@ -150,7 +150,7 @@ function AdminDealer() {
           value={storeSearch}
           onChange={e => setStoreSearch(e.target.value)}
           placeholder="Boutique…"
-          className="flex-1 min-w-40 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+          className="flex-1 min-w-40 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
           aria-label="Rechercher par boutique dans la page courante"
           title="Recherche dans la page courante (25 résultats max)"
         />
@@ -167,7 +167,7 @@ function AdminDealer() {
         <>
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-green-50/70">
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   <th className="px-4 py-3">Boutique</th>
                   <th className="px-4 py-3">Dealer</th>
@@ -193,7 +193,7 @@ function AdminDealer() {
                       <button
                         type="button"
                         onClick={() => setSelectedReq(r)}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus-visible:underline"
+                        className="text-xs font-medium text-green-600 hover:text-green-800 focus:outline-none focus-visible:underline"
                       >
                         Voir
                       </button>
@@ -210,7 +210,7 @@ function AdminDealer() {
                 type="button"
                 onClick={() => load(false)}
                 disabled={loadingMore}
-                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
               >
                 {loadingMore ? 'Chargement…' : 'Charger plus'}
               </button>

@@ -63,7 +63,7 @@ function ActionCard({ icon, label, desc, onClick, accent }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center gap-4 rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 px-5 py-4 text-left hover:shadow-md hover:ring-gray-200 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 w-full"
+      className="group flex items-center gap-4 rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 px-5 py-4 text-left hover:shadow-md hover:ring-gray-200 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 w-full"
     >
       <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl ${accent}`}>
         {icon}
@@ -206,7 +206,7 @@ function AdminDashboard() {
           <button
             type="button"
             onClick={refresh}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           >
             <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -311,7 +311,7 @@ function AdminDashboard() {
             <button
               type="button"
               onClick={() => navigate('/admin/dealer')}
-              className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors focus:outline-none focus-visible:underline"
+              className="flex items-center gap-1 text-xs font-semibold text-green-600 hover:text-green-800 transition-colors focus:outline-none focus-visible:underline"
             >
               Voir tout
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">

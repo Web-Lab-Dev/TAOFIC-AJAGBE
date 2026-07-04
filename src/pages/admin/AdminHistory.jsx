@@ -134,7 +134,7 @@ function AdminHistory() {
             type="button"
             onClick={refresh}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50"
           >
             <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -152,7 +152,7 @@ function AdminHistory() {
             <select
               value={storeFilter}
               onChange={e => setStoreFilter(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
               aria-label="Filtrer par boutique"
             >
               <option value="">Toutes les boutiques</option>
@@ -172,7 +172,7 @@ function AdminHistory() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Rechercher agent, client…"
-              className="w-full max-w-md rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+              className="w-full max-w-md rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
               aria-label="Rechercher"
             />
             <p className="mt-1 text-[11px] text-gray-400">
@@ -203,7 +203,7 @@ function AdminHistory() {
             {visibleRecords.length > 0 && (
             <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
               <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead className="bg-gray-50/80">
+                <thead className="bg-green-50/70">
                   <tr className="text-left text-xs font-semibold uppercase tracking-widest text-gray-400">
                     <th className="px-5 py-3.5">Boutique</th>
                     <th className="px-5 py-3.5">Type</th>
@@ -244,7 +244,7 @@ function AdminHistory() {
                   type="button"
                   onClick={() => load(false, storeNameMap)}
                   disabled={loadingMore}
-                  className="rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
                 >
                   {loadingMore ? 'Chargement…' : 'Charger plus'}
                 </button>

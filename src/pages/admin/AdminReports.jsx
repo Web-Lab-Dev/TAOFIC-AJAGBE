@@ -166,7 +166,7 @@ function AdminReports() {
               value={dateFrom}
               max={dateTo || today}
               onChange={e => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
               aria-label="Date de début"
               data-testid="report-date-from"
             />
@@ -177,7 +177,7 @@ function AdminReports() {
               min={dateFrom}
               max={today}
               onChange={e => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
               aria-label="Date de fin"
               data-testid="report-date-to"
             />
@@ -185,7 +185,7 @@ function AdminReports() {
               type="button"
               onClick={load}
               disabled={loading}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
               data-testid="report-refresh"
             >
               {loading ? 'Chargement…' : 'Actualiser'}
@@ -194,7 +194,7 @@ function AdminReports() {
               <button
                 type="button"
                 onClick={() => exportCsv(requests)}
-                className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
                 data-testid="report-export-csv"
               >
                 Exporter CSV
@@ -244,7 +244,7 @@ function AdminReports() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Par type de demande</h2>
             <div className="overflow-x-auto rounded-xl border border-gray-200">
               <table className="min-w-full text-sm" data-testid="report-table-type">
-                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <thead className="bg-green-50/70 text-xs font-semibold text-green-900 uppercase tracking-wide">
                   <tr>
                     <th className="px-4 py-3 text-left">Type</th>
                     <th className="px-4 py-3 text-right">Total</th>
@@ -271,7 +271,7 @@ function AdminReports() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Activité Dealer</h2>
             <div className="overflow-x-auto rounded-xl border border-gray-200">
               <table className="min-w-full text-sm" data-testid="report-table-dealer">
-                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <thead className="bg-green-50/70 text-xs font-semibold text-green-900 uppercase tracking-wide">
                   <tr>
                     <th className="px-4 py-3 text-left">Dealer</th>
                     <th className="px-4 py-3 text-right">Demandes</th>
@@ -296,7 +296,7 @@ function AdminReports() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Détail par boutique</h2>
             <div className="overflow-x-auto rounded-xl border border-gray-200">
               <table className="min-w-full text-sm" data-testid="report-table-store">
-                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <thead className="bg-green-50/70 text-xs font-semibold text-green-900 uppercase tracking-wide">
                   <tr>
                     <th className="px-4 py-3 text-left">Boutique</th>
                     <th className="px-4 py-3 text-right">Demandes</th>
@@ -328,7 +328,7 @@ function AdminReports() {
             </h2>
             <div className="overflow-x-auto rounded-xl border border-gray-200">
               <table className="min-w-full text-sm" data-testid="report-table-detail">
-                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <thead className="bg-green-50/70 text-xs font-semibold text-green-900 uppercase tracking-wide">
                   <tr>
                     <th className="px-4 py-3 text-left">Date</th>
                     <th className="px-4 py-3 text-left">Type</th>

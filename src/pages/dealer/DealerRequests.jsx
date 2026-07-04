@@ -352,7 +352,7 @@ function DealerRequests() {
           {/* Tableau — scroll horizontal sur mobile */}
           <div className="bg-white rounded-lg shadow overflow-x-auto" data-testid="requests-table">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-green-50/70">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Boutique

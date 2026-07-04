@@ -86,7 +86,7 @@ function AdminUsers() {
             type="button"
             onClick={() => load(true)}
             disabled={loading}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           >
             {loading ? 'Chargement…' : 'Actualiser'}
           </button>
@@ -98,7 +98,7 @@ function AdminUsers() {
         <select
           value={roleFilter}
           onChange={e => setRoleFilter(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
           aria-label="Filtrer par rôle"
         >
           {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -106,7 +106,7 @@ function AdminUsers() {
         <select
           value={activeFilter}
           onChange={e => setActiveFilter(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
           aria-label="Filtrer par statut"
         >
           {ACTIVE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -117,7 +117,7 @@ function AdminUsers() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Rechercher nom ou email…"
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
             aria-label="Rechercher un utilisateur dans la page courante"
             title="Recherche dans la page courante (25 résultats max)"
           />
@@ -135,7 +135,7 @@ function AdminUsers() {
         <>
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-green-50/70">
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   <th className="px-4 py-3">Nom</th>
                   <th className="px-4 py-3">Email</th>
@@ -175,7 +175,7 @@ function AdminUsers() {
                 type="button"
                 onClick={() => load(false)}
                 disabled={loadingMore}
-                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
               >
                 {loadingMore ? 'Chargement…' : 'Charger plus'}
               </button>

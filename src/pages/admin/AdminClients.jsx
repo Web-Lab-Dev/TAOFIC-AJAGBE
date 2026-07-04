@@ -57,7 +57,7 @@ function AdminClients() {
             type="button"
             onClick={() => load(true)}
             disabled={loading}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           >
             {loading ? 'Chargement…' : 'Actualiser'}
           </button>
@@ -72,7 +72,7 @@ function AdminClients() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Nom, prénom ou téléphone…"
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
             aria-label="Rechercher dans la page courante"
             title="Recherche dans la page courante (25 résultats max)"
           />
@@ -83,7 +83,7 @@ function AdminClients() {
           value={storeId}
           onChange={e => setStoreId(e.target.value)}
           placeholder="Filtrer par ID boutique…"
-          className="w-48 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+          className="w-48 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
           aria-label="Filtrer par boutique"
         />
       </div>
@@ -98,7 +98,7 @@ function AdminClients() {
         <>
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-green-50/70">
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   <th className="px-4 py-3">Nom</th>
                   <th className="px-4 py-3">Prénom</th>
@@ -125,7 +125,7 @@ function AdminClients() {
                 type="button"
                 onClick={() => load(false)}
                 disabled={loadingMore}
-                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
               >
                 {loadingMore ? 'Chargement…' : 'Charger plus'}
               </button>

@@ -40,7 +40,7 @@ function StoreDetail({ store, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="rounded p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
             aria-label="Fermer"
           >
             ✕
@@ -161,7 +161,7 @@ function AdminStores() {
             type="button"
             onClick={() => load(true)}
             disabled={loading}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           >
             {loading ? 'Chargement…' : 'Actualiser'}
           </button>
@@ -176,7 +176,7 @@ function AdminStores() {
               key={opt.value}
               type="button"
               onClick={() => setActiveFilter(opt.value)}
-              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 ${
                 activeFilter === opt.value
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-600 hover:bg-gray-50'
@@ -193,7 +193,7 @@ function AdminStores() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Rechercher par nom…"
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
             aria-label="Rechercher une boutique dans la page courante"
             title="Recherche dans la page courante (25 résultats max)"
           />
@@ -213,7 +213,7 @@ function AdminStores() {
         <>
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-green-50/70">
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   <th className="px-4 py-3">Nom</th>
                   <th className="px-4 py-3">Email</th>
@@ -236,7 +236,7 @@ function AdminStores() {
                       <button
                         type="button"
                         onClick={() => setSelectedStore(store)}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus-visible:underline"
+                        className="text-xs font-medium text-green-600 hover:text-green-800 focus:outline-none focus-visible:underline"
                       >
                         Voir détail
                       </button>
@@ -253,7 +253,7 @@ function AdminStores() {
                 type="button"
                 onClick={() => load(false)}
                 disabled={loadingMore}
-                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
               >
                 {loadingMore ? 'Chargement…' : 'Charger plus'}
               </button>
