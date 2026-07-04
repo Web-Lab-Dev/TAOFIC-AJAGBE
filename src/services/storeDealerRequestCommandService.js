@@ -37,6 +37,7 @@ const ERROR_MESSAGES = {
   BALANCE_NOT_FOUND:        'Le solde de la boutique est introuvable.',
   INVALID_BALANCE_DATA:     'Le solde actuel est invalide. Contactez un administrateur.',
   BALANCE_OVERFLOW:         'Le nouveau solde dépasse la limite autorisée.',
+  INSUFFICIENT_DEALER_BALANCE: "L'inventaire du dealer est insuffisant pour cet approvisionnement.",
   TRANSACTION_FAILED:       "L'opération n'a pas pu être finalisée.",
 }
 

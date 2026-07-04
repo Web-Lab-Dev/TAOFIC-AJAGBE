@@ -26,6 +26,7 @@ export const DEALER_NAV_ITEMS = [
   { name: 'Vue générale', path: '/dealer' },
   { name: 'Boutiques', path: '/dealer/stores' },
   { name: 'Ravitaillements', path: '/dealer/requests' },
+  { name: 'Retours boutiques', path: '/dealer/transfers' },
   { name: 'Historique', path: '/dealer/history' },
   { name: 'Profil', path: '/dealer/profile' },
 ]

@@ -40,6 +40,19 @@ export const HTTP_CODES = {
   SETTLEMENT_DATA_INVALID:      'invalid-argument',
   // Même clé d'idempotence, payload différent (montant ou méthode)
   IDEMPOTENCY_CONFLICT:         'failed-precondition',
+  // Transferts boutique → dealer (retours de stock / liquidité)
+  INVALID_TRANSFER_TYPE:        'invalid-argument',
+  INVALID_TRANSFER_AMOUNT:      'invalid-argument',
+  INVALID_TRANSFER_ID:          'invalid-argument',
+  INVALID_TRANSFER_DATA:        'failed-precondition',
+  TRANSFER_NOT_FOUND:           'not-found',
+  TRANSFER_NOT_PENDING:         'failed-precondition',
+  TRANSFER_DEALER_MISMATCH:     'permission-denied',
+  INSUFFICIENT_STORE_BALANCE:   'failed-precondition',
+  DEALER_NOT_FOUND:             'failed-precondition',
+  // Approvisionnement de l'inventaire dealer
+  INVALID_INVENTORY_RESOURCE:   'invalid-argument',
+  INSUFFICIENT_DEALER_BALANCE:  'failed-precondition',
 }
 
 export class DealerRequestError extends Error {

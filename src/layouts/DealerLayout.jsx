@@ -3,6 +3,12 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { DEALER_NAV_ITEMS } from '../constants/navigation'
 import { subscribeDealerPendingCount } from '../services/dealerService'
+import { subscribeIncomingTransfersCount } from '../services/storeTransferService'
+import { BRAND, getRoleAccent } from '../constants/workspaceTheme'
+import WorkspaceTopbar from '../components/ui/WorkspaceTopbar'
+import DealerInventoryBar from '../components/dealer/DealerInventoryBar'
+
+const ACCENT = getRoleAccent('dealer')
 
 function PendingBadge({ count }) {
   if (!count) return null
@@ -17,8 +23,7 @@ function PendingBadge({ count }) {
   )
 }
 
-function NavItem({ item, pendingCount, onClick }) {
-  const showBadge = item.path === '/dealer/requests'
+function NavItem({ item, badgeCount = 0, onClick }) {
   return (
     <NavLink
       to={item.path}
@@ -26,21 +31,27 @@ function NavItem({ item, pendingCount, onClick }) {
       onClick={onClick}
       className={({ isActive }) =>
         `flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-          isActive
-            ? 'bg-green-700 text-white'
-            : 'text-green-100 hover:bg-green-800/60 hover:text-white'
+          isActive ? BRAND.navActive : BRAND.navIdle
         }`
       }
     >
       {item.name}
-      {showBadge && <PendingBadge count={pendingCount} />}
+      <PendingBadge count={badgeCount} />
     </NavLink>
   )
+}
+
+// Compteur de badge selon l'entrée de navigation.
+function badgeFor(path, { pendingCount, transfersCount }) {
+  if (path === '/dealer/requests') return pendingCount
+  if (path === '/dealer/transfers') return transfersCount
+  return 0
 }
 
 function DealerLayout() {
   const { logout, userProfile, currentUser } = useAuth()
   const [pendingCount, setPendingCount] = useState(0)
+  const [transfersCount, setTransfersCount] = useState(0)
   const [sidebarOpen, setSidebarOpen]   = useState(false)
 
   useEffect(() => {
@@ -53,24 +64,36 @@ function DealerLayout() {
     return unsub
   }, [currentUser, userProfile])
 
+  useEffect(() => {
+    setTransfersCount(0)
+    if (userProfile?.role !== 'dealer' || !currentUser?.uid) return undefined
+    return subscribeIncomingTransfersCount({
+      dealerUid: currentUser.uid,
+      onUpdate: setTransfersCount,
+    })
+  }, [currentUser, userProfile])
+
+  const counts = { pendingCount, transfersCount }
+
   return (
     <div className="min-h-screen bg-gray-50" data-testid="dealer-layout">
       {/* ── Sidebar desktop ──────────────────────────────────────────────────── */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-green-900 shadow-xl lg:flex">
-        <div className="flex h-16 flex-shrink-0 items-center gap-3 px-5 border-b border-green-800">
+      <aside className={`fixed inset-y-0 left-0 z-30 hidden w-56 flex-col ${BRAND.sidebar} shadow-xl lg:flex`}>
+        <div className={`h-1 ${ACCENT.bar}`} aria-hidden="true" />
+        <div className={`flex h-16 flex-shrink-0 items-center gap-3 px-5 border-b ${BRAND.sidebarBorder}`}>
           <div>
             <p className="text-lg font-bold text-white leading-none">AKAYIS</p>
-            <p className="text-[11px] text-green-300 leading-none mt-0.5">Espace Dealer</p>
+            <p className={`text-[11px] ${BRAND.sidebarMuted} leading-none mt-0.5`}>Espace Dealer</p>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5" aria-label="Navigation Dealer" data-testid="dealer-nav">
           {DEALER_NAV_ITEMS.map(item => (
-            <NavItem key={item.path} item={item} pendingCount={pendingCount} onClick={() => {}} />
+            <NavItem key={item.path} item={item} badgeCount={badgeFor(item.path, counts)} onClick={() => {}} />
           ))}
         </nav>
-        <div className="flex-shrink-0 border-t border-green-800 px-3 py-3">
+        <div className={`flex-shrink-0 border-t ${BRAND.sidebarBorder} px-3 py-3`}>
           {userProfile?.name && (
-            <p className="mb-2 truncate px-3 text-xs text-green-300">{userProfile.name}</p>
+            <p className={`mb-2 truncate px-3 text-xs ${BRAND.sidebarMuted}`}>{userProfile.name}</p>
           )}
           <button
             onClick={logout}
@@ -85,12 +108,12 @@ function DealerLayout() {
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
-          <aside className="absolute inset-y-0 left-0 w-64 flex flex-col bg-green-900 shadow-xl">
-            <div className="flex h-16 flex-shrink-0 items-center justify-between px-5 border-b border-green-800">
+          <aside className={`absolute inset-y-0 left-0 w-64 flex flex-col ${BRAND.sidebar} shadow-xl`}>
+            <div className={`flex h-16 flex-shrink-0 items-center justify-between px-5 border-b ${BRAND.sidebarBorder}`}>
               <p className="text-lg font-bold text-white">AKAYIS Dealer</p>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="rounded p-1 text-green-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
+                className={`rounded p-1 text-green-200 hover:text-white focus:outline-none focus-visible:ring-2 ${ACCENT.ring}`}
                 aria-label="Fermer le menu"
               >
                 ✕
@@ -98,12 +121,12 @@ function DealerLayout() {
             </div>
             <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5" aria-label="Navigation Dealer">
               {DEALER_NAV_ITEMS.map(item => (
-                <NavItem key={item.path} item={item} pendingCount={pendingCount} onClick={() => setSidebarOpen(false)} />
+                <NavItem key={item.path} item={item} badgeCount={badgeFor(item.path, counts)} onClick={() => setSidebarOpen(false)} />
               ))}
             </nav>
-            <div className="flex-shrink-0 border-t border-green-800 px-3 py-3">
+            <div className={`flex-shrink-0 border-t ${BRAND.sidebarBorder} px-3 py-3`}>
               {userProfile?.name && (
-                <p className="mb-2 truncate px-3 text-xs text-green-300">{userProfile.name}</p>
+                <p className={`mb-2 truncate px-3 text-xs ${BRAND.sidebarMuted}`}>{userProfile.name}</p>
               )}
               <button onClick={logout} className="w-full rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
                 Se déconnecter
@@ -125,9 +148,9 @@ function DealerLayout() {
           </svg>
         </button>
         <p className="font-bold text-green-900">AKAYIS Dealer</p>
-        {pendingCount > 0 && (
+        {(pendingCount + transfersCount) > 0 && (
           <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
-            {pendingCount > 99 ? '99+' : pendingCount}
+            {(pendingCount + transfersCount) > 99 ? '99+' : (pendingCount + transfersCount)}
           </span>
         )}
       </header>
@@ -135,6 +158,8 @@ function DealerLayout() {
       {/* ── Contenu principal ─────────────────────────────────────────────────── */}
       <div className="lg:pl-56">
         <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8">
+          <WorkspaceTopbar role="dealer" />
+          <DealerInventoryBar />
           <Outlet />
         </main>
       </div>

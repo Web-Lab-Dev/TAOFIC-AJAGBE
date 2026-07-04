@@ -1,0 +1,193 @@
+/**
+ * storeTransferService.js — Transferts boutique → dealer (retours stock/liquidité).
+ *
+ * Écritures : exclusivement via Cloud Functions (httpsCallable). Aucun write
+ * Firestore direct ici — le backend reste autoritatif (débit/crédit/restauration
+ * des soldes). Lectures : abonnements temps réel filtrés par rôle (les règles
+ * Firestore cloisonnent : boutique voit ses transferts, dealer voit les siens).
+ *
+ * Région Functions : europe-west1 (config dans src/config/firebase.js).
+ */
+
+import { httpsCallable } from 'firebase/functions'
+import {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  limit,
+} from 'firebase/firestore'
+import { functions, db } from '../config/firebase'
+import { STORE_TRANSFERS_PAGE_SIZE } from '../constants/dealerConstants'
+
+const TRANSFERS_COLLECTION = 'storeDealerTransfers'
+
+// ── Mapping des codes métier → messages UI ───────────────────────────────────
+const ERROR_MESSAGES = {
+  UNAUTHENTICATED:            'Votre session a expiré. Reconnectez-vous.',
+  PROFILE_NOT_FOUND:          'Votre profil est introuvable.',
+  PROFILE_INACTIVE:           'Votre compte est inactif.',
+  ROLE_FORBIDDEN:             "Vous n'avez pas l'autorisation d'effectuer cette action.",
+  STORE_ID_REQUIRED:          'Identifiant de boutique manquant dans votre profil.',
+  INVALID_TRANSFER_TYPE:      'Type de transfert invalide.',
+  INVALID_TRANSFER_AMOUNT:    'Montant invalide : entier strictement positif requis.',
+  INVALID_TRANSFER_ID:        'Identifiant de transfert invalide.',
+  INVALID_INVENTORY_RESOURCE: 'Ressource invalide (stock ou liquidité).',
+  INVALID_TRANSFER_DATA:      'Les données de ce transfert sont invalides.',
+  INVALID_REJECTION_REASON:   'Le motif de rejet est invalide.',
+  TRANSFER_NOT_FOUND:         'Ce transfert est introuvable.',
+  TRANSFER_NOT_PENDING:       'Ce transfert a déjà été traité.',
+  TRANSFER_DEALER_MISMATCH:   'Ce transfert ne vous est pas destiné.',
+  INSUFFICIENT_STORE_BALANCE: 'Solde insuffisant pour ce transfert.',
+  DEALER_NOT_FOUND:           'Aucun dealer disponible pour le moment.',
+  BALANCE_NOT_FOUND:          'Le solde est introuvable.',
+  INVALID_BALANCE_DATA:       'Le solde actuel est invalide. Contactez un administrateur.',
+  BALANCE_OVERFLOW:           'Le nouveau solde dépasse la limite autorisée.',
+  TRANSACTION_FAILED:         "L'opération n'a pas pu être finalisée.",
+}
+
+export function mapTransferError(err) {
+  const detailCode = err?.details?.code
+  if (detailCode && ERROR_MESSAGES[detailCode]) {
+    const mapped = new Error(ERROR_MESSAGES[detailCode])
+    mapped.code = detailCode
+    return mapped
+  }
+  const funcCode = String(err?.code || '')
+  let message = "Une erreur inattendue s'est produite."
+  let code = detailCode || ''
+  if (funcCode.includes('unauthenticated'))         { message = ERROR_MESSAGES.UNAUTHENTICATED;     code = 'UNAUTHENTICATED' }
+  else if (funcCode.includes('permission-denied'))  { message = ERROR_MESSAGES.ROLE_FORBIDDEN;       code = 'ROLE_FORBIDDEN' }
+  else if (funcCode.includes('not-found'))          { message = ERROR_MESSAGES.TRANSFER_NOT_FOUND;   code = 'TRANSFER_NOT_FOUND' }
+  else if (funcCode.includes('failed-precondition')){ message = ERROR_MESSAGES.TRANSFER_NOT_PENDING; code = 'TRANSFER_NOT_PENDING' }
+  else if (funcCode.includes('invalid-argument'))   { message = ERROR_MESSAGES.INVALID_TRANSFER_ID;  code = 'INVALID_TRANSFER_ID' }
+  const mapped = new Error(message)
+  mapped.code = code
+  return mapped
+}
+
+// ── Validation locale minimale (le backend reste autoritatif) ────────────────
+function parseAmountLocal(raw) {
+  const s = String(raw ?? '').trim()
+  if (!/^[0-9]+$/.test(s)) return null
+  const n = Number(s)
+  if (!Number.isSafeInteger(n) || n <= 0) return null
+  return n
+}
+
+// ── Commandes (callable) ─────────────────────────────────────────────────────
+
+/** Boutique : initie un retour (débit immédiat côté serveur). */
+export async function createStoreDealerTransfer({ transferType, amount }) {
+  const parsed = parseAmountLocal(amount)
+  if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
+  const callable = httpsCallable(functions, 'createStoreDealerTransfer')
+  try {
+    const result = await callable({ transferType, amount: parsed })
+    return result.data
+  } catch (err) {
+    throw mapTransferError(err)
+  }
+}
+
+/** Dealer : confirme la réception (crédit inventaire dealer). */
+export async function confirmStoreDealerTransfer(transferId) {
+  const id = String(transferId ?? '').trim()
+  if (!id) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_ID)
+  const callable = httpsCallable(functions, 'confirmStoreDealerTransfer')
+  try {
+    const result = await callable({ transferId: id })
+    return result.data
+  } catch (err) {
+    throw mapTransferError(err)
+  }
+}
+
+/** Dealer : approvisionne son inventaire (crédit stock ou liquidité). */
+export async function replenishDealerInventory({ resource, amount }) {
+  if (resource !== 'stock' && resource !== 'liquidite') throw new Error('Ressource invalide (stock ou liquidité).')
+  const parsed = parseAmountLocal(amount)
+  if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
+  const callable = httpsCallable(functions, 'replenishDealerInventory')
+  try {
+    const result = await callable({ resource, amount: parsed })
+    return result.data
+  } catch (err) {
+    throw mapTransferError(err)
+  }
+}
+
+/** Dealer : rejette (restaure le solde boutique). Motif 3–500 caractères. */
+export async function rejectStoreDealerTransfer(transferId, rejectionReason) {
+  const id = String(transferId ?? '').trim()
+  if (!id) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_ID)
+  const reason = String(rejectionReason ?? '').trim()
+  if (reason.length < 3) throw new Error('Le motif doit comporter au moins 3 caractères.')
+  if (reason.length > 500) throw new Error('Le motif ne peut pas dépasser 500 caractères.')
+  const callable = httpsCallable(functions, 'rejectStoreDealerTransfer')
+  try {
+    const result = await callable({ transferId: id, rejectionReason: reason })
+    return result.data
+  } catch (err) {
+    throw mapTransferError(err)
+  }
+}
+
+// ── Lectures temps réel ──────────────────────────────────────────────────────
+
+/** Boutique : ses propres transferts (première page, temps réel). */
+export function subscribeStoreTransfers({ storeId, onUpdate, onError } = {}) {
+  if (!storeId) { onUpdate?.([]); return () => {} }
+  const q = query(
+    collection(db, TRANSFERS_COLLECTION),
+    where('storeId', '==', storeId),
+    orderBy('createdAt', 'desc'),
+    limit(STORE_TRANSFERS_PAGE_SIZE),
+  )
+  return onSnapshot(
+    q,
+    (snap) => onUpdate?.(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(mapTransferError(err)),
+  )
+}
+
+/** Dealer : transferts entrants qui le ciblent (optionnellement filtrés par statut). */
+export function subscribeIncomingTransfers({ dealerUid, statusFilter = null, onUpdate, onError } = {}) {
+  if (!dealerUid) { onUpdate?.([]); return () => {} }
+  const constraints = [where('dealerUid', '==', dealerUid)]
+  if (statusFilter) constraints.push(where('status', '==', statusFilter))
+  constraints.push(orderBy('createdAt', 'desc'))
+  constraints.push(limit(STORE_TRANSFERS_PAGE_SIZE))
+  const q = query(collection(db, TRANSFERS_COLLECTION), ...constraints)
+  return onSnapshot(
+    q,
+    (snap) => onUpdate?.(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(mapTransferError(err)),
+  )
+}
+
+/** Dealer : compteur léger des transferts entrants en attente. */
+export function subscribeIncomingTransfersCount({ dealerUid, onUpdate } = {}) {
+  if (!dealerUid) { onUpdate?.(0); return () => {} }
+  const q = query(
+    collection(db, TRANSFERS_COLLECTION),
+    where('dealerUid', '==', dealerUid),
+    where('status', '==', 'pending'),
+  )
+  return onSnapshot(q, (snap) => onUpdate?.(snap.size), () => onUpdate?.(0))
+}
+
+/** Dealer : son inventaire (dealerBalances/{uid}) en temps réel. */
+export function subscribeDealerBalance({ dealerUid, onUpdate, onError } = {}) {
+  if (!dealerUid) { onUpdate?.({ stock: 0, liquidite: 0 }); return () => {} }
+  return onSnapshot(
+    doc(db, 'dealerBalances', dealerUid),
+    (snap) => {
+      const orange = snap.exists() ? (snap.data()?.balances?.Orange ?? {}) : {}
+      onUpdate?.({ stock: Number(orange.stock) || 0, liquidite: Number(orange.liquidite) || 0 })
+    },
+    (err) => onError?.(mapTransferError(err)),
+  )
+}

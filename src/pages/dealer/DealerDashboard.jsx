@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { listActiveStores, listDealerRequests, subscribeDealerPendingCount } from '../../services/dealerService'
+import { subscribeIncomingTransfersCount } from '../../services/storeTransferService'
 import { formatCurrency } from '../../utils/formatCurrency'
 import StatCard from '../../components/ui/StatCard'
 import PageHeader from '../../components/ui/PageHeader'
@@ -27,6 +28,7 @@ function DealerDashboard() {
   const navigate = useNavigate()
 
   const [pendingCount, setPendingCount]   = useState(0)
+  const [transfersCount, setTransfersCount] = useState(0)
   const [storeCount, setStoreCount]       = useState(null)
   const [recentReqs, setRecentReqs]       = useState([])
   const [kpiLoading, setKpiLoading]       = useState(true)
@@ -42,6 +44,12 @@ function DealerDashboard() {
       onUpdate: setPendingCount,
     })
     return unsub
+  }, [currentUser, userProfile])
+
+  // Retours boutiques en attente (temps réel)
+  useEffect(() => {
+    if (userProfile?.role !== 'dealer' || !currentUser?.uid) return undefined
+    return subscribeIncomingTransfersCount({ dealerUid: currentUser.uid, onUpdate: setTransfersCount })
   }, [currentUser, userProfile])
 
   const loadKpi = useCallback(async () => {
@@ -102,7 +110,7 @@ function DealerDashboard() {
         ) : kpiLoading ? (
           <SkeletonCards count={3} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Boutiques partenaires" value={storeCount ?? '—'} color="green" icon="🏪" />
             <StatCard
               label="Demandes en attente"
@@ -110,6 +118,13 @@ function DealerDashboard() {
               color={pendingCount > 0 ? 'amber' : 'green'}
               icon="📋"
               onClick={() => navigate('/dealer/requests')}
+            />
+            <StatCard
+              label="Retours en attente"
+              value={transfersCount}
+              color={transfersCount > 0 ? 'amber' : 'green'}
+              icon="📥"
+              onClick={() => navigate('/dealer/transfers')}
             />
             <StatCard label="Mes demandes récentes" value={recentReqs.length} color="teal" icon="📊" />
           </div>

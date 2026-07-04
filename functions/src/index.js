@@ -23,6 +23,10 @@ import { confirmDealerClosureHandler } from './closures/confirmDealerClosure.js'
 import { rejectDealerClosureHandler } from './closures/rejectDealerClosure.js'
 import { addTransactionPaymentHandler } from './settlements/addTransactionPayment.js'
 import { addTransactionRefundHandler } from './settlements/addTransactionRefund.js'
+import { createStoreDealerTransferHandler } from './storeTransfers/createStoreDealerTransfer.js'
+import { confirmStoreDealerTransferHandler } from './storeTransfers/confirmStoreDealerTransfer.js'
+import { rejectStoreDealerTransferHandler } from './storeTransfers/rejectStoreDealerTransfer.js'
+import { replenishDealerInventoryHandler } from './storeTransfers/replenishDealerInventory.js'
 
 // Garde idempotente : évite "App named '[DEFAULT]' already exists" lors des imports
 // dans les tests d'intégration (TC-036) qui s'exécutent après TC-035 dans le même processus.
@@ -63,4 +67,24 @@ export const addTransactionPayment = onCall(
 export const addTransactionRefund = onCall(
   { region: 'europe-west1', enforceAppCheck: false },
   wrapCallable(addTransactionRefundHandler, deps)
+)
+
+export const createStoreDealerTransfer = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(createStoreDealerTransferHandler, deps)
+)
+
+export const confirmStoreDealerTransfer = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(confirmStoreDealerTransferHandler, deps)
+)
+
+export const rejectStoreDealerTransfer = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(rejectStoreDealerTransferHandler, deps)
+)
+
+export const replenishDealerInventory = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(replenishDealerInventoryHandler, deps)
 )

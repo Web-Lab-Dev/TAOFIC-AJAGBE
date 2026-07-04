@@ -40,6 +40,7 @@ import DealerDashboard from './pages/dealer/DealerDashboard.jsx'
 import DealerStores from './pages/dealer/DealerStores.jsx'
 import DealerRequests from './pages/dealer/DealerRequests.jsx'
 import NewDealerRequest from './pages/dealer/NewDealerRequest.jsx'
+import DealerTransfers from './pages/dealer/DealerTransfers.jsx'
 import DealerHistory from './pages/dealer/DealerHistory.jsx'
 import DealerProfile from './pages/dealer/DealerProfile.jsx'
 
@@ -144,6 +145,7 @@ export function AppContent() {
         <Route path="/dealer/stores" element={<DealerStores />} />
         <Route path="/dealer/requests" element={<DealerRequests />} />
         <Route path="/dealer/requests/new" element={<NewDealerRequest />} />
+        <Route path="/dealer/transfers" element={<DealerTransfers />} />
         <Route path="/dealer/history" element={<DealerHistory />} />
         <Route path="/dealer/profile" element={<DealerProfile />} />
       </Route>

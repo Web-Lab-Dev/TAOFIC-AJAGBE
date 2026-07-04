@@ -258,6 +258,35 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Transferts boutique → dealer (retours de stock/liquidité)
+    // Toutes les écritures via Cloud Functions (Admin SDK) — le débit/
+    // crédit/restauration des soldes est autoritatif côté serveur.
+    // Dealer lit les transferts qui lui sont destinés ; boutique lit les siens.
+    // ─────────────────────────────────────────────────────────────
+
+    match /storeDealerTransfers/{transferId} {
+      allow read: if isDealer() && resource.data.dealerUid == request.auth.uid;
+      allow read: if isStoreAdmin(resource.data.storeId);
+      allow read: if isSystemManager();
+      allow create, update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Inventaire dealer (soldes + audit) — écritures via Cloud Functions.
+    // Chaque dealer ne lit que son propre inventaire ; gérant lit tout.
+    // ─────────────────────────────────────────────────────────────
+
+    match /dealerBalances/{dealerUid} {
+      allow read: if (isDealer() && dealerUid == request.auth.uid) || isSystemManager();
+      allow create, update, delete: if false;
+
+      match /auditLogs/{logId} {
+        allow read: if (isDealer() && dealerUid == request.auth.uid) || isSystemManager();
+        allow write: if false;
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Données par boutique (V1)
     // ─────────────────────────────────────────────────────────────
 

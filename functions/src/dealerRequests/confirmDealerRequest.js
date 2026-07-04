@@ -26,6 +26,7 @@ import {
   getBalanceField,
   buildAuditEntry,
 } from './shared.js'
+import { readDealerBalanceAmount } from '../storeTransfers/shared.js'
 
 export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
@@ -83,6 +84,11 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
       let previousBalance, newBalance, balUpdatePayload
       let previousLiquidityBalance = null
       let newLiquidityBalance      = null
+      // Cohérence inventaire dealer : décrément à l'approvisionnement (stock_add /
+      // liquidity_add). Garde d'amorçage : si le dealer n'a pas encore de document
+      // dealerBalances, on NE décrémente PAS (transition avant amorçage).
+      // La lecture DOIT précéder les écritures (règle des transactions Firestore).
+      let dealerDebit = null
 
       if (reqData.requestType === 'open_day') {
         // Ouverture du jour : définit stock ET liquidité (pas d'addition)
@@ -120,6 +126,25 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
           [`balances.Orange.${balField}`]: newBalance,
           updatedAt: now,
         }
+
+        // Décrément inventaire dealer (même champ) si l'inventaire est amorcé.
+        const dealerBalRef  = db.doc(`dealerBalances/${reqData.dealerUid}`)
+        const dealerBalSnap = await t.get(dealerBalRef)
+        if (dealerBalSnap.exists) {
+          const previousDealerBalance = readDealerBalanceAmount(dealerBalSnap.data(), balField)
+          if (previousDealerBalance < reqData.amount) {
+            throw new DealerRequestError(
+              'INSUFFICIENT_DEALER_BALANCE',
+              "L'inventaire du dealer est insuffisant pour cet approvisionnement."
+            )
+          }
+          dealerDebit = {
+            ref: dealerBalRef,
+            field: balField,
+            previous: previousDealerBalance,
+            next: previousDealerBalance - reqData.amount,
+          }
+        }
       }
 
       // Mise à jour de la demande (les champs liquidity sont null pour stock_add/liquidity_add)
@@ -139,6 +164,30 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
 
       // Mise à jour du solde (chemin pointé pour préserver les autres réseaux)
       t.update(balRef, balUpdatePayload)
+
+      // Décrément inventaire dealer + audit dealer (si amorcé)
+      if (dealerDebit) {
+        t.update(dealerDebit.ref, {
+          [`balances.Orange.${dealerDebit.field}`]: dealerDebit.next,
+          updatedAt: now,
+        })
+        const dealerAuditRef = db.collection(`dealerBalances/${reqData.dealerUid}/auditLogs`).doc()
+        t.set(dealerAuditRef, {
+          action:          'DEALER_SUPPLY_DEBIT',
+          actorUid,
+          actorRole:       'store_admin',
+          actorStoreId,
+          requestId,
+          dealerUid:       reqData.dealerUid,
+          requestType:     reqData.requestType,
+          network:         'Orange',
+          resource:        dealerDebit.field,
+          amount:          reqData.amount,
+          previousBalance: dealerDebit.previous,
+          newBalance:      dealerDebit.next,
+          createdAt:       now,
+        })
+      }
 
       // Piste d'audit dans clients/{storeId}/auditLogs
       const auditRef = db.collection(`clients/${actorStoreId}/auditLogs`).doc()

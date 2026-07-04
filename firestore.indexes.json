@@ -104,6 +104,40 @@
       ]
     },
     {
+      "collectionGroup": "storeDealerTransfers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dealerUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "storeDealerTransfers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dealerUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "storeDealerTransfers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "storeId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "storeDealerTransfers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "storeId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "settlements",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
