@@ -52,6 +52,30 @@ export function validateTransferId(transferId) {
   return transferId.trim()
 }
 
+// ── Partenaire (dénormalisé, sans impact financier) ──────────────────────────
+// On valide juste des chaînes non vides et bornées : l'identité du partenaire
+// n'affecte pas les soldes (seul l'inventaire du dealer bouge).
+export function validatePartnerInput(data) {
+  const str = (v, field, { max = 120, required = true } = {}) => {
+    if (v == null || v === '') {
+      if (required) throw new DealerRequestError('INVALID_PARTNER', `Champ partenaire manquant : ${field}.`)
+      return null
+    }
+    if (typeof v !== 'string') throw new DealerRequestError('INVALID_PARTNER', `Champ partenaire invalide : ${field}.`)
+    const t = v.trim()
+    if (required && t === '') throw new DealerRequestError('INVALID_PARTNER', `Champ partenaire vide : ${field}.`)
+    if (t.length > max) throw new DealerRequestError('INVALID_PARTNER', `Champ partenaire trop long : ${field}.`)
+    return t
+  }
+  return {
+    partnerId: str(data.partnerId, 'partnerId'),
+    partnerNom: str(data.partnerNom, 'partnerNom'),
+    partnerPrenom: str(data.partnerPrenom, 'partnerPrenom', { required: false }),
+    partnerNumeroDA: str(data.partnerNumeroDA, 'partnerNumeroDA', { required: false }),
+    partnerLocalite: str(data.partnerLocalite, 'partnerLocalite', { required: false }),
+  }
+}
+
 // ── Profil dealer (actif, role dealer) ───────────────────────────────────────
 export function validateDealerProfile(profile) {
   if (!profile || typeof profile !== 'object') {

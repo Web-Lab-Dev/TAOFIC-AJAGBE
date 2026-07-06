@@ -287,6 +287,16 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Dépôts partenaires (sous-dealers hors boîte) — écritures via CF.
+    // Immédiats, sans confirmation. Le dealer lit les siens ; gérant lit tout.
+    // ─────────────────────────────────────────────────────────────
+
+    match /dealerPartnerDeposits/{depositId} {
+      allow read: if (isDealer() && resource.data.dealerUid == request.auth.uid) || isSystemManager();
+      allow create, update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Données par boutique (V1)
     // ─────────────────────────────────────────────────────────────
 

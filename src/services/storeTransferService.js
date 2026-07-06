@@ -35,6 +35,7 @@ const ERROR_MESSAGES = {
   INVALID_TRANSFER_AMOUNT:    'Montant invalide : entier strictement positif requis.',
   INVALID_TRANSFER_ID:        'Identifiant de transfert invalide.',
   INVALID_INVENTORY_RESOURCE: 'Ressource invalide (stock ou liquidité).',
+  INVALID_PARTNER:            'Partenaire invalide.',
   INVALID_TRANSFER_DATA:      'Les données de ce transfert sont invalides.',
   INVALID_REJECTION_REASON:   'Le motif de rejet est invalide.',
   TRANSFER_NOT_FOUND:         'Ce transfert est introuvable.',
@@ -138,7 +139,44 @@ export async function rejectStoreDealerTransfer(transferId, rejectionReason) {
   }
 }
 
+/** Dealer : dépôt partenaire (−stock +liquidité 1:1 sur son inventaire). */
+export async function createPartnerDeposit({ partner, amount }) {
+  if (!partner || !partner.id) throw new Error(ERROR_MESSAGES.INVALID_PARTNER)
+  const parsed = parseAmountLocal(amount)
+  if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
+  const callable = httpsCallable(functions, 'createPartnerDeposit')
+  try {
+    const result = await callable({
+      partnerId: partner.id,
+      partnerNom: partner.nom ?? '',
+      partnerPrenom: partner.prenom ?? '',
+      partnerNumeroDA: partner.numeroDA ?? '',
+      partnerLocalite: partner.localite ?? '',
+      amount: parsed,
+    })
+    return result.data
+  } catch (err) {
+    throw mapTransferError(err)
+  }
+}
+
 // ── Lectures temps réel ──────────────────────────────────────────────────────
+
+/** Dealer : ses dépôts partenaires (première page, temps réel). */
+export function subscribePartnerDeposits({ dealerUid, onUpdate, onError } = {}) {
+  if (!dealerUid) { onUpdate?.([]); return () => {} }
+  const q = query(
+    collection(db, 'dealerPartnerDeposits'),
+    where('dealerUid', '==', dealerUid),
+    orderBy('createdAt', 'desc'),
+    limit(STORE_TRANSFERS_PAGE_SIZE),
+  )
+  return onSnapshot(
+    q,
+    (snap) => onUpdate?.(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(mapTransferError(err)),
+  )
+}
 
 /** Boutique : ses propres transferts (première page, temps réel). */
 export function subscribeStoreTransfers({ storeId, onUpdate, onError } = {}) {

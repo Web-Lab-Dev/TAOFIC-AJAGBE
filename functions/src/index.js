@@ -27,6 +27,7 @@ import { createStoreDealerTransferHandler } from './storeTransfers/createStoreDe
 import { confirmStoreDealerTransferHandler } from './storeTransfers/confirmStoreDealerTransfer.js'
 import { rejectStoreDealerTransferHandler } from './storeTransfers/rejectStoreDealerTransfer.js'
 import { replenishDealerInventoryHandler } from './storeTransfers/replenishDealerInventory.js'
+import { createPartnerDepositHandler } from './storeTransfers/createPartnerDeposit.js'
 
 // Garde idempotente : évite "App named '[DEFAULT]' already exists" lors des imports
 // dans les tests d'intégration (TC-036) qui s'exécutent après TC-035 dans le même processus.
@@ -87,4 +88,9 @@ export const rejectStoreDealerTransfer = onCall(
 export const replenishDealerInventory = onCall(
   { region: 'europe-west1', enforceAppCheck: false },
   wrapCallable(replenishDealerInventoryHandler, deps)
+)
+
+export const createPartnerDeposit = onCall(
+  { region: 'europe-west1', enforceAppCheck: false },
+  wrapCallable(createPartnerDepositHandler, deps)
 )

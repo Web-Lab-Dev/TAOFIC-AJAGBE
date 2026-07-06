@@ -64,6 +64,9 @@ async function seedAll() {
 
   await seedDocument(testEnv, 'dealerBalances', 'dealer-a-uid', { balances: { Orange: { stock: 5000, liquidite: 0 } } })
   await seedDocument(testEnv, 'dealerBalances/dealer-a-uid/auditLogs', 'log-1', { action: 'STORE_DEALER_TRANSFER_CONFIRMED', amount: 5000 })
+
+  await seedDocument(testEnv, 'dealerPartnerDeposits', 'dep-a', { dealerUid: 'dealer-a-uid', partnerId: '54525263', amount: 5000, status: 'confirmed' })
+  await seedDocument(testEnv, 'dealerPartnerDeposits', 'dep-b', { dealerUid: 'dealer-b-uid', partnerId: '75750889', amount: 3000, status: 'confirmed' })
 }
 
 const fs = (uid) => getAuthenticatedContext(testEnv, uid).firestore()
@@ -149,5 +152,29 @@ describe('dealerBalances — lecture / écriture', () => {
   it('dealer écrit un auditLog → deny', async () => {
     await seedAll()
     await assertFails(setDoc(doc(fs('dealer-a-uid'), 'dealerBalances/dealer-a-uid/auditLogs', 'hack'), { action: 'x' }))
+  })
+})
+
+// ── dealerPartnerDeposits : lecture + écritures ──────────────────────────────
+describe('dealerPartnerDeposits — lecture / écriture', () => {
+  it('dealer lit son propre dépôt → allow', async () => {
+    await seedAll()
+    await assertSucceeds(getDoc(doc(fs('dealer-a-uid'), 'dealerPartnerDeposits', 'dep-a')))
+  })
+  it('dealer ne lit pas le dépôt d’un autre → deny', async () => {
+    await seedAll()
+    await assertFails(getDoc(doc(fs('dealer-a-uid'), 'dealerPartnerDeposits', 'dep-b')))
+  })
+  it('boutique → deny', async () => {
+    await seedAll()
+    await assertFails(getDoc(doc(fs('store-admin-a-uid'), 'dealerPartnerDeposits', 'dep-a')))
+  })
+  it('system_manager lit → allow', async () => {
+    await seedAll()
+    await assertSucceeds(getDoc(doc(fs('system-mgr-uid'), 'dealerPartnerDeposits', 'dep-a')))
+  })
+  it('dealer crée un dépôt directement → deny (CF only)', async () => {
+    await seedAll()
+    await assertFails(setDoc(doc(fs('dealer-a-uid'), 'dealerPartnerDeposits', 'hack'), { dealerUid: 'dealer-a-uid', partnerId: 'x', amount: 1, status: 'confirmed' }))
   })
 })

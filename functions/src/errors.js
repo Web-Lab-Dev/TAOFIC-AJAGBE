@@ -53,6 +53,8 @@ export const HTTP_CODES = {
   // Approvisionnement de l'inventaire dealer
   INVALID_INVENTORY_RESOURCE:   'invalid-argument',
   INSUFFICIENT_DEALER_BALANCE:  'failed-precondition',
+  // Dépôt partenaire (sous-dealer hors boîte)
+  INVALID_PARTNER:              'invalid-argument',
 }
 
 export class DealerRequestError extends Error {

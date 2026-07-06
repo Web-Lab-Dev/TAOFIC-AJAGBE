@@ -138,6 +138,14 @@
       ]
     },
     {
+      "collectionGroup": "dealerPartnerDeposits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dealerUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "settlements",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
