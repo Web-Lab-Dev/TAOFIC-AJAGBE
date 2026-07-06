@@ -15,16 +15,21 @@
  *
  * Sécurité :
  *   - DRY-RUN par défaut ; n'écrit rien sans --execute.
- *   - Garde-fou projet strict (resolveAndAssertAdminProject).
+ *   - Restauration = opération de PRODUCTION légitime. Contrairement aux scripts
+ *     d'audit (bloqués hors `demo-`), ce script accepte un projet de production,
+ *     MAIS toute ÉCRITURE en prod (--execute) exige une confirmation explicite :
+ *     la variable AKAYIS_CONFIRM_PRODUCTION_RESTORE=true. Le dry-run (lecture
+ *     seule) reste autorisé sans confirmation, quel que soit le projet.
  *   - Idempotent : ré-exécutable sans effet de bord destructeur.
  *   - Aucune suppression. Aucune donnée métier touchée.
  *
  * Usage :
+ *   # 1) Diagnostic à blanc (aucune écriture, prod ou demo) :
  *   GOOGLE_APPLICATION_CREDENTIALS=/chemin/serviceAccount.json \
- *     node scripts/restoreDeletedAccount.mjs --email=akayisouaga@gmail.com
- *   # puis, après vérification du plan :
- *   GOOGLE_APPLICATION_CREDENTIALS=... \
- *     node scripts/restoreDeletedAccount.mjs --email=akayisouaga@gmail.com --execute
+ *     node scripts/restoreDeletedAccount.mjs --email=compte@example.com
+ *   # 2) Restauration réelle en PRODUCTION (confirmation explicite requise) :
+ *   GOOGLE_APPLICATION_CREDENTIALS=... AKAYIS_CONFIRM_PRODUCTION_RESTORE=true \
+ *     node scripts/restoreDeletedAccount.mjs --email=compte@example.com --execute
  */
 
 import { readFile } from 'node:fs/promises'
@@ -32,7 +37,6 @@ import { randomBytes } from 'node:crypto'
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
-import { resolveAndAssertAdminProject } from './lib/resolveAndAssertAdminProject.mjs'
 
 // ── Arguments ────────────────────────────────────────────────────────────────
 const getArg = (name) => {
@@ -55,10 +59,36 @@ if (!serviceAccountPath) {
 }
 
 const serviceAccount = JSON.parse(await readFile(serviceAccountPath, 'utf8'))
-const projectId = resolveAndAssertAdminProject({
-  serviceAccount,
-  envProjectId: process.env.GCLOUD_PROJECT,
-})
+
+// ── Résolution du projet + garde de production dédiée ────────────────────────
+// (Ce script est un outil de restauration : il PEUT viser la production, à la
+//  différence des scripts d'audit bloqués hors `demo-`. On applique donc une
+//  confirmation explicite pour les écritures prod plutôt qu'un blocage total.)
+const rawProjectId = serviceAccount.project_id
+if (typeof rawProjectId !== 'string' || rawProjectId.trim() === '') {
+  console.error('Le service account ne contient pas de project_id valide. Opération bloquée.')
+  process.exit(1)
+}
+const projectId = rawProjectId.trim()
+
+const envProject = String(process.env.GCLOUD_PROJECT || '').trim()
+if (envProject && envProject !== projectId) {
+  console.error(`Incohérence : service account "${projectId}" vs GCLOUD_PROJECT "${envProject}". Opération bloquée.`)
+  process.exit(1)
+}
+
+const isProduction = !projectId.startsWith('demo-')
+const productionConfirmed = process.env.AKAYIS_CONFIRM_PRODUCTION_RESTORE === 'true'
+if (isProduction && execute && !productionConfirmed) {
+  console.error(
+    [
+      `Restauration RÉELLE demandée sur un projet de PRODUCTION : "${projectId}".`,
+      'Pour confirmer volontairement, relancez avec la variable AKAYIS_CONFIRM_PRODUCTION_RESTORE=true.',
+      '(Le dry-run — sans --execute — reste autorisé sans confirmation.)',
+    ].join('\n')
+  )
+  process.exit(1)
+}
 
 initializeApp({ credential: cert(serviceAccount) })
 const auth = getAuth()

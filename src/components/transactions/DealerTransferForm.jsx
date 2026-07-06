@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../hooks/useToast'
 import { useSimpleNetworkData } from '../../hooks/useSimpleNetworkData'
@@ -40,6 +40,7 @@ function DealerTransferForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pending, setPending] = useState(null) // confirmation modal
   const [transfers, setTransfers] = useState([])
+  const submittingRef = useRef(false) // verrou synchrone anti-double-clic (débit)
 
   const storeId = userProfile?.storeId
 
@@ -71,7 +72,10 @@ function DealerTransferForm() {
   }, [validation, transferType, showToast])
 
   const confirmSubmit = useCallback(async () => {
-    if (!pending) return
+    // Verrou synchrone : empêche un double-clic de déclencher deux débits avant
+    // que setIsSubmitting(true) (asynchrone) ne prenne effet.
+    if (!pending || submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
     try {
       await createStoreDealerTransfer({ transferType: pending.transferType, amount: pending.amount })
@@ -82,6 +86,7 @@ function DealerTransferForm() {
       showToast(err?.message || "Échec de l'envoi au dealer", 'error')
     } finally {
       setIsSubmitting(false)
+      submittingRef.current = false
     }
   }, [pending, showToast])
 

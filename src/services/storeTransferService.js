@@ -49,20 +49,23 @@ const ERROR_MESSAGES = {
 }
 
 export function mapTransferError(err) {
+  // Le code métier (details.code) est prioritaire et distingue précisément les
+  // cas (solde insuffisant, déjà traité, etc.). On ne retombe JAMAIS sur un
+  // message spécifique trompeur : le repli par catégorie reste neutre.
   const detailCode = err?.details?.code
-  if (detailCode && ERROR_MESSAGES[detailCode]) {
-    const mapped = new Error(ERROR_MESSAGES[detailCode])
+  if (detailCode) {
+    const mapped = new Error(ERROR_MESSAGES[detailCode] || "L'opération n'a pas pu être finalisée.")
     mapped.code = detailCode
     return mapped
   }
   const funcCode = String(err?.code || '')
   let message = "Une erreur inattendue s'est produite."
-  let code = detailCode || ''
-  if (funcCode.includes('unauthenticated'))         { message = ERROR_MESSAGES.UNAUTHENTICATED;     code = 'UNAUTHENTICATED' }
-  else if (funcCode.includes('permission-denied'))  { message = ERROR_MESSAGES.ROLE_FORBIDDEN;       code = 'ROLE_FORBIDDEN' }
-  else if (funcCode.includes('not-found'))          { message = ERROR_MESSAGES.TRANSFER_NOT_FOUND;   code = 'TRANSFER_NOT_FOUND' }
-  else if (funcCode.includes('failed-precondition')){ message = ERROR_MESSAGES.TRANSFER_NOT_PENDING; code = 'TRANSFER_NOT_PENDING' }
-  else if (funcCode.includes('invalid-argument'))   { message = ERROR_MESSAGES.INVALID_TRANSFER_ID;  code = 'INVALID_TRANSFER_ID' }
+  let code = ''
+  if (funcCode.includes('unauthenticated'))          { message = ERROR_MESSAGES.UNAUTHENTICATED;  code = 'UNAUTHENTICATED' }
+  else if (funcCode.includes('permission-denied'))   { message = ERROR_MESSAGES.ROLE_FORBIDDEN;    code = 'ROLE_FORBIDDEN' }
+  else if (funcCode.includes('not-found'))           { message = ERROR_MESSAGES.TRANSFER_NOT_FOUND; code = 'TRANSFER_NOT_FOUND' }
+  else if (funcCode.includes('failed-precondition')) { message = "Opération impossible dans l'état actuel."; code = 'FAILED_PRECONDITION' }
+  else if (funcCode.includes('invalid-argument'))    { message = 'Données invalides.'; code = 'INVALID_ARGUMENT' }
   const mapped = new Error(message)
   mapped.code = code
   return mapped

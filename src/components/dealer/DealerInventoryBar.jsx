@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../hooks/useToast'
 import { subscribeDealerBalance, replenishDealerInventory } from '../../services/storeTransferService'
@@ -18,6 +18,7 @@ function DealerInventoryBar() {
   const [replenish, setReplenish] = useState(null) // { resource } | null
   const [amount, setAmount] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const submittingRef = useRef(false) // verrou synchrone anti-double-clic
 
   const dealerUid = currentUser?.uid
   const isDealer = userProfile?.role === 'dealer'
@@ -28,7 +29,8 @@ function DealerInventoryBar() {
   }, [dealerUid, isDealer])
 
   const submit = useCallback(async () => {
-    if (!replenish) return
+    if (!replenish || submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     try {
       await replenishDealerInventory({ resource: replenish.resource, amount })
@@ -39,6 +41,7 @@ function DealerInventoryBar() {
       showToast(err?.message || "Échec de l'approvisionnement", 'error')
     } finally {
       setSubmitting(false)
+      submittingRef.current = false
     }
   }, [replenish, amount, showToast])
 
