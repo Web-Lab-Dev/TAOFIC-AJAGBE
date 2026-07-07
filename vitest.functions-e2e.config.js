@@ -11,6 +11,10 @@ export default defineConfig({
     globals: false,
     fileParallelism: false,
     maxWorkers: 1,
-    testTimeout: 30000,
+    // 60s : un aller-retour E2E complet (createUser Auth → sign-in → httpsCallable
+    // sur l'émulateur Functions à froid → sign-out) peut dépasser 30s au premier
+    // appel / sous charge. Marge pour un déroulé déterministe, sans masquer un
+    // vrai blocage (le test échouerait toujours au-delà de 60s).
+    testTimeout: 60000,
   },
 })

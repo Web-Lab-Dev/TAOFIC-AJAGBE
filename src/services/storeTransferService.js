@@ -43,6 +43,7 @@ const ERROR_MESSAGES = {
   TRANSFER_DEALER_MISMATCH:   'Ce transfert ne vous est pas destiné.',
   INSUFFICIENT_STORE_BALANCE: 'Solde insuffisant pour ce transfert.',
   DEALER_NOT_FOUND:           'Aucun dealer disponible pour le moment.',
+  MULTIPLE_DEALERS_ACTIVE:    'Configuration invalide : plusieurs dealers actifs. Contactez un administrateur.',
   BALANCE_NOT_FOUND:          'Le solde est introuvable.',
   INVALID_BALANCE_DATA:       'Le solde actuel est invalide. Contactez un administrateur.',
   BALANCE_OVERFLOW:           'Le nouveau solde dépasse la limite autorisée.',

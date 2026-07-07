@@ -13,13 +13,13 @@
  *   2) document users/{uid} encore présent (email == cible)   → doc.id
  *   3) document stores/{id} (email == cible)                  → store.adminUid
  *
- * Sécurité :
+ * Sécurité (audit) :
  *   - DRY-RUN par défaut ; n'écrit rien sans --execute.
- *   - Restauration = opération de PRODUCTION légitime. Contrairement aux scripts
- *     d'audit (bloqués hors `demo-`), ce script accepte un projet de production,
- *     MAIS toute ÉCRITURE en prod (--execute) exige une confirmation explicite :
- *     la variable AKAYIS_CONFIRM_PRODUCTION_RESTORE=true. Le dry-run (lecture
- *     seule) reste autorisé sans confirmation, quel que soit le projet.
+ *   - Le DRY-RUN (lecture seule) est autorisé sur tout projet, y compris la
+ *     production, pour permettre le diagnostic.
+ *   - L'ÉCRITURE (--execute) est cantonnée aux projets demo-* : toute tentative
+ *     d'exécution sur taofic-ajagbe (ou tout projet non demo-) est REFUSÉE.
+ *     Le dépôt ne contient donc aucun chemin d'écriture production pendant l'audit.
  *   - Idempotent : ré-exécutable sans effet de bord destructeur.
  *   - Aucune suppression. Aucune donnée métier touchée.
  *
@@ -27,8 +27,8 @@
  *   # 1) Diagnostic à blanc (aucune écriture, prod ou demo) :
  *   GOOGLE_APPLICATION_CREDENTIALS=/chemin/serviceAccount.json \
  *     node scripts/restoreDeletedAccount.mjs --email=compte@example.com
- *   # 2) Restauration réelle en PRODUCTION (confirmation explicite requise) :
- *   GOOGLE_APPLICATION_CREDENTIALS=... AKAYIS_CONFIRM_PRODUCTION_RESTORE=true \
+ *   # 2) Restauration réelle (émulateur / projet demo-* uniquement) :
+ *   GOOGLE_APPLICATION_CREDENTIALS=/chemin/demoServiceAccount.json \
  *     node scripts/restoreDeletedAccount.mjs --email=compte@example.com --execute
  */
 
@@ -37,6 +37,7 @@ import { randomBytes } from 'node:crypto'
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { resolveRestoreProject, AssertFirebaseProjectError } from './lib/assertRestoreProject.mjs'
 
 // ── Arguments ────────────────────────────────────────────────────────────────
 const getArg = (name) => {
@@ -60,34 +61,25 @@ if (!serviceAccountPath) {
 
 const serviceAccount = JSON.parse(await readFile(serviceAccountPath, 'utf8'))
 
-// ── Résolution du projet + garde de production dédiée ────────────────────────
-// (Ce script est un outil de restauration : il PEUT viser la production, à la
-//  différence des scripts d'audit bloqués hors `demo-`. On applique donc une
-//  confirmation explicite pour les écritures prod plutôt qu'un blocage total.)
-const rawProjectId = serviceAccount.project_id
-if (typeof rawProjectId !== 'string' || rawProjectId.trim() === '') {
-  console.error('Le service account ne contient pas de project_id valide. Opération bloquée.')
-  process.exit(1)
-}
-const projectId = rawProjectId.trim()
-
-const envProject = String(process.env.GCLOUD_PROJECT || '').trim()
-if (envProject && envProject !== projectId) {
-  console.error(`Incohérence : service account "${projectId}" vs GCLOUD_PROJECT "${envProject}". Opération bloquée.`)
-  process.exit(1)
-}
-
-const isProduction = !projectId.startsWith('demo-')
-const productionConfirmed = process.env.AKAYIS_CONFIRM_PRODUCTION_RESTORE === 'true'
-if (isProduction && execute && !productionConfirmed) {
-  console.error(
-    [
-      `Restauration RÉELLE demandée sur un projet de PRODUCTION : "${projectId}".`,
-      'Pour confirmer volontairement, relancez avec la variable AKAYIS_CONFIRM_PRODUCTION_RESTORE=true.',
-      '(Le dry-run — sans --execute — reste autorisé sans confirmation.)',
-    ].join('\n')
-  )
-  process.exit(1)
+// ── Résolution du projet + garde d'écriture (émulateur-only pour --execute) ──
+// Le DRY-RUN (lecture seule) est autorisé sur tout projet ; --execute est
+// cantonné aux projets demo-* (aucune écriture production pendant l'audit).
+let projectId
+try {
+  projectId = resolveRestoreProject({
+    serviceAccount,
+    envProjectId: process.env.GCLOUD_PROJECT,
+    execute,
+  })
+} catch (error) {
+  if (error instanceof AssertFirebaseProjectError) {
+    console.error(`Opération bloquée [${error.code}] : ${error.message}`)
+    if (execute) {
+      console.error('Le DRY-RUN (sans --execute) reste autorisé pour diagnostiquer, y compris en production.')
+    }
+    process.exit(1)
+  }
+  throw error
 }
 
 initializeApp({ credential: cert(serviceAccount) })

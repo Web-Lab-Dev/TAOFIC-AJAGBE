@@ -137,16 +137,28 @@ export function readDealerBalanceAmount(balanceData, field) {
 }
 
 // ── Résolution du dealer unique (compte role==='dealer' actif) ───────────────
+// Règle métier : il ne peut exister qu'UN SEUL dealer actif dans tout le système.
+// On lit jusqu'à 2 dealers pour détecter une violation d'invariant plutôt que de
+// choisir arbitrairement le premier (limit(1) masquerait le problème).
+//   size === 0 → DEALER_NOT_FOUND
+//   size  >  1 → MULTIPLE_DEALERS_ACTIVE (invariant violé, aucune opération)
+//   size === 1 → dealer résolu
 // Deux égalités sans orderBy → aucune index composite requise.
 export async function resolveSingleDealer(db) {
   const snap = await db
     .collection('users')
     .where('role', '==', 'dealer')
     .where('active', '==', true)
-    .limit(1)
+    .limit(2)
     .get()
   if (snap.empty) {
     throw new DealerRequestError('DEALER_NOT_FOUND', 'Aucun dealer actif disponible.')
+  }
+  if (snap.size > 1) {
+    throw new DealerRequestError(
+      'MULTIPLE_DEALERS_ACTIVE',
+      'Plusieurs dealers actifs détectés : configuration invalide. Un seul dealer actif est autorisé.'
+    )
   }
   const doc = snap.docs[0]
   const data = doc.data()

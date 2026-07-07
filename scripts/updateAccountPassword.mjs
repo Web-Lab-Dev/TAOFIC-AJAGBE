@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { resolveAndAssertAdminProject, AssertFirebaseProjectError } from './lib/resolveAndAssertAdminProject.mjs'
 
 const email = String(process.env.AKAYIS_LOGIN_EMAIL || process.env.npm_config_email || '').trim().toLowerCase()
 const password = String(process.env.AKAYIS_LOGIN_PASSWORD || '')
@@ -14,11 +15,24 @@ if (!serviceAccountPath) {
   process.exit(1)
 }
 
+// Garde projet : lire le service account et valider AVANT toute initialisation
+// Firebase (bloque taofic-ajagbe et tout projet non demo-*).
+const serviceAccount = JSON.parse(await readFile(serviceAccountPath, 'utf8'))
+try {
+  resolveAndAssertAdminProject({ serviceAccount, envProjectId: process.env.GCLOUD_PROJECT })
+} catch (error) {
+  if (error instanceof AssertFirebaseProjectError) {
+    console.error(`Opération bloquée [${error.code}] : ${error.message}`)
+    process.exit(1)
+  }
+  throw error
+}
+
 const { initializeApp, cert } = await import('firebase-admin/app')
 const { getAuth } = await import('firebase-admin/auth')
 
 initializeApp({
-  credential: cert(JSON.parse(await readFile(serviceAccountPath, 'utf8')))
+  credential: cert(serviceAccount)
 })
 
 const auth = getAuth()

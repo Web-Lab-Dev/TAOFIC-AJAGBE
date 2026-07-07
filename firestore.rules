@@ -107,6 +107,49 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Validation des soldes réseau (networkBalances/current)
+    //
+    // Donnée financière : schéma strict. On refuse toute structure
+    // arbitraire (réseau inconnu, champ parasite, valeur non numérique).
+    // Réseaux autorisés = ensemble figé côté application.
+    // Rappel : une écriture directe reste possible (l'UI en dépend), donc
+    // un montant bien formé n'est pas bloqué ici — mais aucune structure
+    // hors-schéma ne peut passer.
+    // ─────────────────────────────────────────────────────────────
+
+    // Donnée financière : entier sûr non-négatif obligatoire (pas de décimal,
+    // pas de dépassement de Number.MAX_SAFE_INTEGER).
+    function validBalanceValue(v) {
+      return v is number &&
+        v >= 0 &&
+        v == math.floor(v) &&
+        v <= 9007199254740991;
+    }
+
+    function validNetworkEntry(entry) {
+      return entry is map &&
+        entry.keys().hasOnly(['stock', 'liquidite']) &&
+        (!('stock' in entry) || validBalanceValue(entry.stock)) &&
+        (!('liquidite' in entry) || validBalanceValue(entry.liquidite));
+    }
+
+    function validNetworkBalancesMap(b) {
+      return b is map &&
+        b.keys().hasOnly(['Orange', 'Moov', 'Telecel', 'Coris', 'Sank']) &&
+        (!('Orange'  in b) || validNetworkEntry(b.Orange)) &&
+        (!('Moov'    in b) || validNetworkEntry(b.Moov)) &&
+        (!('Telecel' in b) || validNetworkEntry(b.Telecel)) &&
+        (!('Coris'   in b) || validNetworkEntry(b.Coris)) &&
+        (!('Sank'    in b) || validNetworkEntry(b.Sank));
+    }
+
+    function validNetworkBalancesDoc(data) {
+      return data.keys().hasOnly(['balances', 'updatedAt']) &&
+        data.balances is map &&
+        validNetworkBalancesMap(data.balances);
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Validation V2 — dealerRequests
     // ─────────────────────────────────────────────────────────────
 
@@ -344,7 +387,7 @@ service cloud.firestore {
         allow read: if isStoreMember(storeId) || isDealer() || isSystemManager();
         allow create, update: if isStoreMember(storeId) &&
           balanceId == 'current' &&
-          request.resource.data.balances is map;
+          validNetworkBalancesDoc(request.resource.data);
         allow delete: if false;
       }
 

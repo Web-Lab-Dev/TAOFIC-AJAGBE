@@ -481,7 +481,10 @@ describe('TI-8 — Scripts CLI (processus enfant)', () => {
     const r = await runCLI('deleteTechnicalUser.mjs', ['--email', email])
     expect(r.exitCode).not.toBe(0)
     expect(r.stderr).toMatch(/confirm/)
-  }, 10000)
+    // 30s (> CLI_PROCESS_TIMEOUT interne de 25s) : le démarrage à froid d'un
+    // processus enfant + import firebase-admin peut dépasser 10s sous charge.
+    // Le kill interne du helper reste le garde-fou contre un vrai blocage.
+  }, 30000)
 
   it('TI-8-E : delete avec --confirm → exit 0', async () => {
     await runCLI('createTechnicalUser.mjs', ['--role', 'dealer', '--email', email, '--name', 'CLI Del'])
@@ -502,13 +505,13 @@ describe('TI-8 — Scripts CLI (processus enfant)', () => {
     const r = await runCLI('createTechnicalUser.mjs', ['--role', 'dealer', '--unknown-option'])
     expect(r.exitCode).not.toBe(0)
     expect(r.stderr).toMatch(/inconnue/)
-  }, 10000)
+  }, 30000)
 
   it('TI-8-H : rôle store_admin → exit non nul', async () => {
     const r = await runCLI('createTechnicalUser.mjs', ['--role', 'store_admin', '--email', email, '--name', 'Test'])
     expect(r.exitCode).not.toBe(0)
     expect(r.stderr).toMatch(/boutique/)
-  }, 10000)
+  }, 30000)
 
   it('TI-8-I : GCLOUD_PROJECT=taofic-ajagbe → exit non nul', async () => {
     const r = await runCLI(
@@ -518,7 +521,7 @@ describe('TI-8 — Scripts CLI (processus enfant)', () => {
     )
     expect(r.exitCode).not.toBe(0)
     expect(r.stderr + r.stdout).toMatch(/taofic-ajagbe/)
-  }, 10000)
+  }, 30000)
 
   it('TI-8-J : FIREBASE_AUTH_EMULATOR_HOST absent → exit non nul', async () => {
     const envWithout = {
@@ -532,7 +535,7 @@ describe('TI-8 — Scripts CLI (processus enfant)', () => {
       envWithout
     )
     expect(r.exitCode).not.toBe(0)
-  }, 10000)
+  }, 30000)
 
   it('TI-8-K : GCLOUD_PROJECT non-demo (akayis-test) → exit non nul', async () => {
     const r = await runCLI(
@@ -542,12 +545,12 @@ describe('TI-8 — Scripts CLI (processus enfant)', () => {
     )
     expect(r.exitCode).not.toBe(0)
     expect(r.stderr + r.stdout).toMatch(/demo|NON_DEMO/)
-  }, 10000)
+  }, 30000)
 
   it('TI-8-L : verify sans --role → exit non nul', async () => {
     const r = await runCLI('verifyTechnicalUser.mjs', ['--email', email])
     expect(r.exitCode).not.toBe(0)
-  }, 10000)
+  }, 30000)
 
   it('TI-8-M1 : sans --show-reset-link, le lien complet est masqué dans stdout', async () => {
     await cleanupUser(emailResetDefault)

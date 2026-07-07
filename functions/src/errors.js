@@ -50,6 +50,7 @@ export const HTTP_CODES = {
   TRANSFER_DEALER_MISMATCH:     'permission-denied',
   INSUFFICIENT_STORE_BALANCE:   'failed-precondition',
   DEALER_NOT_FOUND:             'failed-precondition',
+  MULTIPLE_DEALERS_ACTIVE:      'failed-precondition',
   // Approvisionnement de l'inventaire dealer
   INVALID_INVENTORY_RESOURCE:   'invalid-argument',
   INSUFFICIENT_DEALER_BALANCE:  'failed-precondition',

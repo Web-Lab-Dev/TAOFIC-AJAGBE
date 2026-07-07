@@ -205,6 +205,28 @@ describe('TC-067-CR — create', () => {
       'INVALID_TRANSFER_AMOUNT',
     )
   })
+
+  it('[CR-08] deux dealers actifs → MULTIPLE_DEALERS_ACTIVE, aucun débit, aucun transfert', async () => {
+    // Invariant métier violé : plus d'un dealer actif dans le système.
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedUser(OTHER_DEALER_UID, DEALER_PROFILE)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    await expectError(
+      createStoreDealerTransferHandler(
+        makeRequest(STORE_ADMIN_UID, { transferType: 'return_stock', amount: 5000 }),
+        { db, FieldValue },
+      ),
+      'MULTIPLE_DEALERS_ACTIVE',
+    )
+
+    // Aucune écriture : solde boutique intact, aucun transfert créé.
+    const bal = (await db.doc(`clients/${STORE_A}/networkBalances/current`).get()).data()
+    expect(bal.balances.Orange.stock).toBe(50000)
+    const transfers = await db.collection('storeDealerTransfers').get()
+    expect(transfers.size).toBe(0)
+  })
 })
 
 // ── §CO — confirmStoreDealerTransferHandler ──────────────────────────────────
