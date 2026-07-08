@@ -1,7 +1,8 @@
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { useFormValidation } from '../../hooks/useFormValidation'
-import { AUTH_LABELS, AUTH_PLACEHOLDERS } from '../../constants/authMessages'
+import { isValidNewPassword } from '../../utils/authHelpers'
+import { AUTH_LABELS, AUTH_PLACEHOLDERS, AUTH_ERRORS } from '../../constants/authMessages'
 import { AUTH_STYLES, THEME_VARIANTS } from '../../constants/authStyles'
 
 function SignUpForm({ onToggle }) {
@@ -27,6 +28,11 @@ function SignUpForm({ onToggle }) {
     e.preventDefault()
 
     const result = await handleFormSubmit(async (formValues) => {
+      // Exigence renforcée pour un NOUVEAU mot de passe (min 8), sans toucher
+      // au plancher de connexion partagé (min 6) des comptes existants.
+      if (!isValidNewPassword(formValues.password)) {
+        throw new Error(AUTH_ERRORS.NEW_PASSWORD_MIN_LENGTH)
+      }
       await signup(formValues.email, formValues.password, formValues.storeName)
       navigate('/profil')
     })

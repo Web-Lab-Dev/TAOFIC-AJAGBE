@@ -174,8 +174,8 @@ export const useFormValidation = (initialValues = {}, _validationRules = {}, opt
       passwordErrors.newPassword = 'Le nouveau mot de passe doit être différent de l\'ancien'
     }
 
-    if (newPassword && newPassword.length < AUTH_CONFIG.MIN_PASSWORD_LENGTH) {
-      passwordErrors.newPassword = `Le mot de passe doit contenir au moins ${AUTH_CONFIG.MIN_PASSWORD_LENGTH} caractères`
+    if (newPassword && newPassword.length < AUTH_CONFIG.MIN_NEW_PASSWORD_LENGTH) {
+      passwordErrors.newPassword = `Le mot de passe doit contenir au moins ${AUTH_CONFIG.MIN_NEW_PASSWORD_LENGTH} caractères`
     }
 
     if (newPassword && confirmPassword && newPassword !== confirmPassword) {

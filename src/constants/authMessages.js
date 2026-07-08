@@ -16,6 +16,7 @@ export const AUTH_ERRORS = {
   EMPTY_FIELDS: 'Veuillez remplir tous les champs',
   PASSWORD_MISMATCH: 'Les mots de passe ne correspondent pas',
   PASSWORD_MIN_LENGTH: 'Le mot de passe doit contenir au moins 6 caractères',
+  NEW_PASSWORD_MIN_LENGTH: 'Le mot de passe doit contenir au moins 8 caractères',
   PASSWORD_SAME: 'Le nouveau mot de passe doit être différent de l\'ancien',
   INVALID_EMAIL_FORMAT: 'Format d\'email invalide',
 
@@ -95,7 +96,13 @@ export const AUTH_ROLE_LABELS = {
 
 // Configurations
 export const AUTH_CONFIG = {
+  // Plancher de connexion : aligné sur le minimum Firebase Auth (6).
+  // NE PAS relever — validerait à la hausse les mots de passe EXISTANTS et
+  // bloquerait la connexion des comptes créés avant ce durcissement.
   MIN_PASSWORD_LENGTH: 6,
+  // Exigence pour tout NOUVEAU mot de passe (inscription, changement).
+  // N'affecte pas la connexion des comptes existants.
+  MIN_NEW_PASSWORD_LENGTH: 8,
   PASSWORD_RESET_TIMEOUT: 3000,
   SUCCESS_MESSAGE_TIMEOUT: 2000,
   MAX_LOGIN_ATTEMPTS: 5

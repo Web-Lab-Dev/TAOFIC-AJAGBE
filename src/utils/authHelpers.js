@@ -11,9 +11,15 @@ export const isValidEmail = (email) => {
   return emailRegex.test(email)
 }
 
-// Validation des mots de passe
+// Validation des mots de passe existants (connexion) : plancher Firebase (6).
 export const isValidPassword = (password) => {
   return password && password.length >= AUTH_CONFIG.MIN_PASSWORD_LENGTH
+}
+
+// Validation d'un NOUVEAU mot de passe (inscription / changement) : min 8.
+// Distinct de isValidPassword pour ne pas verrouiller les comptes existants.
+export const isValidNewPassword = (password) => {
+  return password && password.length >= AUTH_CONFIG.MIN_NEW_PASSWORD_LENGTH
 }
 
 // Vérification de la correspondance des mots de passe
