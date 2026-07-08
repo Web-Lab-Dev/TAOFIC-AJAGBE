@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../hooks/useToast'
-import { subscribeDealerBalance, replenishDealerInventory } from '../../services/storeTransferService'
+import { subscribeDealerBalance, replenishDealerInventory, decreaseDealerInventory } from '../../services/storeTransferService'
 import { formatCurrency } from '../../utils/formatCurrency'
 import Toast from '../Toast'
 
@@ -15,7 +15,7 @@ function DealerInventoryBar() {
   const { toasts, showToast, removeToast } = useToast()
 
   const [inventory, setInventory] = useState({ stock: 0, liquidite: 0 })
-  const [replenish, setReplenish] = useState(null) // { resource } | null
+  const [replenish, setReplenish] = useState(null) // { resource, mode: 'increase'|'decrease' } | null
   const [amount, setAmount] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false) // verrou synchrone anti-double-clic
@@ -32,13 +32,15 @@ function DealerInventoryBar() {
     if (!replenish || submittingRef.current) return
     submittingRef.current = true
     setSubmitting(true)
+    const isDecrease = replenish.mode === 'decrease'
     try {
-      await replenishDealerInventory({ resource: replenish.resource, amount })
-      showToast('Inventaire approvisionné.', 'success')
+      if (isDecrease) await decreaseDealerInventory({ resource: replenish.resource, amount })
+      else await replenishDealerInventory({ resource: replenish.resource, amount })
+      showToast(isDecrease ? 'Inventaire diminué.' : 'Inventaire approvisionné.', 'success')
       setReplenish(null)
       setAmount('')
     } catch (err) {
-      showToast(err?.message || "Échec de l'approvisionnement", 'error')
+      showToast(err?.message || (isDecrease ? 'Échec de la diminution' : "Échec de l'approvisionnement"), 'error')
     } finally {
       setSubmitting(false)
       submittingRef.current = false
@@ -68,20 +70,34 @@ function DealerInventoryBar() {
           <Card label="Stock" value={inventory.stock} icon="📦" tint="from-blue-50" />
           <Card label="Liquidité" value={inventory.liquidite} icon="💵" tint="from-teal-50" />
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => { setReplenish({ resource: 'stock' }); setAmount('') }}
+            onClick={() => { setReplenish({ resource: 'stock', mode: 'increase' }); setAmount('') }}
             className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           >
             + Stock
           </button>
           <button
             type="button"
-            onClick={() => { setReplenish({ resource: 'liquidite' }); setAmount('') }}
+            onClick={() => { setReplenish({ resource: 'stock', mode: 'decrease' }); setAmount('') }}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            − Stock
+          </button>
+          <button
+            type="button"
+            onClick={() => { setReplenish({ resource: 'liquidite', mode: 'increase' }); setAmount('') }}
             className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
           >
             + Liquidité
+          </button>
+          <button
+            type="button"
+            onClick={() => { setReplenish({ resource: 'liquidite', mode: 'decrease' }); setAmount('') }}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            − Liquidité
           </button>
         </div>
       </div>
@@ -91,9 +107,13 @@ function DealerInventoryBar() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-gray-900">
-              Approvisionner : {replenish.resource === 'stock' ? 'Stock' : 'Liquidité'}
+              {replenish.mode === 'decrease' ? 'Retirer' : 'Approvisionner'} : {replenish.resource === 'stock' ? 'Stock' : 'Liquidité'}
             </h2>
-            <p className="mt-1 text-sm text-gray-500">Ajoute au montant que tu as acquis (ex. achat chez Orange).</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {replenish.mode === 'decrease'
+                ? 'Retire du montant de ton inventaire (correction ou sortie).'
+                : 'Ajoute au montant que tu as acquis (ex. achat chez Orange).'}
+            </p>
             <input
               type="number"
               value={amount}
@@ -114,9 +134,11 @@ function DealerInventoryBar() {
                 type="button"
                 onClick={submit}
                 disabled={submitting || !/^[0-9]+$/.test(amount.trim())}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${replenish.mode === 'decrease' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
               >
-                {submitting ? 'Ajout…' : 'Ajouter'}
+                {submitting
+                  ? (replenish.mode === 'decrease' ? 'Retrait…' : 'Ajout…')
+                  : (replenish.mode === 'decrease' ? 'Retirer' : 'Ajouter')}
               </button>
             </div>
           </div>

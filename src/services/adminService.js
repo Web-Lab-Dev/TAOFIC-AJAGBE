@@ -200,6 +200,78 @@ export async function getRecentDealerRequests(count = 5) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Inventaire Dealer — audit des mouvements de stock / liquidité (lecture seule)
+// ──────────────────────────────────────────────────────────────────────────────
+
+const RESOURCE_LABELS = { stock: 'Stock', liquidite: 'Liquidité' }
+
+// Normalise une entrée de dealerBalances/{uid}/auditLogs en ligne d'affichage.
+// Pure et exportée pour test. Couvre tous les mouvements d'inventaire dealer.
+export function normalizeDealerMovement(log = {}) {
+  const base = { action: log.action ?? null, createdAt: log.createdAt ?? null }
+  switch (log.action) {
+    case 'DEALER_INVENTORY_REPLENISHED':
+      return { ...base, type: 'Approvisionnement', resourceLabel: RESOURCE_LABELS[log.resource] ?? log.resource ?? '—',
+        sens: '+', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: 'Dealer' }
+    case 'DEALER_INVENTORY_DECREASED':
+      return { ...base, type: 'Diminution', resourceLabel: RESOURCE_LABELS[log.resource] ?? log.resource ?? '—',
+        sens: '−', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: 'Dealer' }
+    case 'STORE_DEALER_TRANSFER_CONFIRMED': {
+      const res = log.transferType === 'return_liquidity' ? 'liquidite' : 'stock'
+      return { ...base, type: 'Retour boutique', resourceLabel: RESOURCE_LABELS[res],
+        sens: '+', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: log.storeName ?? 'Boutique' }
+    }
+    case 'PARTNER_DEPOSIT':
+      return { ...base, type: 'Dépôt partenaire', resourceLabel: 'Stock − / Liquidité +',
+        sens: '±', amount: log.amount ?? 0, soldeApres: null,
+        newStock: log.newStock ?? null, newLiquidite: log.newLiquidite ?? null,
+        source: log.partnerNom ?? 'Partenaire' }
+    default:
+      return { ...base, type: log.action ?? 'Mouvement', resourceLabel: RESOURCE_LABELS[log.resource] ?? '—',
+        sens: '', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: '—' }
+  }
+}
+
+// Liste paginée des mouvements d'inventaire du dealer unique actif + solde courant.
+// Le gérant lit users (résolution dealer), dealerBalances/{uid} et sa sous-collection
+// auditLogs (règles: isSystemManager). Aucun index composite requis.
+export async function listDealerInventoryMovements({ lastDoc = null, dealerUid = null } = {}) {
+  try {
+    let uid = dealerUid
+    let dealerName = null
+    let multipleActiveDealers = false
+    if (!uid) {
+      // limit(2) pour détecter l'anomalie « plusieurs dealers actifs » (invariant
+      // serveur : un seul dealer actif — cf. resolveSingleDealer/MULTIPLE_DEALERS_ACTIVE).
+      const dealerSnap = await getDocs(
+        query(collection(db, 'users'), where('role', '==', 'dealer'), where('active', '==', true), limit(2))
+      )
+      if (dealerSnap.empty) {
+        return { dealerUid: null, dealerName: null, balance: { stock: 0, liquidite: 0 }, movements: [], lastDoc: null, hasMore: false, multipleActiveDealers: false }
+      }
+      multipleActiveDealers = dealerSnap.size > 1
+      uid = dealerSnap.docs[0].id
+      dealerName = dealerSnap.docs[0].data().name ?? null
+    }
+
+    const balSnap = await getDoc(doc(db, 'dealerBalances', uid))
+    const orange = balSnap.exists() ? (balSnap.data()?.balances?.Orange ?? {}) : {}
+    const balance = { stock: Number(orange.stock) || 0, liquidite: Number(orange.liquidite) || 0 }
+
+    const constraints = [orderBy('createdAt', 'desc'), limit(PAGE + 1)]
+    if (lastDoc) constraints.push(startAfter(lastDoc))
+    const snap = await getDocs(query(collection(db, 'dealerBalances', uid, 'auditLogs'), ...constraints))
+    const hasMore = snap.docs.length > PAGE
+    const docs = hasMore ? snap.docs.slice(0, PAGE) : snap.docs
+    const movements = docs.map(d => ({ id: d.id, ...normalizeDealerMovement(d.data()) }))
+
+    return { dealerUid: uid, dealerName, balance, movements, lastDoc: docs.at(-1) ?? null, hasMore, multipleActiveDealers }
+  } catch (err) {
+    throw mapErr(err)
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Utilisateurs
 // ──────────────────────────────────────────────────────────────────────────────
 

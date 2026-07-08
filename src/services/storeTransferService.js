@@ -42,6 +42,7 @@ const ERROR_MESSAGES = {
   TRANSFER_NOT_PENDING:       'Ce transfert a déjà été traité.',
   TRANSFER_DEALER_MISMATCH:   'Ce transfert ne vous est pas destiné.',
   INSUFFICIENT_STORE_BALANCE: 'Solde insuffisant pour ce transfert.',
+  INSUFFICIENT_DEALER_BALANCE:'Solde insuffisant : la diminution dépasse votre inventaire.',
   DEALER_NOT_FOUND:           'Aucun dealer disponible pour le moment.',
   MULTIPLE_DEALERS_ACTIVE:    'Configuration invalide : plusieurs dealers actifs. Contactez un administrateur.',
   BALANCE_NOT_FOUND:          'Le solde est introuvable.',
@@ -116,6 +117,20 @@ export async function replenishDealerInventory({ resource, amount }) {
   const parsed = parseAmountLocal(amount)
   if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
   const callable = httpsCallable(functions, 'replenishDealerInventory')
+  try {
+    const result = await callable({ resource, amount: parsed })
+    return result.data
+  } catch (err) {
+    throw mapTransferError(err)
+  }
+}
+
+/** Dealer : diminue son inventaire (débit stock ou liquidité, bloqué sous zéro). */
+export async function decreaseDealerInventory({ resource, amount }) {
+  if (resource !== 'stock' && resource !== 'liquidite') throw new Error('Ressource invalide (stock ou liquidité).')
+  const parsed = parseAmountLocal(amount)
+  if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
+  const callable = httpsCallable(functions, 'decreaseDealerInventory')
   try {
     const result = await callable({ resource, amount: parsed })
     return result.data

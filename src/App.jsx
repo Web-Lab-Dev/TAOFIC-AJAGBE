@@ -31,6 +31,7 @@ import AdminStores from './pages/admin/AdminStores.jsx'
 import AdminProfile from './pages/admin/AdminProfile.jsx'
 import AdminUsers from './pages/admin/AdminUsers.jsx'
 import AdminDealer from './pages/admin/AdminDealer.jsx'
+import AdminDealerInventory from './pages/admin/AdminDealerInventory.jsx'
 import AdminClients from './pages/admin/AdminClients.jsx'
 import AdminHistory from './pages/admin/AdminHistory.jsx'
 import AdminReports from './pages/admin/AdminReports.jsx'
@@ -127,6 +128,7 @@ export function AppContent() {
         <Route path="/admin/stores" element={<AdminStores />} />
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/dealer" element={<AdminDealer />} />
+        <Route path="/admin/dealer-inventory" element={<AdminDealerInventory />} />
         <Route path="/admin/clients" element={<AdminClients />} />
         <Route path="/admin/history" element={<AdminHistory />} />
         <Route path="/admin/reports" element={<AdminReports />} />

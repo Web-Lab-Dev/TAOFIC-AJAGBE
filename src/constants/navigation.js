@@ -16,6 +16,7 @@ export const ADMIN_NAV_ITEMS = [
   { name: 'Boutiques', path: '/admin/stores', section: 'supervision' },
   { name: 'Utilisateurs', path: '/admin/users', section: 'supervision' },
   { name: 'Dealer', path: '/admin/dealer', section: 'supervision' },
+  { name: 'Inventaire Dealer', path: '/admin/dealer-inventory', section: 'supervision' },
   { name: 'Clients', path: '/admin/clients', section: 'supervision' },
   { name: 'Historique', path: '/admin/history', section: 'supervision' },
   { name: 'Rapports', path: '/admin/reports', section: 'supervision' },
