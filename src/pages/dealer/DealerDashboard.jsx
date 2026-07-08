@@ -12,6 +12,7 @@ import StatusBadge from '../../components/ui/StatusBadge'
 import { SkeletonCards } from '../../components/ui/SkeletonList'
 import RejectionRemarkButton from '../../components/ui/RejectionRemarkButton'
 import { DEALER_REQUEST_STATUSES } from '../../constants/dealerConstants'
+import { CARD, TABLE_WRAP, TABLE_HEAD } from '../../constants/workspaceTheme'
 
 const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
 const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité', open_day: 'Ouverture' }
@@ -88,7 +89,7 @@ function DealerDashboard() {
     <div data-testid="dealer-home">
       <PageHeader
         title="Vue générale"
-        subtitle={`Bonjour ${userProfile?.name ?? ''} — tableau de bord Dealer`}
+        subtitle={`Bonjour ${userProfile?.name ?? ''} 👋`}
         actions={
           <button
             type="button"
@@ -108,7 +109,7 @@ function DealerDashboard() {
         {kpiError ? (
           <ErrorState message={kpiError} onRetry={loadKpi} />
         ) : kpiLoading ? (
-          <SkeletonCards count={3} />
+          <SkeletonCards count={4} />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Boutiques partenaires" value={storeCount ?? '—'} color="green" icon="🏪" />
@@ -146,53 +147,53 @@ function DealerDashboard() {
           </button>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          {reqsError && <ErrorState message={reqsError} onRetry={loadRecentReqs} />}
-          {reqsLoading && !reqsError && (
-            <div className="space-y-2">
-              {[1, 2, 3].map(n => <div key={n} className="h-10 animate-pulse rounded bg-gray-100" />)}
-            </div>
-          )}
-          {!reqsLoading && !reqsError && recentReqs.length === 0 && (
+        {reqsError && <ErrorState message={reqsError} onRetry={loadRecentReqs} />}
+        {reqsLoading && !reqsError && (
+          <div className={`${CARD} space-y-2 p-5`}>
+            {[1, 2, 3].map(n => <div key={n} className="h-10 animate-pulse rounded bg-gray-100" />)}
+          </div>
+        )}
+        {!reqsLoading && !reqsError && recentReqs.length === 0 && (
+          <div className={`${CARD} p-5`}>
             <EmptyState title="Aucune demande" message="Créez votre première demande avec le bouton ci-dessus." />
-          )}
-          {!reqsLoading && !reqsError && recentReqs.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead>
-                  <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    <th className="pb-2 pr-4">Boutique</th>
-                    <th className="pb-2 pr-4">Type</th>
-                    <th className="pb-2 pr-4">Montant</th>
-                    <th className="pb-2 pr-4">Statut</th>
-                    <th className="pb-2 pr-4">Remarque</th>
-                    <th className="pb-2">Date</th>
+          </div>
+        )}
+        {!reqsLoading && !reqsError && recentReqs.length > 0 && (
+          <div className={TABLE_WRAP}>
+            <table className="min-w-full divide-y divide-gray-100 text-sm">
+              <thead className={TABLE_HEAD}>
+                <tr className="text-left text-xs font-medium uppercase tracking-wider">
+                  <th className="px-4 py-3">Boutique</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Montant</th>
+                  <th className="px-4 py-3">Statut</th>
+                  <th className="px-4 py-3">Remarque</th>
+                  <th className="px-4 py-3">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {recentReqs.map(r => (
+                  <tr key={r.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{r.targetStoreName}</td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{TYPE_LABELS[r.requestType] ?? r.requestType}</td>
+                    <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{formatCurrency(r.amount)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <StatusBadge status={r.status} label={STATUS_LABELS[r.status] ?? r.status} />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <RejectionRemarkButton
+                        storeName={r.targetStoreName}
+                        reason={r.status === DEALER_REQUEST_STATUSES.REJECTED ? r.rejectionReason : null}
+                        testId={`remark-btn-${r.id}`}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{formatDate(r.createdAt)}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {recentReqs.map(r => (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="py-2 pr-4 font-medium text-gray-800 whitespace-nowrap">{r.targetStoreName}</td>
-                      <td className="py-2 pr-4 text-gray-600 whitespace-nowrap">{TYPE_LABELS[r.requestType] ?? r.requestType}</td>
-                      <td className="py-2 pr-4 font-medium text-gray-800 whitespace-nowrap">{formatCurrency(r.amount)}</td>
-                      <td className="py-2 pr-4 whitespace-nowrap">
-                        <StatusBadge status={r.status} label={STATUS_LABELS[r.status] ?? r.status} />
-                      </td>
-                      <td className="py-2 pr-4 whitespace-nowrap">
-                        <RejectionRemarkButton
-                          storeName={r.targetStoreName}
-                          reason={r.status === DEALER_REQUEST_STATUSES.REJECTED ? r.rejectionReason : null}
-                          testId={`remark-btn-${r.id}`}
-                        />
-                      </td>
-                      <td className="py-2 text-gray-400 text-xs whitespace-nowrap">{formatDate(r.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   )

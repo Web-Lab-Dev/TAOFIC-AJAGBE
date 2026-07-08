@@ -5,7 +5,6 @@ import { DEALER_NAV_ITEMS } from '../constants/navigation'
 import { subscribeDealerPendingCount } from '../services/dealerService'
 import { subscribeIncomingTransfersCount } from '../services/storeTransferService'
 import { BRAND, getRoleAccent } from '../constants/workspaceTheme'
-import WorkspaceTopbar from '../components/ui/WorkspaceTopbar'
 import DealerInventoryBar from '../components/dealer/DealerInventoryBar'
 
 const ACCENT = getRoleAccent('dealer')
@@ -158,7 +157,6 @@ function DealerLayout() {
       {/* ── Contenu principal ─────────────────────────────────────────────────── */}
       <div className="lg:pl-56">
         <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8">
-          <WorkspaceTopbar role="dealer" />
           <DealerInventoryBar />
           <Outlet />
         </main>

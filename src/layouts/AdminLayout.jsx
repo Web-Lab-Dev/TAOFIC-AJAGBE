@@ -3,7 +3,6 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ADMIN_NAV_ITEMS } from '../constants/navigation'
 import { BRAND, getRoleAccent } from '../constants/workspaceTheme'
-import WorkspaceTopbar from '../components/ui/WorkspaceTopbar'
 
 const ACCENT = getRoleAccent('admin')
 
@@ -134,7 +133,6 @@ function AdminLayout() {
       {/* ── Contenu principal ─────────────────────────────────────────────────── */}
       <div className="lg:pl-60">
         <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-8">
-          <WorkspaceTopbar role="admin" />
           <Outlet />
         </main>
       </div>

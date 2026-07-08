@@ -8,15 +8,57 @@ import Toast from '../Toast'
 /**
  * Bandeau d'inventaire dealer — persistant en haut de chaque page (comme le
  * bandeau des cartes réseau de l'espace boutique). Toujours visible : Stock +
- * Liquidité (Orange), avec approvisionnement (+ Stock / + Liquidité).
+ * Liquidité (Orange). Un unique bouton « Ajuster » ouvre une modale unifiée
+ * (ressource + opération + montant) plutôt qu'un mur de 4 boutons.
  */
+
+const RESOURCES = [
+  { value: 'stock', label: 'Stock' },
+  { value: 'liquidite', label: 'Liquidité' },
+]
+const OPERATIONS = [
+  { value: 'increase', label: '+ Ajouter' },
+  { value: 'decrease', label: '− Retirer' },
+]
+
+// Petit sélecteur segmenté accessible (radiogroup).
+function Segmented({ label, options, value, onChange, name }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+      <div role="radiogroup" aria-label={label} className="inline-flex rounded-lg bg-gray-100 p-1">
+        {options.map(opt => {
+          const active = opt.value === value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(opt.value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400 ${
+                active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+              data-testid={`seg-${name}-${opt.value}`}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function DealerInventoryBar() {
   const { currentUser, userProfile } = useAuth()
   const { toasts, showToast, removeToast } = useToast()
 
   const [inventory, setInventory] = useState({ stock: 0, liquidite: 0 })
-  const [replenish, setReplenish] = useState(null) // { resource, mode: 'increase'|'decrease' } | null
-  const [amount, setAmount] = useState('')
+  const [adjustOpen, setAdjustOpen] = useState(false)
+  const [resource, setResource]     = useState('stock')     // 'stock' | 'liquidite'
+  const [mode, setMode]             = useState('increase')  // 'increase' | 'decrease'
+  const [amount, setAmount]         = useState('')
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false) // verrou synchrone anti-double-clic
 
@@ -28,26 +70,43 @@ function DealerInventoryBar() {
     return subscribeDealerBalance({ dealerUid, onUpdate: setInventory })
   }, [dealerUid, isDealer])
 
+  const closeModal = useCallback(() => {
+    setAdjustOpen(false)
+    setAmount('')
+    setResource('stock')
+    setMode('increase')
+  }, [])
+
+  // Fermeture à la touche Échap
+  useEffect(() => {
+    if (!adjustOpen) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') closeModal() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [adjustOpen, closeModal])
+
   const submit = useCallback(async () => {
-    if (!replenish || submittingRef.current) return
+    if (submittingRef.current) return
     submittingRef.current = true
     setSubmitting(true)
-    const isDecrease = replenish.mode === 'decrease'
+    const isDecrease = mode === 'decrease'
     try {
-      if (isDecrease) await decreaseDealerInventory({ resource: replenish.resource, amount })
-      else await replenishDealerInventory({ resource: replenish.resource, amount })
+      if (isDecrease) await decreaseDealerInventory({ resource, amount })
+      else await replenishDealerInventory({ resource, amount })
       showToast(isDecrease ? 'Inventaire diminué.' : 'Inventaire approvisionné.', 'success')
-      setReplenish(null)
-      setAmount('')
+      closeModal()
     } catch (err) {
       showToast(err?.message || (isDecrease ? 'Échec de la diminution' : "Échec de l'approvisionnement"), 'error')
     } finally {
       setSubmitting(false)
       submittingRef.current = false
     }
-  }, [replenish, amount, showToast])
+  }, [resource, mode, amount, showToast, closeModal])
 
   if (!isDealer) return null
+
+  const isDecrease = mode === 'decrease'
+  const amountValid = /^[0-9]+$/.test(amount.trim())
 
   const Card = ({ label, value, icon, tint }) => (
     <div className={`flex-1 min-w-40 rounded-xl border border-gray-100 bg-gradient-to-br ${tint} to-white px-4 py-2.5`}>
@@ -70,61 +129,45 @@ function DealerInventoryBar() {
           <Card label="Stock" value={inventory.stock} icon="📦" tint="from-blue-50" />
           <Card label="Liquidité" value={inventory.liquidite} icon="💵" tint="from-teal-50" />
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex shrink-0">
           <button
             type="button"
-            onClick={() => { setReplenish({ resource: 'stock', mode: 'increase' }); setAmount('') }}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+            onClick={() => { setAdjustOpen(true); setAmount(''); setResource('stock'); setMode('increase') }}
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+            data-testid="dealer-inventory-adjust"
           >
-            + Stock
-          </button>
-          <button
-            type="button"
-            onClick={() => { setReplenish({ resource: 'stock', mode: 'decrease' }); setAmount('') }}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-          >
-            − Stock
-          </button>
-          <button
-            type="button"
-            onClick={() => { setReplenish({ resource: 'liquidite', mode: 'increase' }); setAmount('') }}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
-          >
-            + Liquidité
-          </button>
-          <button
-            type="button"
-            onClick={() => { setReplenish({ resource: 'liquidite', mode: 'decrease' }); setAmount('') }}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-          >
-            − Liquidité
+            Ajuster
           </button>
         </div>
       </div>
 
-      {/* Modale d'approvisionnement */}
-      {replenish && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+      {/* Modale d'ajustement unifiée */}
+      {adjustOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="dealer-adjust-title">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {replenish.mode === 'decrease' ? 'Retirer' : 'Approvisionner'} : {replenish.resource === 'stock' ? 'Stock' : 'Liquidité'}
-            </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {replenish.mode === 'decrease'
-                ? 'Retire du montant de ton inventaire (correction ou sortie).'
-                : 'Ajoute au montant que tu as acquis (ex. achat chez Orange).'}
-            </p>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Montant (FCFA)"
-              className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
-            />
-            <div className="mt-4 flex justify-end gap-3">
+            <h2 id="dealer-adjust-title" className="text-lg font-semibold text-gray-900">Ajuster l'inventaire</h2>
+            <p className="mt-1 text-sm text-gray-500">Approvisionnement ou correction de votre inventaire (Orange).</p>
+
+            <div className="mt-4 space-y-4">
+              <Segmented label="Ressource" name="resource" options={RESOURCES} value={resource} onChange={setResource} />
+              <Segmented label="Opération" name="operation" options={OPERATIONS} value={mode} onChange={setMode} />
+              <div>
+                <label htmlFor="dealer-adjust-amount" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Montant</label>
+                <input
+                  id="dealer-adjust-amount"
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="Montant (FCFA)"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => { setReplenish(null); setAmount('') }}
+                onClick={closeModal}
                 disabled={submitting}
                 className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
@@ -133,12 +176,13 @@ function DealerInventoryBar() {
               <button
                 type="button"
                 onClick={submit}
-                disabled={submitting || !/^[0-9]+$/.test(amount.trim())}
-                className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${replenish.mode === 'decrease' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+                disabled={submitting || !amountValid}
+                className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 focus:outline-none focus-visible:ring-2 ${
+                  isDecrease ? 'bg-red-600 hover:bg-red-700 focus-visible:ring-red-500' : 'bg-green-600 hover:bg-green-700 focus-visible:ring-green-500'
+                }`}
+                data-testid="dealer-adjust-submit"
               >
-                {submitting
-                  ? (replenish.mode === 'decrease' ? 'Retrait…' : 'Ajout…')
-                  : (replenish.mode === 'decrease' ? 'Retirer' : 'Ajouter')}
+                {submitting ? 'Traitement…' : 'Valider'}
               </button>
             </div>
           </div>
