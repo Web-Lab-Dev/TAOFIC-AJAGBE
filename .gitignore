@@ -55,3 +55,6 @@ DEV-NOTES.md
 
 # Local Claude agent memory
 .claude/agent-memory/
+
+# Sauvegardes locales de règles Firestore prod (snapshots ponctuels, ne jamais committer)
+firestore.rules.prod-*.txt
