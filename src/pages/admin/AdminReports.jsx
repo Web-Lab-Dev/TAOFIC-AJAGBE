@@ -27,7 +27,6 @@ function fmtAmount(n) {
 const TYPE_LABELS = {
   stock_add:     'Approvisionnement Stock',
   liquidity_add: 'Approvisionnement Liquidité',
-  open_day:      'Ouverture du Jour',
 }
 
 const STATUS_LABELS = {

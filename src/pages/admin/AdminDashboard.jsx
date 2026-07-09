@@ -22,7 +22,7 @@ function formatDate(ts) {
 }
 
 const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
-const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité', open_day: 'Ouverture' }
+const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité' }
 
 const STATUS_STYLES = {
   pending:   'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
@@ -33,7 +33,6 @@ const STATUS_STYLES = {
 const TYPE_DOT = {
   stock_add:     'bg-blue-500',
   liquidity_add: 'bg-purple-500',
-  open_day:      'bg-emerald-500',
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

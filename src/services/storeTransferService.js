@@ -155,9 +155,14 @@ export async function rejectStoreDealerTransfer(transferId, rejectionReason) {
   }
 }
 
-/** Dealer : dépôt partenaire (−stock +liquidité 1:1 sur son inventaire). */
-export async function createPartnerDeposit({ partner, amount }) {
+/**
+ * Dealer : opération partenaire (1:1 sur son inventaire).
+ *   - 'deposit'    (dépôt)  : −stock +liquidité
+ *   - 'withdrawal' (retrait): +stock −liquidité
+ */
+export async function createPartnerDeposit({ partner, amount, operation = 'deposit' }) {
   if (!partner || !partner.id) throw new Error(ERROR_MESSAGES.INVALID_PARTNER)
+  if (operation !== 'deposit' && operation !== 'withdrawal') throw new Error(ERROR_MESSAGES.INVALID_PARTNER)
   const parsed = parseAmountLocal(amount)
   if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
   const callable = httpsCallable(functions, 'createPartnerDeposit')
@@ -169,6 +174,7 @@ export async function createPartnerDeposit({ partner, amount }) {
       partnerNumeroDA: partner.numeroDA ?? '',
       partnerLocalite: partner.localite ?? '',
       amount: parsed,
+      operation,
     })
     return result.data
   } catch (err) {

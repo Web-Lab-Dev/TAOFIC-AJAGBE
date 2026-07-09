@@ -15,7 +15,7 @@ function formatDate(ts) {
 }
 
 const STATUS_LABELS  = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
-const TYPE_LABELS    = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité', open_day: 'Ouverture' }
+const TYPE_LABELS    = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité' }
 const STATUS_OPTIONS = [
   { value: '', label: 'Tous les statuts' },
   { value: 'pending', label: 'En attente' },

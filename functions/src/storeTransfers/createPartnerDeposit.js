@@ -1,13 +1,12 @@
 /**
- * Handler de dépôt partenaire (sous-dealer hors boîte).
+ * Handler de dépôt / retrait partenaire (sous-dealer hors boîte).
  *
- * Sémantique :
- *   Le dealer dépose du stock à un partenaire et reçoit de la liquidité, 1:1,
- *   sur SON propre inventaire : stock −M et liquidité +M, en une transaction.
- *   Aucune notification, aucune confirmation : l'opération est immédiate et
- *   juste enregistrée dans l'historique. Le partenaire n'a aucun solde.
+ * Sémantique (sur l'inventaire du dealer, 1:1, en une transaction) :
+ *   - deposit    (dépôt)  : stock −M et liquidité +M. Exige stock ≥ M.
+ *   - withdrawal (retrait): stock +M et liquidité −M. Exige liquidité ≥ M.
+ *   Aucune notification, aucune confirmation : opération immédiate, juste
+ *   enregistrée dans l'historique. Le partenaire n'a aucun solde.
  *
- * Exige que le dealer ait au moins M de stock (INSUFFICIENT_DEALER_BALANCE sinon).
  * db et FieldValue injectés (testabilité sans émulateur Functions).
  */
 
@@ -16,6 +15,7 @@ import { validateAuthUid, validateInputPayload } from '../dealerRequests/shared.
 import {
   validateTransferAmount,
   validatePartnerInput,
+  validatePartnerOperation,
   validateDealerProfile,
   readDealerBalanceAmount,
   TRANSFER_NETWORK,
@@ -27,10 +27,12 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
 
   // ── 2. Payload ─────────────────────────────────────────────────────────────
   const payload = validateInputPayload(request.data, [
-    'partnerId', 'partnerNom', 'partnerPrenom', 'partnerNumeroDA', 'partnerLocalite', 'amount',
+    'partnerId', 'partnerNom', 'partnerPrenom', 'partnerNumeroDA', 'partnerLocalite', 'amount', 'operation',
   ])
   const amount = validateTransferAmount(payload.amount)
+  const operation = validatePartnerOperation(payload.operation) // 'deposit' | 'withdrawal'
   const partner = validatePartnerInput(payload)
+  const isWithdrawal = operation === 'withdrawal'
 
   // ── 3. Prévalidation profil dealer ─────────────────────────────────────────
   const profileSnap = await db.doc(`users/${actorUid}`).get()
@@ -39,7 +41,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
   }
   validateDealerProfile(profileSnap.data())
 
-  // ── 4. Transaction : −stock +liquidité sur l'inventaire dealer ─────────────
+  // ── 4. Transaction : ajustement croisé stock ↔ liquidité ───────────────────
   let result
   try {
     result = await db.runTransaction(async (t) => {
@@ -56,12 +58,19 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
       const previousStock = readDealerBalanceAmount(balData, 'stock')
       const previousLiquidite = readDealerBalanceAmount(balData, 'liquidite')
 
-      if (previousStock < amount) {
-        throw new DealerRequestError('INSUFFICIENT_DEALER_BALANCE', 'Stock insuffisant pour ce dépôt partenaire.')
+      // Dépôt : −stock +liquidité (exige stock). Retrait : +stock −liquidité (exige liquidité).
+      const previousDebit = isWithdrawal ? previousLiquidite : previousStock
+      if (previousDebit < amount) {
+        throw new DealerRequestError(
+          'INSUFFICIENT_DEALER_BALANCE',
+          isWithdrawal ? 'Liquidité insuffisante pour ce retrait partenaire.' : 'Stock insuffisant pour ce dépôt partenaire.'
+        )
       }
-      const newStock = previousStock - amount
-      const newLiquidite = previousLiquidite + amount
-      if (!Number.isSafeInteger(newLiquidite)) {
+
+      const newStock = isWithdrawal ? previousStock + amount : previousStock - amount
+      const newLiquidite = isWithdrawal ? previousLiquidite - amount : previousLiquidite + amount
+      const creditNew = isWithdrawal ? newStock : newLiquidite
+      if (!Number.isSafeInteger(creditNew)) {
         throw new DealerRequestError('BALANCE_OVERFLOW', 'Le solde résultant dépasse la limite des entiers sûrs.')
       }
       const now = FieldValue.serverTimestamp()
@@ -72,7 +81,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
         updatedAt: now,
       }, { merge: true })
 
-      // Enregistrement du dépôt (confirmé d'emblée — pas de flux de validation).
+      // Enregistrement de l'opération (confirmée d'emblée — pas de flux de validation).
       const depositRef = db.collection('dealerPartnerDeposits').doc()
       t.set(depositRef, {
         dealerUid: actorUid,
@@ -83,6 +92,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
         partnerPrenom: partner.partnerPrenom,
         partnerNumeroDA: partner.partnerNumeroDA,
         partnerLocalite: partner.partnerLocalite,
+        operation,
         network: TRANSFER_NETWORK,
         amount,
         previousStock,
@@ -97,6 +107,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
       const auditRef = db.collection(`dealerBalances/${actorUid}/auditLogs`).doc()
       t.set(auditRef, {
         action: 'PARTNER_DEPOSIT',
+        operation,
         actorUid,
         actorEmail: txProfile.email ?? null,
         actorName: txProfile.name ?? null,
@@ -111,7 +122,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
         createdAt: now,
       })
 
-      return { depositId: depositRef.id, newStock, newLiquidite }
+      return { depositId: depositRef.id, operation, newStock, newLiquidite }
     })
   } catch (err) {
     if (err instanceof DealerRequestError) throw err

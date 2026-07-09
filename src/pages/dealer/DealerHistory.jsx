@@ -99,7 +99,7 @@ function DealerHistory() {
   const partnerRows = partnerDeposits.map(d => ({
     id: d.id, kind: 'partner',
     label: partnerLabel({ nom: d.partnerNom, prenom: d.partnerPrenom, localite: d.partnerLocalite, numeroDA: d.partnerNumeroDA }),
-    typeLabel: 'Dépôt partenaire',
+    typeLabel: d.operation === 'withdrawal' ? 'Retrait partenaire' : 'Dépôt partenaire',
     amount: d.amount,
     status: 'confirmed',
     rejectionReason: null,

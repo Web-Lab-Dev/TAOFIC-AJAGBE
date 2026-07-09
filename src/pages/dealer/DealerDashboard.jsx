@@ -15,7 +15,7 @@ import { DEALER_REQUEST_STATUSES } from '../../constants/dealerConstants'
 import { CARD, TABLE_WRAP, TABLE_HEAD } from '../../constants/workspaceTheme'
 
 const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
-const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité', open_day: 'Ouverture' }
+const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité' }
 
 function formatDate(ts) {
   if (!ts) return '—'

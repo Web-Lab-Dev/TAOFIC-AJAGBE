@@ -41,7 +41,7 @@ const PAGE = 25
 function mapErr(err) {
   if (err?.code === 'permission-denied') return new Error('Accès refusé. Vérifiez vos permissions.')
   if (err?.code === 'unavailable') return new Error('Service indisponible. Réessayez.')
-  if (err?.code === 'failed-precondition') return new Error('Index Firestore manquant — déployez firestore.indexes.json.')
+  if (err?.code === 'failed-precondition') return new Error('Impossible de charger ces données pour le moment.')
   if (import.meta.env.DEV) console.error('[adminService]', err)
   return new Error('Une erreur inattendue s\'est produite.')
 }
@@ -221,11 +221,14 @@ export function normalizeDealerMovement(log = {}) {
       return { ...base, type: 'Retour boutique', resourceLabel: RESOURCE_LABELS[res],
         sens: '+', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: log.storeName ?? 'Boutique' }
     }
-    case 'PARTNER_DEPOSIT':
-      return { ...base, type: 'Dépôt partenaire', resourceLabel: 'Stock − / Liquidité +',
+    case 'PARTNER_DEPOSIT': {
+      const withdrawal = log.operation === 'withdrawal'
+      return { ...base, type: withdrawal ? 'Retrait partenaire' : 'Dépôt partenaire',
+        resourceLabel: withdrawal ? 'Stock + / Liquidité −' : 'Stock − / Liquidité +',
         sens: '±', amount: log.amount ?? 0, soldeApres: null,
         newStock: log.newStock ?? null, newLiquidite: log.newLiquidite ?? null,
         source: log.partnerNom ?? 'Partenaire' }
+    }
     default:
       return { ...base, type: log.action ?? 'Mouvement', resourceLabel: RESOURCE_LABELS[log.resource] ?? '—',
         sens: '', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: '—' }
@@ -315,8 +318,13 @@ export async function listAllUsers({
 export async function listAllClients({ lastDoc = null, search = '', storeId = '' } = {}) {
   try {
     const constraints = []
-    if (storeId) constraints.push(where('registeredStoreId', '==', storeId))
-    constraints.push(orderBy('nom'))
+    if (storeId) {
+      // Filtre boutique = égalité seule (ordre implicite par __name__) → aucun
+      // index composite requis. orderBy('nom') seulement en vue « toutes boutiques ».
+      constraints.push(where('registeredStoreId', '==', storeId))
+    } else {
+      constraints.push(orderBy('nom'))
+    }
     constraints.push(limit(PAGE + 1))
     if (lastDoc) constraints.push(startAfter(lastDoc))
 
@@ -330,7 +338,9 @@ export async function listAllClients({ lastDoc = null, search = '', storeId = ''
       clients = clients.filter(c =>
         c.nom?.toLowerCase().includes(q) ||
         c.prenom?.toLowerCase().includes(q) ||
-        c.numeroPersonnel?.toLowerCase().includes(q)
+        c.numeroPersonnel?.toLowerCase().includes(q) ||
+        c.orange?.toLowerCase().includes(q) ||             // code / numéro agent
+        c.registeredStoreName?.toLowerCase().includes(q)
       )
     }
 
@@ -382,13 +392,19 @@ export async function listConsolidatedHistory({ lastDoc = null, search = '', sto
 
     if (search.trim()) {
       const q = search.trim().toLowerCase()
-      records = records.filter(r =>
-        r.clientId?.toLowerCase().includes(q) ||
-        r.clientNom?.toLowerCase().includes(q) ||
-        r.storeName?.toLowerCase().includes(q) ||
-        r.storeId?.toLowerCase().includes(q) ||
-        r.nom?.toLowerCase().includes(q)
-      )
+      records = records.filter(r => {
+        const cn = [r.client?.prenom, r.client?.nom].filter(Boolean).join(' ').toLowerCase()
+        const code = String(r.code || r.client?.orange || '').toLowerCase()
+        return (
+          r.clientId?.toLowerCase().includes(q) ||
+          r.clientNom?.toLowerCase().includes(q) ||
+          cn.includes(q) ||
+          code.includes(q) ||
+          r.storeName?.toLowerCase().includes(q) ||
+          r.storeId?.toLowerCase().includes(q) ||
+          r.nom?.toLowerCase().includes(q)
+        )
+      })
     }
 
     return { records, lastDoc: lastRawDoc, hasMore, storeNameMap: resolvedMap }

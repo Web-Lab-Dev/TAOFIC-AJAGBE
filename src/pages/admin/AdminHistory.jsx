@@ -13,6 +13,17 @@ function formatDate(ts) {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// Nom du client : les transactions stockent l'objet `client` (nom/prénom) ;
+// `clientNom` (aplati) n'existe pas → on le reconstruit, avec repli legacy.
+function clientName(r) {
+  const full = [r.client?.prenom, r.client?.nom].filter(Boolean).join(' ').trim()
+  return full || r.clientNom || '—'
+}
+// Code / numéro agent : `code` (agent du réseau de la transaction) ou `client.orange`.
+function agentCode(r) {
+  return r.code || r.client?.orange || '—'
+}
+
 function statusVariant(statut) {
   if (!statut) return 'inactive'
   const s = String(statut).toLowerCase()
@@ -113,8 +124,8 @@ function AdminHistory() {
     ? records.filter(r => {
         const q = search.trim().toLowerCase()
         return (
-          r.clientNom?.toLowerCase().includes(q) ||
-          r.nom?.toLowerCase().includes(q) ||
+          clientName(r).toLowerCase().includes(q) ||
+          agentCode(r).toLowerCase().includes(q) ||
           r.type?.toLowerCase().includes(q)
         )
       })
@@ -184,7 +195,7 @@ function AdminHistory() {
         </div>
 
         {/* ── États ─────────────────────────────────────────────────────────── */}
-        {loading && <SkeletonTable rows={8} cols={6} />}
+        {loading && <SkeletonTable rows={8} cols={7} />}
         {error && <ErrorState message={error} onRetry={refresh} />}
         {/* Vide ET rien de plus à charger → aucune donnée. Si `hasMore`, on
             garde le bouton « Charger plus » accessible (voir bloc suivant). */}
@@ -210,6 +221,7 @@ function AdminHistory() {
                     <th className="px-5 py-3.5">Montant</th>
                     <th className="px-5 py-3.5">Statut</th>
                     <th className="px-5 py-3.5">Client</th>
+                    <th className="px-5 py-3.5">Code agent</th>
                     <th className="px-5 py-3.5">Date</th>
                   </tr>
                 </thead>
@@ -228,7 +240,8 @@ function AdminHistory() {
                           <StatusBadge status={statusVariant(r.statut)} label={r.statut} />
                         ) : '—'}
                       </td>
-                      <td className="px-5 py-3.5 text-gray-600 whitespace-nowrap text-xs">{r.clientNom ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-gray-700 whitespace-nowrap text-xs">{clientName(r)}</td>
+                      <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap font-mono text-xs">{agentCode(r)}</td>
                       <td className="px-5 py-3.5 text-gray-400 text-xs whitespace-nowrap">{formatDate(r.createdAt)}</td>
                     </tr>
                   ))}

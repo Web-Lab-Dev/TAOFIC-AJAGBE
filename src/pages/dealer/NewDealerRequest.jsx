@@ -39,6 +39,7 @@ function NewDealerRequest() {
     Object.values(DEALER_REQUEST_TYPES).includes(preType) ? preType : ''
   )
   const [selectedPartnerId, setSelectedPartnerId] = useState('')
+  const [partnerOperation, setPartnerOperation] = useState('deposit') // 'deposit' | 'withdrawal'
   const [amountRaw, setAmountRaw] = useState('')
   const [amountError, setAmountError] = useState(null)
 
@@ -87,7 +88,7 @@ function NewDealerRequest() {
 
     try {
       if (isPartner) {
-        await createPartnerDeposit({ partner: findPartner(selectedPartnerId), amount: parseDealerAmount(amountRaw) })
+        await createPartnerDeposit({ partner: findPartner(selectedPartnerId), amount: parseDealerAmount(amountRaw), operation: partnerOperation })
         navigate('/dealer/history', { replace: true })
       } else {
         await createDealerRequest({
@@ -106,13 +107,14 @@ function NewDealerRequest() {
       submitLockRef.current = false
       setIsSubmitting(false)
     }
-  }, [isPartner, currentUser, userProfile, selectedStoreId, requestType, selectedPartnerId, amountRaw, navigate, isSubmitting])
+  }, [isPartner, currentUser, userProfile, selectedStoreId, requestType, selectedPartnerId, partnerOperation, amountRaw, navigate, isSubmitting])
 
   const switchTarget = (t) => {
     setTargetType(t)
     setStep('form')
     setSubmitError(null)
     setAmountError(null)
+    setPartnerOperation('deposit')
   }
 
   if (storesLoading) {
@@ -140,7 +142,7 @@ function NewDealerRequest() {
       <div className="max-w-xl mx-auto" data-testid="new-dealer-request">
         <div className="bg-white rounded-lg shadow p-6">
           <h1 className="text-lg font-bold text-gray-800 mb-5">
-            {isPartner ? 'Confirmer le dépôt partenaire' : 'Confirmer la demande'}
+            {isPartner ? 'Confirmer l\'opération partenaire' : 'Confirmer la demande'}
           </h1>
           <dl className="divide-y divide-gray-100 mb-6">
             {isPartner ? (
@@ -151,7 +153,11 @@ function NewDealerRequest() {
                 </div>
                 <div className="flex py-3">
                   <dt className="w-36 flex-shrink-0 text-sm text-gray-500">Opération</dt>
-                  <dd className="text-sm font-medium text-gray-800">Dépôt — stock −{formatCurrency(parsedAmt)}, liquidité +{formatCurrency(parsedAmt)}</dd>
+                  <dd className="text-sm font-medium text-gray-800" data-testid="confirm-operation">
+                    {partnerOperation === 'withdrawal'
+                      ? `Retrait — stock +${formatCurrency(parsedAmt)}, liquidité −${formatCurrency(parsedAmt)}`
+                      : `Dépôt — stock −${formatCurrency(parsedAmt)}, liquidité +${formatCurrency(parsedAmt)}`}
+                  </dd>
                 </div>
               </>
             ) : (
@@ -247,8 +253,40 @@ function NewDealerRequest() {
                   <option key={p.id} value={p.id}>{partnerLabel(p)}</option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-gray-500">
-                Dépôt immédiat, sans notification : votre inventaire fait stock −montant et liquidité +montant.
+
+              <fieldset className="mt-4">
+                <legend className="block text-sm font-medium text-gray-700 mb-2">
+                  Opération <span aria-hidden="true" className="text-red-500">*</span>
+                </legend>
+                <div role="radiogroup" aria-label="Opération partenaire" className="inline-flex rounded-lg bg-gray-100 p-1">
+                  {[
+                    { value: 'deposit', label: 'Dépôt' },
+                    { value: 'withdrawal', label: 'Retrait' },
+                  ].map(op => {
+                    const active = partnerOperation === op.value
+                    return (
+                      <button
+                        key={op.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setPartnerOperation(op.value)}
+                        className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400 ${
+                          active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                        data-testid={`partner-op-${op.value}`}
+                      >
+                        {op.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </fieldset>
+
+              <p className="mt-3 text-xs text-gray-500">
+                {partnerOperation === 'withdrawal'
+                  ? 'Retrait immédiat, sans notification : votre inventaire fait stock +montant et liquidité −montant.'
+                  : 'Dépôt immédiat, sans notification : votre inventaire fait stock −montant et liquidité +montant.'}
               </p>
             </div>
           ) : (

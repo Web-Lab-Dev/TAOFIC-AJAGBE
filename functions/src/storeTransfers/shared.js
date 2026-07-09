@@ -76,6 +76,17 @@ export function validatePartnerInput(data) {
   }
 }
 
+// ── Opération partenaire : dépôt (−stock +liquidité) ou retrait (+stock −liquidité) ─
+// Rétrocompatible : une valeur absente/vide vaut 'deposit' (comportement historique).
+export const PARTNER_OPERATIONS = new Set(['deposit', 'withdrawal'])
+export function validatePartnerOperation(operation) {
+  const v = (operation == null || operation === '') ? 'deposit' : operation
+  if (typeof v !== 'string' || !PARTNER_OPERATIONS.has(v)) {
+    throw new DealerRequestError('INVALID_PARTNER', 'Opération partenaire invalide (dépôt ou retrait).')
+  }
+  return v
+}
+
 // ── Profil dealer (actif, role dealer) ───────────────────────────────────────
 export function validateDealerProfile(profile) {
   if (!profile || typeof profile !== 'object') {

@@ -118,4 +118,62 @@ describe('TC-070 — createPartnerDeposit', () => {
       'INVALID_TRANSFER_AMOUNT',
     )
   })
+
+  it('[PD-07] retrait : stock +M, liquidité −M, opération enregistrée, audit', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedDealerBal({ stock: 10000, liquidite: 40000 })
+
+    const res = await createPartnerDepositHandler(
+      req(DEALER_UID, { ...PARTNER, amount: 15000, operation: 'withdrawal' }), { db, FieldValue })
+    expect(res.success).toBe(true)
+    expect(res.operation).toBe('withdrawal')
+    expect(res.newStock).toBe(25000)      // 10000 + 15000
+    expect(res.newLiquidite).toBe(25000)  // 40000 - 15000
+
+    const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(dbal.balances.Orange.stock).toBe(25000)
+    expect(dbal.balances.Orange.liquidite).toBe(25000)
+
+    const d = (await db.collection('dealerPartnerDeposits').get()).docs[0].data()
+    expect(d.operation).toBe('withdrawal')
+    const audit = (await db.collection(`dealerBalances/${DEALER_UID}/auditLogs`).get()).docs[0].data()
+    expect(audit.action).toBe('PARTNER_DEPOSIT')
+    expect(audit.operation).toBe('withdrawal')
+  })
+
+  it('[PD-08] retrait : liquidité insuffisante → INSUFFICIENT_DEALER_BALANCE, aucune écriture', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedDealerBal({ stock: 40000, liquidite: 5000 })
+    await expectError(
+      createPartnerDepositHandler(req(DEALER_UID, { ...PARTNER, amount: 15000, operation: 'withdrawal' }), { db, FieldValue }),
+      'INSUFFICIENT_DEALER_BALANCE',
+    )
+    const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(dbal.balances.Orange.stock).toBe(40000)
+    expect(dbal.balances.Orange.liquidite).toBe(5000)
+    expect((await db.collection('dealerPartnerDeposits').get()).size).toBe(0)
+  })
+
+  it('[PD-09] opération invalide → INVALID_PARTNER', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedDealerBal({ stock: 40000, liquidite: 40000 })
+    await expectError(
+      createPartnerDepositHandler(req(DEALER_UID, { ...PARTNER, amount: 1000, operation: 'transfer' }), { db, FieldValue }),
+      'INVALID_PARTNER',
+    )
+  })
+
+  it('[PD-10] retrait : stock crédité dépasse l\'entier sûr → BALANCE_OVERFLOW, aucune écriture', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    // stock à la limite MAX_SAFE_INTEGER ; liquidité suffisante pour le débit.
+    await seedDealerBal({ stock: 9007199254740991, liquidite: 5000 })
+    await expectError(
+      createPartnerDepositHandler(req(DEALER_UID, { ...PARTNER, amount: 1000, operation: 'withdrawal' }), { db, FieldValue }),
+      'BALANCE_OVERFLOW',
+    )
+    const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(dbal.balances.Orange.stock).toBe(9007199254740991) // inchangé
+    expect(dbal.balances.Orange.liquidite).toBe(5000)         // inchangé
+    expect((await db.collection('dealerPartnerDeposits').get()).size).toBe(0)
+  })
 })
