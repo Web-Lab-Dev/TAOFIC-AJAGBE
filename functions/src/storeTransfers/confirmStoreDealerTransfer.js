@@ -64,22 +64,30 @@ export async function confirmStoreDealerTransferHandler(request, { db, FieldValu
         throw new DealerRequestError('INVALID_TRANSFER_DATA', 'Montant du transfert invalide.')
       }
 
-      // Solde dealer (peut ne pas exister → 0)
-      const balRef = db.doc(`dealerBalances/${actorUid}`)
-      const balSnap = await t.get(balRef)
-      const previousDealerBalance = readDealerBalanceAmount(balSnap.exists ? balSnap.data() : null, field)
-      const newDealerBalance = previousDealerBalance + amount
-      if (!Number.isSafeInteger(newDealerBalance)) {
-        throw new DealerRequestError('BALANCE_OVERFLOW', 'Le solde résultant dépasse la limite des entiers sûrs.')
-      }
+      // Règle métier : SEUL le retour de stock crédite l'inventaire dealer.
+      // L'« Envoi de liquidité » est validé et tracé mais NE crédite PAS la
+      // liquidité dealer (la liquidité part vers Orange, hors inventaire suivi).
+      const creditsDealer = transfer.transferType === 'return_stock'
+      let previousDealerBalance = null
+      let newDealerBalance = null
       const now = FieldValue.serverTimestamp()
 
-      // Crédit dealer — set + merge (crée le document s'il n'existe pas encore,
-      // le merge profond préserve l'autre champ : stock ↔ liquidite).
-      t.set(balRef, {
-        balances: { Orange: { [field]: newDealerBalance } },
-        updatedAt: now,
-      }, { merge: true })
+      if (creditsDealer) {
+        // Solde dealer (peut ne pas exister → 0)
+        const balRef = db.doc(`dealerBalances/${actorUid}`)
+        const balSnap = await t.get(balRef)
+        previousDealerBalance = readDealerBalanceAmount(balSnap.exists ? balSnap.data() : null, field)
+        newDealerBalance = previousDealerBalance + amount
+        if (!Number.isSafeInteger(newDealerBalance)) {
+          throw new DealerRequestError('BALANCE_OVERFLOW', 'Le solde résultant dépasse la limite des entiers sûrs.')
+        }
+        // Crédit dealer — set + merge (crée le document s'il n'existe pas encore,
+        // le merge profond préserve l'autre champ : stock ↔ liquidite).
+        t.set(balRef, {
+          balances: { Orange: { [field]: newDealerBalance } },
+          updatedAt: now,
+        }, { merge: true })
+      }
 
       // Mise à jour du transfert
       t.update(transferRef, {

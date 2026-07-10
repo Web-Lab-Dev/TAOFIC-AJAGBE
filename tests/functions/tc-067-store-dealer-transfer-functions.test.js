@@ -256,7 +256,7 @@ describe('TC-067-CO — confirm', () => {
     expect(audit.docs[0].data().action).toBe('STORE_DEALER_TRANSFER_CONFIRMED')
   })
 
-  it('[CO-02] cumul : solde dealer existant + montant', async () => {
+  it('[CO-02] envoi de liquidité : liquidité dealer NON créditée, transfert confirmé, audit sans impact', async () => {
     await seedUser(DEALER_UID, DEALER_PROFILE)
     await db.doc(`dealerBalances/${DEALER_UID}`).set({ balances: { Orange: { stock: 2000, liquidite: 1000 } } })
     await seedTransfer('t-liq', basePendingTransfer({ transferType: 'return_liquidity', amount: 3000 }))
@@ -265,10 +265,41 @@ describe('TC-067-CO — confirm', () => {
       makeRequest(DEALER_UID, { transferId: 't-liq' }),
       { db, FieldValue },
     )
-    expect(res.newDealerBalance).toBe(4000)
+    expect(res.success).toBe(true)
+    expect(res.newDealerBalance).toBeNull()
+    expect(res.previousDealerBalance).toBeNull()
+
     const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
-    expect(dbal.balances.Orange.liquidite).toBe(4000)
-    expect(dbal.balances.Orange.stock).toBe(2000) // préservé
+    expect(dbal.balances.Orange.liquidite).toBe(1000) // INCHANGÉ : aucun crédit
+    expect(dbal.balances.Orange.stock).toBe(2000)     // préservé
+
+    const tr = (await db.doc('storeDealerTransfers/t-liq').get()).data()
+    expect(tr.status).toBe('confirmed')
+    expect(tr.newDealerBalance).toBeNull()
+
+    const audit = await db.collection(`dealerBalances/${DEALER_UID}/auditLogs`).get()
+    expect(audit.size).toBe(1)
+    expect(audit.docs[0].data().action).toBe('STORE_DEALER_TRANSFER_CONFIRMED')
+    expect(audit.docs[0].data().newBalance).toBeNull()
+  })
+
+  it('[CO-07] envoi de liquidité sans inventaire préexistant : aucun crédit ni doc dealerBalances, confirmé', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedTransfer('t-liq2', basePendingTransfer({ transferType: 'return_liquidity', amount: 5000 }))
+
+    const res = await confirmStoreDealerTransferHandler(
+      makeRequest(DEALER_UID, { transferId: 't-liq2' }),
+      { db, FieldValue },
+    )
+    expect(res.success).toBe(true)
+    expect(res.newDealerBalance).toBeNull()
+
+    // Écrire l'audit (sous-collection) ne crée pas le document dealerBalances parent.
+    const balDoc = await db.doc(`dealerBalances/${DEALER_UID}`).get()
+    expect(balDoc.exists).toBe(false)
+
+    const tr = (await db.doc('storeDealerTransfers/t-liq2').get()).data()
+    expect(tr.status).toBe('confirmed')
   })
 
   it('[CO-03] appelant non dealer → ROLE_FORBIDDEN', async () => {

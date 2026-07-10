@@ -33,23 +33,25 @@ describe('TC-073 — normalizeDealerMovement', () => {
     expect(r.soldeApres).toBe(2000)
   })
 
-  it('retour boutique confirmé (return_liquidity) → + / Liquidité / source = boutique', () => {
+  it('retour boutique liquidité (non créditée, newBalance null) → sens neutre, sans impact solde', () => {
     const r = normalizeDealerMovement({
       action: 'STORE_DEALER_TRANSFER_CONFIRMED', transferType: 'return_liquidity',
-      amount: 4000, newBalance: 9000, storeName: 'Boutique Bitou',
+      amount: 4000, newBalance: null, storeName: 'Boutique Bitou',
     })
     expect(r.type).toBe('Retour boutique')
-    expect(r.resourceLabel).toBe('Liquidité')
-    expect(r.sens).toBe('+')
+    expect(r.resourceLabel).toContain('sans impact solde')
+    expect(r.sens).toBe('·')
+    expect(r.soldeApres).toBeNull()
     expect(r.source).toBe('Boutique Bitou')
   })
 
-  it('retour boutique confirmé (return_stock) → ressource Stock', () => {
+  it('retour boutique confirmé (return_stock, crédité) → + / Stock / solde après', () => {
     const r = normalizeDealerMovement({
       action: 'STORE_DEALER_TRANSFER_CONFIRMED', transferType: 'return_stock', amount: 1000, newBalance: 3000,
     })
     expect(r.resourceLabel).toBe('Stock')
     expect(r.sens).toBe('+')
+    expect(r.soldeApres).toBe(3000)
   })
 
   it('dépôt partenaire → ± / deux impacts (newStock/newLiquidite)', () => {

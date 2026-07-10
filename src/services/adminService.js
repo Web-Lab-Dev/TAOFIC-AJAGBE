@@ -218,8 +218,15 @@ export function normalizeDealerMovement(log = {}) {
         sens: '−', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: 'Dealer' }
     case 'STORE_DEALER_TRANSFER_CONFIRMED': {
       const res = log.transferType === 'return_liquidity' ? 'liquidite' : 'stock'
-      return { ...base, type: 'Retour boutique', resourceLabel: RESOURCE_LABELS[res],
-        sens: '+', amount: log.amount ?? 0, soldeApres: log.newBalance ?? null, source: log.storeName ?? 'Boutique' }
+      // Envoi de liquidité : validé/tracé mais SANS crédit de l'inventaire dealer
+      // (newBalance null) → afficher neutre, pas de faux « +liquidité ».
+      const noImpact = log.newBalance == null
+      return { ...base, type: 'Retour boutique',
+        resourceLabel: noImpact ? `${RESOURCE_LABELS[res]} (sans impact solde)` : RESOURCE_LABELS[res],
+        sens: noImpact ? '·' : '+',
+        amount: log.amount ?? 0,
+        soldeApres: noImpact ? null : (log.newBalance ?? null),
+        source: log.storeName ?? 'Boutique' }
     }
     case 'PARTNER_DEPOSIT': {
       const withdrawal = log.operation === 'withdrawal'
