@@ -58,3 +58,6 @@ DEV-NOTES.md
 
 # Sauvegardes locales de règles Firestore prod (snapshots ponctuels, ne jamais committer)
 firestore.rules.prod-*.txt
+
+# Backups locaux de remise à zéro (données financières client, ne jamais committer)
+backups/
