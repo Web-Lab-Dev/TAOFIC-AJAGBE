@@ -31,6 +31,7 @@ import { join } from 'node:path'
 import { resolveResetProject, PRODUCTION_PROJECT_ID } from './lib/assertResetProject.mjs'
 import { NdjsonWriter } from './lib/firestoreBackup.mjs'
 import { verifyResetBackup } from './lib/verifyResetBackup.mjs'
+import { withRetry } from './lib/withRetry.mjs'
 
 // ─────────────────────────────────────────────
 // Périmètre (allowlists explicites)
@@ -98,6 +99,12 @@ initializeApp({
   credential: serviceAccount ? cert(serviceAccount) : applicationDefault(),
 })
 const db = getFirestore()
+// Transport REST : connexions courtes, bien plus robustes que gRPC sur le
+// réseau instable du poste d'administration (coupures ECONNRESET).
+// Pas sur émulateur : le transport REST exige de vraies clés d'authentification.
+if (!process.env.FIRESTORE_EMULATOR_HOST) {
+  db.settings({ preferRest: true })
+}
 
 console.log(`Projet : ${projectId}${isProduction ? ' (PRODUCTION)' : ''}`)
 console.log(`Mode   : ${execute ? 'EXECUTION' : 'DRY-RUN (aucune écriture)'}`)
@@ -107,7 +114,7 @@ console.log('')
 // Helpers
 // ─────────────────────────────────────────────
 async function countCollection(ref) {
-  const agg = await ref.count().get()
+  const agg = await withRetry(() => ref.count().get(), 'comptage')
   return agg.data().count
 }
 
@@ -116,13 +123,18 @@ async function* paginate(collRef) {
   for (;;) {
     let q = collRef.orderBy(FieldPath.documentId()).limit(PAGE_SIZE)
     if (last) q = q.startAfter(last)
-    const snap = await q.get()
+    // Relire une page est sans effet de bord : nouvelle tentative sûre.
+    const snap = await withRetry(() => q.get(), `lecture ${collRef.path || 'collection'}`)
     if (snap.empty) return
     for (const doc of snap.docs) yield doc
     last = snap.docs[snap.docs.length - 1]
     if (snap.size < PAGE_SIZE) return
   }
 }
+
+const getDoc = (path) => withRetry(() => db.doc(path).get(), `lecture ${path}`)
+const listDocs = (path) => withRetry(() => db.collection(path).listDocuments(), `liste ${path}`)
+const listCols = (path) => withRetry(() => db.doc(path).listCollections(), `sous-collections ${path}`)
 
 // Les ids Firestore peuvent contenir des caractères interdits dans un nom de
 // fichier Windows : on les remplace, avec suffixe numérique en cas de collision.
@@ -143,20 +155,23 @@ function safeFileName(id) {
 const warnings = []
 
 const storeIds = new Set()
-for (const doc of (await db.collection('stores').listDocuments())) storeIds.add(doc.id)
+for (const doc of (await listDocs('stores'))) storeIds.add(doc.id)
 // listDocuments() retourne aussi les parents "missing" qui ne portent que des
 // sous-collections — indispensable pour attraper les boutiques orphelines.
-for (const doc of (await db.collection('clients').listDocuments())) storeIds.add(doc.id)
+for (const doc of (await listDocs('clients'))) storeIds.add(doc.id)
 
 const dealerIds = new Set()
-const dealersSnap = await db.collection('users').where('role', '==', 'dealer').get()
+const dealersSnap = await withRetry(
+  () => db.collection('users').where('role', '==', 'dealer').get(),
+  'liste des dealers'
+)
 for (const doc of dealersSnap.docs) dealerIds.add(doc.id)
-for (const doc of (await db.collection('dealerBalances').listDocuments())) dealerIds.add(doc.id)
+for (const doc of (await listDocs('dealerBalances'))) dealerIds.add(doc.id)
 
 // Filet de sécurité : aucune sous-collection inconnue ne doit exister là où
 // recursiveDelete va passer (elle serait détruite sans backup).
 for (const storeId of storeIds) {
-  const subCols = await db.doc(`clients/${storeId}`).listCollections()
+  const subCols = await listCols(`clients/${storeId}`)
   for (const col of subCols) {
     if (!STORE_SUBCOLLECTIONS_DELETE.includes(col.id) && !STORE_SUBCOLLECTIONS_PRESERVE.includes(col.id)) {
       warnings.push(`Sous-collection inconnue : clients/${storeId}/${col.id}`)
@@ -164,7 +179,7 @@ for (const storeId of storeIds) {
   }
 }
 for (const dealerUid of dealerIds) {
-  const subCols = await db.doc(`dealerBalances/${dealerUid}`).listCollections()
+  const subCols = await listCols(`dealerBalances/${dealerUid}`)
   for (const col of subCols) {
     if (!DEALER_SUBCOLLECTIONS_DELETE.includes(col.id)) {
       warnings.push(`Sous-collection inconnue : dealerBalances/${dealerUid}/${col.id}`)
@@ -187,13 +202,13 @@ for (const storeId of storeIds) {
   for (const sub of STORE_SUBCOLLECTIONS_DELETE) {
     perStore[sub] = await countCollection(db.collection(`clients/${storeId}/${sub}`))
   }
-  perStore.networkBalancesCurrent = (await db.doc(`clients/${storeId}/networkBalances/current`).get()).exists
+  perStore.networkBalancesCurrent = (await getDoc(`clients/${storeId}/networkBalances/current`)).exists
   counts.stores[storeId] = perStore
 }
 
 for (const dealerUid of dealerIds) {
   counts.dealers[dealerUid] = {
-    balanceDoc: (await db.doc(`dealerBalances/${dealerUid}`).get()).exists,
+    balanceDoc: (await getDoc(`dealerBalances/${dealerUid}`)).exists,
     auditLogs: await countCollection(db.collection(`dealerBalances/${dealerUid}/auditLogs`)),
   }
 }
@@ -293,7 +308,7 @@ for (const storeId of storeIds) {
       // Les transactions (drafts/history) portent des settlements ; toute autre
       // sous-collection serait détruite par recursiveDelete sans backup → contrôle.
       if (sub === 'drafts' || sub === 'history') {
-        const txnSubCols = await doc.ref.listCollections()
+        const txnSubCols = await withRetry(() => doc.ref.listCollections(), `sous-collections ${doc.ref.path}`)
         for (const col of txnSubCols) {
           if (!TXN_SUBCOLLECTIONS_DELETE.includes(col.id)) {
             unknownTxnSubcollections.push(`${doc.ref.path}/${col.id}`)
@@ -312,7 +327,7 @@ for (const storeId of storeIds) {
     perStore[sub] = n
   }
 
-  const nbSnap = await db.doc(`clients/${storeId}/networkBalances/current`).get()
+  const nbSnap = await getDoc(`clients/${storeId}/networkBalances/current`)
   if (nbSnap.exists) {
     await writer.writeDoc(nbSnap.ref.path, nbSnap.data())
     perStore.networkBalancesBackedUp = true
@@ -329,7 +344,7 @@ for (const dealerUid of dealerIds) {
   const writer = new NdjsonWriter(join(backupDir, fileName))
   const perDealer = { auditLogs: 0, balanceBackedUp: false }
 
-  const balSnap = await db.doc(`dealerBalances/${dealerUid}`).get()
+  const balSnap = await getDoc(`dealerBalances/${dealerUid}`)
   if (balSnap.exists) {
     await writer.writeDoc(balSnap.ref.path, balSnap.data())
     perDealer.balanceBackedUp = true
@@ -393,8 +408,12 @@ console.log('')
 console.log('Suppression en cours ...')
 
 try {
+  // Une suppression est idempotente : nouvelle tentative sûre après coupure réseau.
+  const recursiveDelete = (path) =>
+    withRetry(() => db.recursiveDelete(db.collection(path)), `suppression ${path}`)
+
   for (const name of TOP_LEVEL_DELETE.filter((n) => n !== 'auditLogs')) {
-    await db.recursiveDelete(db.collection(name))
+    await recursiveDelete(name)
     console.log(`  supprimé : ${name}`)
   }
 
@@ -402,18 +421,18 @@ try {
     // Jamais recursiveDelete sur le doc clients/{storeId} lui-même :
     // cela détruirait networkBalances. Sous-collections cibles uniquement.
     for (const sub of STORE_SUBCOLLECTIONS_DELETE) {
-      await db.recursiveDelete(db.collection(`clients/${storeId}/${sub}`))
+      await recursiveDelete(`clients/${storeId}/${sub}`)
     }
     console.log(`  supprimé : clients/${storeId}/{${STORE_SUBCOLLECTIONS_DELETE.join(',')}}`)
   }
 
   for (const dealerUid of dealerIds) {
-    await db.recursiveDelete(db.collection(`dealerBalances/${dealerUid}/auditLogs`))
+    await recursiveDelete(`dealerBalances/${dealerUid}/auditLogs`)
     console.log(`  supprimé : dealerBalances/${dealerUid}/auditLogs`)
   }
 
   // auditLogs top-level en dernier : garder la trace applicative le plus longtemps possible.
-  await db.recursiveDelete(db.collection('auditLogs'))
+  await recursiveDelete('auditLogs')
   console.log('  supprimé : auditLogs')
 
   // ─────────────────────────────────────────────
@@ -425,7 +444,7 @@ try {
   let zeroedDealerBalances = 0
   for (const dealerUid of dealerIds) {
     const ref = db.doc(`dealerBalances/${dealerUid}`)
-    const snap = await ref.get()
+    const snap = await getDoc(ref.path)
     if (!snap.exists) {
       console.log(`  dealerBalances/${dealerUid} : absent, ignoré`)
       continue
@@ -435,7 +454,11 @@ try {
     for (const network of Object.keys(data.balances || {})) {
       zeroBalances[network] = { stock: 0, liquidite: 0 }
     }
-    await ref.set({ ...data, balances: zeroBalances, updatedAt: FieldValue.serverTimestamp() })
+    // set() complet : idempotent, nouvelle tentative sûre.
+    await withRetry(
+      () => ref.set({ ...data, balances: zeroBalances, updatedAt: FieldValue.serverTimestamp() }),
+      `remise à zéro ${ref.path}`
+    )
     zeroedDealerBalances += 1
     console.log(`  dealerBalances/${dealerUid} : remis à zéro`)
   }
@@ -443,7 +466,7 @@ try {
   let zeroedNetworkBalances = 0
   for (const storeId of storeIds) {
     const ref = db.doc(`clients/${storeId}/networkBalances/current`)
-    const snap = await ref.get()
+    const snap = await getDoc(ref.path)
     if (!snap.exists) {
       console.log(`  clients/${storeId}/networkBalances/current : absent, ignoré`)
       continue
@@ -451,7 +474,10 @@ try {
     const zeroBalances = {}
     for (const network of NETWORKS) zeroBalances[network] = { stock: 0, liquidite: 0 }
     // set() sans merge : forme exacte exigée par firestore.rules (balances + updatedAt).
-    await ref.set({ balances: zeroBalances, updatedAt: FieldValue.serverTimestamp() })
+    await withRetry(
+      () => ref.set({ balances: zeroBalances, updatedAt: FieldValue.serverTimestamp() }),
+      `remise à zéro ${ref.path}`
+    )
     zeroedNetworkBalances += 1
     console.log(`  clients/${storeId}/networkBalances/current : remis à zéro`)
   }
@@ -459,7 +485,9 @@ try {
   // ─────────────────────────────────────────────
   // Phase 6 — Trace finale + résumé
   // ─────────────────────────────────────────────
-  await db.collection('auditLogs').add({
+  // ID déterministe : une nouvelle tentative après coupure réseau ne peut pas
+  // créer de doublon de la trace.
+  await withRetry(() => db.doc(`auditLogs/reset-${timestamp}`).set({
     action: 'RESET_PERFORMED',
     projectId,
     backupDir,
@@ -470,7 +498,7 @@ try {
     zeroedNetworkBalances,
     executedBy: 'scripts/resetDataToZero.mjs',
     executedAt: FieldValue.serverTimestamp(),
-  })
+  }), 'trace RESET_PERFORMED')
 
   console.log('')
   console.log('══ REMISE À ZÉRO TERMINÉE ══════════════════════')

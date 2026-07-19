@@ -20,6 +20,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveResetProject, PRODUCTION_PROJECT_ID } from './lib/assertResetProject.mjs'
 import { readNdjson, reviveValue } from './lib/firestoreBackup.mjs'
+import { withRetry } from './lib/withRetry.mjs'
 
 const BATCH_SIZE = 500
 
@@ -80,6 +81,11 @@ initializeApp({
   credential: serviceAccount ? cert(serviceAccount) : applicationDefault(),
 })
 const db = getFirestore()
+// Transport REST : connexions courtes, plus robustes sur réseau instable.
+// Pas sur émulateur : le transport REST exige de vraies clés d'authentification.
+if (!process.env.FIRESTORE_EMULATOR_HOST) {
+  db.settings({ preferRest: true })
+}
 const sdk = { Timestamp, GeoPoint, db }
 
 console.log(`Projet : ${projectId}${isProduction ? ' (PRODUCTION)' : ''}`)
@@ -88,14 +94,19 @@ console.log(`Backup : ${backupDir} (créé le ${manifest.createdAt}, projet ${ma
 console.log('')
 
 let totalDocs = 0
-let batch = db.batch()
-let batchSize = 0
+let pending = []
 
 async function flushBatch() {
-  if (batchSize === 0) return
-  await batch.commit()
-  batch = db.batch()
-  batchSize = 0
+  if (pending.length === 0) return
+  const ops = pending
+  pending = []
+  // Batch reconstruit à chaque tentative (un WriteBatch ne se committe qu'une
+  // fois) ; des set() complets sont idempotents : nouvelle tentative sûre.
+  await withRetry(() => {
+    const batch = db.batch()
+    for (const { path, data } of ops) batch.set(db.doc(path), data)
+    return batch.commit()
+  }, 'écriture batch restauration')
 }
 
 for (const [fileName, expectedCount] of Object.entries(manifest.files)) {
@@ -109,9 +120,8 @@ for (const [fileName, expectedCount] of Object.entries(manifest.files)) {
   for (const { path, data } of docs) {
     totalDocs += 1
     if (execute) {
-      batch.set(db.doc(path), reviveValue(data, sdk))
-      batchSize += 1
-      if (batchSize >= BATCH_SIZE) await flushBatch()
+      pending.push({ path, data: reviveValue(data, sdk) })
+      if (pending.length >= BATCH_SIZE) await flushBatch()
     }
   }
   console.log(`  ${execute ? 'restauré' : 'serait restauré'} : ${fileName} (${docs.length} document(s))`)
