@@ -305,13 +305,21 @@ for (const storeId of storeIds) {
     for await (const doc of paginate(db.collection(`clients/${storeId}/${sub}`))) {
       await writer.writeDoc(doc.ref.path, doc.data())
       n += 1
-      // Les transactions (drafts/history) portent des settlements ; toute autre
-      // sous-collection serait détruite par recursiveDelete sans backup → contrôle.
-      if (sub === 'drafts' || sub === 'history') {
-        const txnSubCols = await withRetry(() => doc.ref.listCollections(), `sous-collections ${doc.ref.path}`)
+    }
+    perStore[sub] = n
+
+    // Les transactions (drafts/history) portent des settlements. On énumère les
+    // refs via listDocuments (et non une requête) : quand l'application supprime
+    // un brouillon, sa sous-collection settlements peut survivre sous un parent
+    // "missing" — invisible aux requêtes mais détruite par recursiveDelete,
+    // elle doit donc être sauvegardée aussi (798 vs 379 constatés en prod).
+    if (sub === 'drafts' || sub === 'history') {
+      const txnRefs = await listDocs(`clients/${storeId}/${sub}`)
+      for (const txnRef of txnRefs) {
+        const txnSubCols = await withRetry(() => txnRef.listCollections(), `sous-collections ${txnRef.path}`)
         for (const col of txnSubCols) {
           if (!TXN_SUBCOLLECTIONS_DELETE.includes(col.id)) {
-            unknownTxnSubcollections.push(`${doc.ref.path}/${col.id}`)
+            unknownTxnSubcollections.push(`${txnRef.path}/${col.id}`)
             continue
           }
           // Comptage serveur par boutique : un écart compensé entre boutiques
@@ -324,7 +332,6 @@ for (const storeId of storeIds) {
         }
       }
     }
-    perStore[sub] = n
   }
 
   const nbSnap = await getDoc(`clients/${storeId}/networkBalances/current`)

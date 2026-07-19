@@ -193,6 +193,11 @@ async function seed() {
   b.set(db.doc('clients/S1/clients/legacyC1'), { nom: 'Test', prenom: 'Legacy', numeroPersonnel: '76112233', createdAt: T0 })
   b.set(db.doc('clients/S1/users/legacyU1'), { name: 'Employe Test', email: 'legacy@akayis.test', role: 'employee', createdAt: T0 })
 
+  // Settlements orphelins : le brouillon parent "ghost" n'existe pas (supprimé
+  // par l'application) mais ses settlements survivent — constaté en production.
+  b.set(db.doc('clients/S1/drafts/ghost/settlements/sg1'), { amount: 500, paymentMethod: 'Orange', fullySettled: true })
+  b.set(db.doc('clients/S1/history/ghostH/settlements/sg2'), { amount: 700, paymentMethod: 'Espèces', fullySettled: true })
+
   // Dealers
   for (const uid of ['dealer1', 'dealer2']) {
     b.set(db.doc(`dealerBalances/${uid}`), { balances: { Orange: { stock: 40000, liquidite: 25000 } }, updatedAt: T0 })
@@ -313,6 +318,10 @@ describe('Remise à zéro — cycle complet sur émulateur', () => {
     expect(d1).toBeTruthy()
     expect(d1.data.montant).toBe(5000)
     expect(d1.data.createdAt).toEqual({ __type: 'timestamp', seconds: 1700000000, nanoseconds: 0 })
+
+    // Les settlements orphelins (parents "missing") sont bien dans le backup
+    expect(s1Lines.some((l) => l.path === 'clients/S1/drafts/ghost/settlements/sg1')).toBe(true)
+    expect(s1Lines.some((l) => l.path === 'clients/S1/history/ghostH/settlements/sg2')).toBe(true)
   }, 90000)
 
   it('D — restore : restoreFromBackup ramène l’état pré-reset', async () => {
