@@ -43,7 +43,10 @@ const TOP_LEVEL_DELETE = [
   'auditLogs',
 ]
 const TOP_LEVEL_PRESERVE = ['globalClients', 'users', 'stores']
-const STORE_SUBCOLLECTIONS_DELETE = ['drafts', 'history', 'sessions', 'auditLogs']
+// 'clients' et 'users' : sous-collections héritées de la première version de
+// l'application (pilote de mai 2026, vues sous clients/taofic_ajagbe) —
+// confirmées comme données de test à purger, inexistantes ailleurs.
+const STORE_SUBCOLLECTIONS_DELETE = ['drafts', 'history', 'sessions', 'auditLogs', 'clients', 'users']
 const STORE_SUBCOLLECTIONS_PRESERVE = ['networkBalances']
 const TXN_SUBCOLLECTIONS_DELETE = ['settlements']
 const DEALER_SUBCOLLECTIONS_DELETE = ['auditLogs']

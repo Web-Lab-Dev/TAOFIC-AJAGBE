@@ -189,6 +189,10 @@ async function seed() {
   // Boutique orpheline : sous-collection sans doc stores/S3 ni doc clients/S3
   b.set(db.doc('clients/S3/drafts/dx'), { type: 'Dépôt', montant: 999, clientId: 'c9', statut: 'Non Terminées' })
 
+  // Sous-collections héritées de la première version (pilote mai 2026) : à purger
+  b.set(db.doc('clients/S1/clients/legacyC1'), { nom: 'Test', prenom: 'Legacy', numeroPersonnel: '76112233', createdAt: T0 })
+  b.set(db.doc('clients/S1/users/legacyU1'), { name: 'Employe Test', email: 'legacy@akayis.test', role: 'employee', createdAt: T0 })
+
   // Dealers
   for (const uid of ['dealer1', 'dealer2']) {
     b.set(db.doc(`dealerBalances/${uid}`), { balances: { Orange: { stock: 40000, liquidite: 25000 } }, updatedAt: T0 })
@@ -243,7 +247,7 @@ describe('Remise à zéro — cycle complet sur émulateur', () => {
       expect(pathsUnder(postDump, prefix)).toEqual([])
     }
     for (const storeId of ['S1', 'S2', 'S3']) {
-      for (const sub of ['drafts', 'history', 'sessions', 'auditLogs']) {
+      for (const sub of ['drafts', 'history', 'sessions', 'auditLogs', 'clients', 'users']) {
         expect(pathsUnder(postDump, `clients/${storeId}/${sub}/`)).toEqual([])
       }
     }
@@ -297,7 +301,7 @@ describe('Remise à zéro — cycle complet sur émulateur', () => {
       p.startsWith('dealerRequests/') || p.startsWith('dealerClosures/') ||
       p.startsWith('storeDealerTransfers/') || p.startsWith('dealerPartnerDeposits/') ||
       p.startsWith('auditLogs/') ||
-      /^clients\/[^/]+\/(drafts|history|sessions|auditLogs)\//.test(p) ||
+      /^clients\/[^/]+\/(drafts|history|sessions|auditLogs|clients|users)\//.test(p) ||
       /^clients\/[^/]+\/networkBalances\/current$/.test(p) ||
       /^dealerBalances\/[^/]+(\/auditLogs\/.+)?$/.test(p)
     ).length
