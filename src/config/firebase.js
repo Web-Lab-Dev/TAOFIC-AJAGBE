@@ -1,6 +1,12 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import { getFirestore, connectFirestoreEmulator, enableMultiTabIndexedDbPersistence } from 'firebase/firestore'
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  connectFirestoreEmulator,
+} from 'firebase/firestore'
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
 import { setLogLevel } from 'firebase/app'
 
@@ -63,16 +69,23 @@ try {
   // Init Authentication - pour gérer les connexions utilisateurs
   auth = getAuth(app)
 
-  // Init Firestore - base de données temps réel
-  db = getFirestore(app)
+  // Init Firestore avec persistence IndexedDB multi-onglets en prod (API Firebase v9+)
+  // En dev/émulateur : client standard sans persistence pour éviter les conflits de cache
+  const isDev = import.meta.env.DEV
+  const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
+
+  if (!isDev && import.meta.env.VITE_FIRESTORE_OFFLINE_PERSISTENCE === 'true') {
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  } else {
+    db = getFirestore(app)
+  }
 
   // Init Functions — région europe-west1 (proximité Afrique de l'Ouest)
   functions = getFunctions(app, 'europe-west1')
 
   // Configuration dev : utiliser les émulateurs Firebase si activés
-  const isDev = import.meta.env.DEV
-  const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
-
   if (isDev && useEmulators) {
     try {
       connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
@@ -81,18 +94,6 @@ try {
     } catch {
       // Ignorer si les émulateurs ne sont pas lancés
     }
-  }
-
-  // Activer la persistence offline (PWA) - stockage local pour mode hors ligne
-  // Uniquement en prod pour éviter les conflits avec les émulateurs
-  if (!isDev && import.meta.env.VITE_FIRESTORE_OFFLINE_PERSISTENCE === 'true') {
-    enableMultiTabIndexedDbPersistence(db)
-      .then(() => {
-        // Cache activé - l'app fonctionne maintenant hors ligne
-      })
-      .catch(() => {
-        // Déjà activé ou navigateur incompatible
-      })
   }
 
 } catch (error) {

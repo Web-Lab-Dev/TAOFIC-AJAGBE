@@ -9,6 +9,7 @@ import { AUTH_ROLES } from './constants/authMessages'
 import { getDefaultRouteForRole } from './utils/roleRouting'
 import RoleGuard from './components/auth/RoleGuard.jsx'
 import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
+import OfflineBanner from './components/OfflineBanner.jsx'
 
 // Layouts
 import Layout from './components/Layout'
@@ -96,7 +97,9 @@ function RoleBasedRedirect() {
 
 export function AppContent() {
   return (
-    <Routes>
+    <>
+      <OfflineBanner />
+      <Routes>
       {/* ── Espace Boutique (store_admin) ────────────────────────────────── */}
       <Route
         element={
@@ -155,6 +158,7 @@ export function AppContent() {
       {/* ── Fallback ──────────────────────────────────────────────────────── */}
       <Route path="*" element={<RoleBasedRedirect />} />
     </Routes>
+    </>
   )
 }
 

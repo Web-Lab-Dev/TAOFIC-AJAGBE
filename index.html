@@ -20,6 +20,20 @@
     <link rel="apple-touch-icon" sizes="192x192" href="/pwa-192x192.png">
     <link rel="apple-touch-icon" sizes="512x512" href="/pwa-512x512.png">
 
+    <!-- Capture beforeinstallprompt avant le montage React pour que le bouton soit toujours visible -->
+    <script>
+      window.__pwaInstallEvent = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwaInstallEvent = e;
+        window.dispatchEvent(new CustomEvent('pwa-install-available'));
+      });
+      window.addEventListener('appinstalled', function() {
+        window.__pwaInstallEvent = null;
+        window.dispatchEvent(new CustomEvent('pwa-installed'));
+      });
+    </script>
+
     <!-- PWA sera configuré automatiquement par Vite PWA -->
     <script>
       (function () {
