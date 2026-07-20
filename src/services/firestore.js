@@ -495,7 +495,7 @@ export class FirestoreService {
    */
   subscribeToCollection(collectionName, callback, queryOptions = {}) {
     try {
-      const subscriptionKey = `${collectionName}_${JSON.stringify(queryOptions)}`
+      const subscriptionKey = `${this.resolveCollectionPath(collectionName)}_${JSON.stringify(queryOptions)}`
 
       // Vérifier si on a déjà un listener pour cette requête exacte
       if (this.connectionPool.has(subscriptionKey)) {

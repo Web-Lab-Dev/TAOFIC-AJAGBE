@@ -143,42 +143,30 @@ export class HistoryService {
   // ---------------------------------------------------------------------------
 
   subscribeToHistory(callback, filters = {}) {
-    let queryOptions = {
-      // ⚠️ Pas de orderByField pour inclure TOUS les éléments d'historique, même sans createdAt
-      // orderByField: 'createdAt',
-      // orderDirection: 'desc'
+    const activeStore = this._requireActiveStore()
+
+    // ⚠️ Pas de orderByField pour inclure TOUS les éléments d'historique, même sans createdAt
+    // Filtre storeId obligatoire : chaque boutique ne voit que ses propres transactions,
+    // même si plusieurs boutiques partagent un même préfixe de chemin Firestore.
+    const whereClause = [{ field: 'storeId', operator: '==', value: activeStore.id }]
+
+    if (filters.clientId) {
+      whereClause.push({ field: 'clientId', operator: '==', value: filters.clientId })
     }
 
-    // Ajouter des filtres si spécifiés
-    if (filters.clientId || filters.dateRange) {
-      queryOptions.where = []
-
-      if (filters.clientId) {
-        queryOptions.where.push({
-          field: 'clientId',
-          operator: '==',
-          value: filters.clientId
-        })
+    if (filters.dateRange) {
+      if (filters.dateRange.start) {
+        whereClause.push({ field: 'createdAt', operator: '>=', value: filters.dateRange.start })
       }
-
-      if (filters.dateRange) {
-        if (filters.dateRange.start) {
-          queryOptions.where.push({
-            field: 'createdAt',
-            operator: '>=',
-            value: filters.dateRange.start
-          })
-        }
-        if (filters.dateRange.end) {
-          queryOptions.where.push({
-            field: 'createdAt',
-            operator: '<=',
-            value: filters.dateRange.end
-          })
-        }
+      if (filters.dateRange.end) {
+        whereClause.push({ field: 'createdAt', operator: '<=', value: filters.dateRange.end })
       }
     }
 
-    return this._subscribeToCollection(FIRESTORE_CONFIG.COLLECTIONS.HISTORY, callback, queryOptions)
+    return this._subscribeToCollection(
+      FIRESTORE_CONFIG.COLLECTIONS.HISTORY,
+      callback,
+      { where: whereClause }
+    )
   }
 }
