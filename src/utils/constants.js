@@ -1,4 +1,6 @@
-// Constantes réseau et codes associés
+import { activeProfile } from '../config/activeClientProfile.js'
+
+// Constantes réseau et codes associés (référentiel produit, indépendant du profil)
 export const NETWORK_CODES = {
   'Orange': '000001',
   'Moov': '000626',
@@ -7,21 +9,18 @@ export const NETWORK_CODES = {
   'Sank': '000004'
 }
 
-// Options réseau visibles pour ce client.
-// Les autres réseaux restent dans la logique interne et peuvent être réactivés.
-export const NETWORK_OPTIONS = ['Orange']
+// Options réseau visibles pour CE client — dérivées du profil client actif
+// (networks.enabled). Ex. TAOFIC → ['Orange'] ; pilote → les 5 réseaux.
+export const NETWORK_OPTIONS = [...activeProfile.networks.enabled]
 
-// Types de transaction
-export const TRANSACTION_TYPES = [
-  { value: 'Dépôt', label: 'Dépôt' },
-  { value: 'Retrait', label: 'Retrait' }
-]
+// Types de transaction — dérivés du profil (transactions.types).
+// Ex. TAOFIC → Dépôt/Retrait ; pilote → Dépôt/Retrait/Crédit.
+export const TRANSACTION_TYPES = activeProfile.transactions.types.map(
+  (type) => ({ value: type, label: type })
+)
 
-// Méthodes de paiement
-export const PAYMENT_METHODS = [
-  'Orange Money',
-  'Cash'
-]
+// Méthodes de paiement — dérivées du profil (transactions.paymentMethods).
+export const PAYMENT_METHODS = [...activeProfile.transactions.paymentMethods]
 
 // Styles pour les types de transactions
 export const TRANSACTION_STYLES = {

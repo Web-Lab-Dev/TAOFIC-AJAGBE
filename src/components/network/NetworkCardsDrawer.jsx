@@ -1,7 +1,10 @@
 import { useSimpleNetworkData } from '../../hooks/useSimpleNetworkData'
+import { activeProfile } from '../../config/activeClientProfile.js'
 import NetworkCard from './NetworkCard'
 
-const VISIBLE_NETWORK_CARDS = ['Orange', 'Liquidite']
+// Cartes de solde affichées = réseaux du profil client actif + la carte Liquidité
+// (toujours présente). Ex. TAOFIC → ['Orange', 'Liquidite'] (identique à avant).
+const VISIBLE_NETWORK_CARDS = [...activeProfile.networks.enabled, 'Liquidite']
 
 function NetworkCardsDrawer() {
   const { networkData } = useSimpleNetworkData()

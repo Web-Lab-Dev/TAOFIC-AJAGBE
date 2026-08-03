@@ -20,7 +20,12 @@ export const DEALER_REQUEST_STATUS_LABELS = Object.freeze({
   rejected: 'Rejetée',
 })
 
-export const DEALER_NETWORK = 'Orange'
+// Réseau dealer par défaut = 1er réseau du circuit dealer du profil actif.
+// Le dealer MULTI-réseaux (plusieurs SIM) est un chantier serveur (Phase 3) ; ici on
+// conserve le comportement mono-réseau (ex. TAOFIC → 'Orange').
+import { activeProfile } from '../config/activeClientProfile.js'
+
+export const DEALER_NETWORK = activeProfile.dealer.networks[0]
 
 export const DEALER_REQUESTS_PAGE_SIZE = 20
 export const DEALER_STORES_PAGE_SIZE = 20
