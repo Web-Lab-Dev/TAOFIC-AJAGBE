@@ -30,7 +30,9 @@ function normalizeClientId(value) {
 //   • 'nouveau_client' = placeholder d'un client non encore profilé → reçoit le
 //     pilote complet (opt-out) le temps qu'on lui crée son propre profil restreint.
 export const PROFILES = Object.freeze({
-  _pilot:          pilotProfile,
+  // clé normalisée : normalizeClientId('_pilot') === 'pilot' (le _ de tête est retiré),
+  // donc resolveProfile('_pilot') comme resolveProfile('pilot') pointent ici.
+  pilot:           pilotProfile,
   nouveau_client:  pilotProfile,
   taofic_ajagbe:   taoficProfile,
 })

@@ -2,6 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // <<< PROFIL-GÉNÉRÉ — DÉBUT (généré par scripts/generate-rules.mjs, ne pas éditer à la main) >>>
+    // Réseaux du circuit dealer autorisés pour ce client (depuis profil.dealer.networks).
+    function profileDealerNetworks() { return ['Orange']; }
+    // <<< PROFIL-GÉNÉRÉ — FIN >>>
+
     // ─────────────────────────────────────────────────────────────
     // Helpers V1 — backward compat boutiques
     // ─────────────────────────────────────────────────────────────
@@ -245,7 +250,7 @@ service cloud.firestore {
         data.dealerName == profile().name &&
         data.status == 'pending' &&
         data.requestType in ['stock_add', 'liquidity_add', 'open_day'] &&
-        data.network == 'Orange' &&
+        data.network in profileDealerNetworks() &&
         data.amount is int && data.amount > 0 &&
         data.targetStoreId is string && data.targetStoreId.size() > 0 &&
         data.createdAt == request.time &&
