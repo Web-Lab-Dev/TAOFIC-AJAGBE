@@ -53,8 +53,8 @@
 
 import { DealerRequestError } from '../errors.js'
 import { validateAuthUid, validateInputPayload } from '../dealerRequests/shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-const VALID_NETWORK     = 'Orange'
 const BUSINESS_DATE_RE  = /^\d{4}-\d{2}-\d{2}$/
 
 // ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ function validateDeclaredAmount(value, fieldName) {
 // Handler
 // ---------------------------------------------------------------------------
 
-export async function createDealerClosureHandler(request, { db, FieldValue }) {
+export async function createDealerClosureHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const dealerUid = validateAuthUid(request.auth?.uid)
 
@@ -106,8 +106,8 @@ export async function createDealerClosureHandler(request, { db, FieldValue }) {
   if (businessDate > today) {
     throw new DealerRequestError('INVALID_CLOSURE_DATA', 'businessDate ne peut pas être dans le futur.')
   }
-  if (network !== VALID_NETWORK) {
-    throw new DealerRequestError('INVALID_CLOSURE_DATA', `Réseau invalide. Seul "${VALID_NETWORK}" est pris en charge.`)
+  if (!new Set(dealerNetworks).has(network)) {
+    throw new DealerRequestError('INVALID_CLOSURE_DATA', `Réseau invalide : "${network}" hors du circuit dealer de ce client.`)
   }
 
   const normalizedReason = typeof reason === 'string' ? reason.trim() : ''
@@ -202,12 +202,12 @@ export async function createDealerClosureHandler(request, { db, FieldValue }) {
         throw new DealerRequestError('BALANCE_NOT_FOUND', 'Document de soldes introuvable pour cette boutique.')
       }
       const balData = balSnap.data()
-      const orange  = balData?.balances?.Orange
-      if (!orange || typeof orange !== 'object') {
-        throw new DealerRequestError('INVALID_BALANCE_DATA', 'Soldes Orange introuvables.')
+      const networkBalance = balData?.balances?.[network]
+      if (!networkBalance || typeof networkBalance !== 'object') {
+        throw new DealerRequestError('INVALID_BALANCE_DATA', `Soldes ${network} introuvables.`)
       }
-      const recordedStockBalance     = typeof orange.stock     === 'number' && Number.isFinite(orange.stock)     ? orange.stock     : 0
-      const recordedLiquidityBalance = typeof orange.liquidite === 'number' && Number.isFinite(orange.liquidite) ? orange.liquidite : 0
+      const recordedStockBalance     = typeof networkBalance.stock     === 'number' && Number.isFinite(networkBalance.stock)     ? networkBalance.stock     : 0
+      const recordedLiquidityBalance = typeof networkBalance.liquidite === 'number' && Number.isFinite(networkBalance.liquidite) ? networkBalance.liquidite : 0
 
       // 6e. Calcul des écarts (côté backend, le client ne peut pas fournir ces valeurs)
       const stockDifference     = declaredStockBalance     - recordedStockBalance

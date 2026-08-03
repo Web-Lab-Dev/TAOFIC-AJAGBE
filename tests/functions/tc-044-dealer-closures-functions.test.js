@@ -750,3 +750,53 @@ describe('TC-044-CON — Concurrence réelle', () => {
     expect(rejAudits.length).toBe(1)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §MN — Clôture dealer multi-réseaux
+//   Le réseau est porté par la clôture (payload) et validé contre dealerNetworks.
+//   Les soldes enregistrés sont lus sur balances[network].
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TC-044-MN — clôture dealer multi-réseaux', () => {
+  const MULTI_BALANCE = {
+    balances: {
+      Orange: { stock: 40000, liquidite: 20000 },
+      Moov:   { stock: 15000, liquidite:  8000 },
+    },
+    updatedAt: new Date('2024-01-01'),
+  }
+
+  it('[MN-01] clôture Moov (dealerNetworks=[Orange,Moov]) → écarts calculés sur balances.Moov', async () => {
+    await seedDealer()
+    await seedStore()
+    await seedBalance(STORE_A, MULTI_BALANCE)
+
+    const result = await createDealerClosureHandler(
+      makeRequest(DEALER_UID, baseCreatePayload({ network: 'Moov', declaredStockBalance: 15000, declaredLiquidityBalance: 8000 })),
+      { db, FieldValue, dealerNetworks: ['Orange', 'Moov'] }
+    )
+
+    expect(result.success).toBe(true)
+    expect(result.stockDifference).toBe(0)        // 15000 - 15000 (Moov)
+    expect(result.liquidityDifference).toBe(0)
+    expect(result.closureId).toBe(`${DEALER_UID}_${STORE_A}_Moov_${BUSINESS_DATE}`)
+
+    const data = (await db.doc(`dealerClosures/${result.closureId}`).get()).data()
+    expect(data.network).toBe('Moov')
+    expect(data.recordedStockBalance).toBe(15000)
+    expect(data.recordedLiquidityBalance).toBe(8000)
+  })
+
+  it('[MN-02] client mono-réseau (défaut Orange) : clôture Moov refusée → INVALID_CLOSURE_DATA', async () => {
+    await seedDealer()
+    await seedStore()
+    await seedBalance(STORE_A, MULTI_BALANCE)
+
+    await expect(
+      createDealerClosureHandler(
+        makeRequest(DEALER_UID, baseCreatePayload({ network: 'Moov', declaredStockBalance: 15000, declaredLiquidityBalance: 8000 })),
+        { db, FieldValue } // dealerNetworks par défaut = ['Orange']
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_CLOSURE_DATA' })
+  })
+})
