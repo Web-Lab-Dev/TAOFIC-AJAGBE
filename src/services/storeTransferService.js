@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore'
 import { functions, db } from '../config/firebase'
 import { STORE_TRANSFERS_PAGE_SIZE } from '../constants/dealerConstants'
+import { parseStrictInteger as parseAmountLocal } from '../utils/parseStrictInteger'
 
 const TRANSFERS_COLLECTION = 'storeDealerTransfers'
 
@@ -74,14 +75,8 @@ export function mapTransferError(err) {
   return mapped
 }
 
-// ── Validation locale minimale (le backend reste autoritatif) ────────────────
-function parseAmountLocal(raw) {
-  const s = String(raw ?? '').trim()
-  if (!/^[0-9]+$/.test(s)) return null
-  const n = Number(s)
-  if (!Number.isSafeInteger(n) || n <= 0) return null
-  return n
-}
+// Validation locale minimale (le backend reste autoritatif) : parseAmountLocal
+// est parseStrictInteger (import ci-dessus).
 
 // ── Commandes (callable) ─────────────────────────────────────────────────────
 

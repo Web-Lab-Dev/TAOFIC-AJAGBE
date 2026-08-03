@@ -21,8 +21,9 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { ADMIN_PAGE_SIZE } from '../constants/dealerConstants'
 
-const PAGE = 25
+const PAGE = ADMIN_PAGE_SIZE
 
 function mapErr(err) {
   if (err?.code === 'permission-denied') return new Error('Accès refusé. Vérifiez vos permissions.')

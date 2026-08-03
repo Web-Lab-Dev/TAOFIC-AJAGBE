@@ -35,6 +35,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { parseStrictInteger as parseDealerAmount } from '../utils/parseStrictInteger'
 import { AUTH_ROLES } from '../constants/authMessages'
 import {
   DEALER_NETWORK,
@@ -63,15 +64,11 @@ function mapFirestoreError(err) {
 
 // ---------------------------------------------------------------------------
 // Validation montant strict — chiffres uniquement, pas d'espaces
+// (implémentation partagée : src/utils/parseStrictInteger.js)
+// Ré-exporté sous son nom historique pour les appelants (NewDealerRequest, tests).
 // ---------------------------------------------------------------------------
 
-export function parseDealerAmount(raw) {
-  const s = String(raw ?? '').trim()
-  if (!/^[0-9]+$/.test(s)) return null
-  const n = Number(s)
-  if (!Number.isSafeInteger(n) || n <= 0) return null
-  return n
-}
+export { parseDealerAmount }
 
 // ---------------------------------------------------------------------------
 // Validation du contexte Dealer
