@@ -106,6 +106,74 @@ service cloud.firestore {
       return status in ['Non Terminées', 'Non Terminees'];
     }
 
+    // Cohérence des champs de règlement d'un doc `history` créé DIRECTEMENT par un membre
+    // boutique (flux paiement-unique legacy — src/services/draftService.js). Un history est
+    // terminal : il alimente les rapports et sert de base au renversement financier
+    // (reverseHistoryTransactionImpact lit settlementSummary.netByNetwork). Sans ce contrôle,
+    // un membre peut forger paidAmount/settlementStatus/settlementSummary/… et corrompre la
+    // piste d'audit, voire « blanchir » une altération de solde via une annulation.
+    // Forme légitime : settlementStatus='settled', remaining/refunded=0, originalAmount==montant,
+    // paidAmount==settlementAmount (entiers > 0, non bornés à montant car amountOverride ne l'est
+    // pas), et AUCUN settlementSummary (réservé au circuit serveur Admin SDK, qui contourne ces
+    // règles). Chaque champ est OPTIONNEL (les vieux `history` « Validée » n'en portent aucun).
+    function validClientHistorySettlement(data) {
+      return
+        !data.keys().hasAny(['settlementSummary']) &&
+        (!('settlementStatus' in data) || data.settlementStatus == 'settled') &&
+        (!('remainingAmount'  in data) || data.remainingAmount == 0) &&
+        (!('refundedAmount'   in data) || data.refundedAmount == 0) &&
+        (!('originalAmount'   in data) || data.originalAmount == data.montant) &&
+        (!('paidAmount'       in data) ||
+          (data.paidAmount is number && data.paidAmount > 0 && data.paidAmount == math.floor(data.paidAmount))) &&
+        (!('settlementAmount' in data) ||
+          (data.settlementAmount is number && data.settlementAmount > 0 && data.settlementAmount == math.floor(data.settlementAmount)));
+    }
+
+    // Champs de COMPTABILITÉ DE RÈGLEMENT d'un draft : écrits EXCLUSIVEMENT par les
+    // Cloud Functions (Admin SDK, qui contourne ces règles). Le client ne doit jamais
+    // les fixer ni les modifier — sinon les callables addTransactionPayment/Refund, qui
+    // lisent remainingAmount/paidAmount/… pour borner un règlement, feraient confiance à
+    // une donnée falsifiée par le membre boutique (contournement de l'autorité serveur).
+    function settlementManagedFields() {
+      return [
+        'originalAmount', 'paidAmount', 'refundedAmount', 'remainingAmount',
+        'settlementStatus', 'settlementSummary', 'settlementUpdatedAt', 'settlementAmount',
+        // settlementType : type métier ÉPINGLÉ par la Cloud Function à la 1re tranche.
+        // Les callables l'utilisent (au lieu de draft.type frais) pour figer le signe de
+        // l'impact réseau sur toute la durée du règlement — défense en profondeur. Le
+        // client ne doit jamais le fixer ni le modifier.
+        'settlementType'
+      ];
+    }
+
+    // Création client : aucun de ces champs ne doit être présent.
+    function draftHasNoSettlementFields(data) {
+      return !data.keys().hasAny(settlementManagedFields());
+    }
+
+    // Mise à jour client : aucun de ces champs ne doit être ajouté, modifié ou retiré.
+    function draftSettlementFieldsUnchanged(newData, oldData) {
+      return !newData.diff(oldData).affectedKeys().hasAny(settlementManagedFields());
+    }
+
+    // Un draft est « en cours de règlement » dès qu'une Cloud Function y a écrit un champ
+    // de règlement (règlement partiel). On teste le document EXISTANT (resource.data).
+    function draftIsSettling(oldData) {
+      return oldData.keys().hasAny(
+        ['settlementStatus', 'paidAmount', 'remainingAmount', 'settlementSummary']);
+    }
+
+    // Dès qu'un règlement est engagé, `type`, `montant` et `clientId` sont FIGÉS côté
+    // client : les callables lisent draft.type (signe de l'impact réseau) et draft.montant
+    // à chaque tranche ; clientId identifie le titulaire dans la piste d'audit (settlement +
+    // history). Sans ce gel, un membre pourrait inverser le signe (Retrait↔Dépôt), gonfler la
+    // borne, ou réattribuer un règlement à un autre client entre deux tranches. Avant tout
+    // règlement, l'édition reste libre (brouillon).
+    function draftCoreFieldsFrozenIfSettling(newData, oldData) {
+      return !draftIsSettling(oldData) ||
+        !newData.diff(oldData).affectedKeys().hasAny(['type', 'montant', 'clientId']);
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Validation des soldes réseau (networkBalances/current)
     //
@@ -351,9 +419,12 @@ service cloud.firestore {
         allow read: if isStoreMember(storeId);
         allow create: if isStoreMember(storeId) &&
           validStoreScopedTransaction(request.resource.data, storeId) &&
-          isPendingStatus(request.resource.data.statut);
+          isPendingStatus(request.resource.data.statut) &&
+          draftHasNoSettlementFields(request.resource.data);
         allow update: if isStoreMember(storeId) &&
-          validStoreScopedTransaction(request.resource.data, storeId);
+          validStoreScopedTransaction(request.resource.data, storeId) &&
+          draftSettlementFieldsUnchanged(request.resource.data, resource.data) &&
+          draftCoreFieldsFrozenIfSettling(request.resource.data, resource.data);
         allow delete: if isStoreMember(storeId);
 
         // Règlements (paiements et remboursements par tranche)
@@ -369,7 +440,8 @@ service cloud.firestore {
         allow create: if isStoreMember(storeId) &&
           validStoreScopedTransaction(request.resource.data, storeId) &&
           validStatus(request.resource.data.statut) &&
-          !isPendingStatus(request.resource.data.statut);
+          !isPendingStatus(request.resource.data.statut) &&
+          validClientHistorySettlement(request.resource.data);
         allow update: if isStoreMember(storeId) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'updatedAt', 'notes']) &&
           validStatus(request.resource.data.statut);
@@ -384,6 +456,13 @@ service cloud.firestore {
       }
 
       match /networkBalances/{balanceId} {
+        // EXCEPTION HÉRITÉE V1 (assumée) : les membres boutique écrivent DIRECTEMENT
+        // leurs soldes réseau (pas via Cloud Function), contrairement au circuit V2
+        // dealer/settlements qui est serveur-autoritatif et audité. La validation ci-
+        // dessous est STRUCTURELLE uniquement (entiers sûrs >= 0, réseaux figés) : un
+        // compte boutique compromis peut fixer un solde arbitraire SANS piste d'audit.
+        // Risque connu, documenté dans docs/audit/claude/AUDIT_ESPACES_DEALER_GERANT.md
+        // (§1.1). Migration éventuelle vers une Cloud Function auditée = chantier séparé.
         allow read: if isStoreMember(storeId) || isDealer() || isSystemManager();
         allow create, update: if isStoreMember(storeId) &&
           balanceId == 'current' &&
