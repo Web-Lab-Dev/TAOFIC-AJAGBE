@@ -1,14 +1,11 @@
 /**
  * dealerProfile.js — réseaux du circuit dealer, côté Cloud Functions.
  * ─────────────────────────────────────────────────────────────────────────────
- * Équivalent « functions » du bloc généré des règles (firestore.rules). Source de
- * vérité = le profil client (config/clients/<id>.js, champ dealer.networks). Le
- * pipeline de déploiement régénère ce fichier depuis le profil du client déployé.
+ * ⚠ FICHIER GÉNÉRÉ par scripts/generate-functions-config.mjs depuis le profil client
+ * (config/clients/<id>.js, champ dealer.networks). NE PAS ÉDITER À LA MAIN.
  *
- * Défaut committé = référence TAOFIC (['Orange']) → comportement mono-réseau
- * strictement identique à l'historique. Un client multi-réseaux régénère la liste.
- *
- * Les handlers acceptent aussi `dealerNetworks` en injection (comme db/FieldValue),
- * pour tester le multi-réseaux sans régénérer ce fichier.
+ * Défaut committé = référence TAOFIC (['Orange']) → mono-réseau identique à
+ * l'historique. Le déploiement régénère ce fichier depuis le profil du client déployé.
+ * Les handlers acceptent aussi `dealerNetworks` en injection (tests multi-réseaux).
  */
 export const DEALER_NETWORKS = ['Orange']

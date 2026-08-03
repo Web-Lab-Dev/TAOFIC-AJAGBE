@@ -54,11 +54,20 @@ riche), puis le faire dériver dans les couches.
 ## 4. Enforcement strict (décision validée)
 
 Une fonctionnalité désactivée chez un client est bloquée **jusqu'au serveur**, pas
-seulement masquée dans l'UI :
-- **Règles Firestore** : générées depuis le profil (`firestore.rules.tmpl` + script, Phase 2).
-  Preuve de non-régression : le profil `taofic-ajagbe` doit **régénérer les règles
-  actuellement en prod à l'identique** (diff nul).
-- **Cloud Functions** : lisent le même profil (réseaux dealer valides, etc., Phase 3).
+seulement masquée dans l'UI. Deux artefacts sont **générés depuis le profil** (bloc balisé
++ test anti-dérive) ; le déploiement les régénère pour le client cible :
+
+| Couche | Généré | Script |
+|---|---|---|
+| Règles | bloc `profileDealerNetworks()` dans `firestore.rules` | `scripts/generate-rules.mjs --client <id>` |
+| Functions | `functions/src/config/dealerProfile.js` (`DEALER_NETWORKS`) | `scripts/generate-functions-config.mjs --client <id>` |
+
+`--check` échoue en CI si un artefact ne correspond plus au profil. Comportement-préservant :
+pour `taofic_ajagbe`, la génération reproduit le mono-réseau `['Orange']` (identique à l'historique).
+
+**État (chantier dealer multi-réseaux)** : couche règles + functions `dealerRequests` + `closures`
+faites (réseau porté par l'opération, validé contre le profil, `balances[network]`). Restent
+`storeTransfers` (ajout d'un champ `network` au payload) et le sélecteur de réseau côté front.
 
 ### Dépendance `canEditBalances`
 État actuel de TAOFIC = `false` : l'affordance d'édition est **masquée dans l'UI**, mais les
