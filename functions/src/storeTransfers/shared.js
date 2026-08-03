@@ -129,17 +129,17 @@ export function readBalanceAmount(balanceData, field) {
 // ── Solde dealer courant pour un champ : 0 si le document/solde n'existe pas ──
 // À la différence des boutiques, le solde dealer peut ne pas encore exister
 // (premier retour) → on part de 0. Toute valeur présente doit rester valide.
-export function readDealerBalanceAmount(balanceData, field) {
+export function readDealerBalanceAmount(balanceData, field, network = 'Orange') {
   if (balanceData === undefined || balanceData === null) return 0
   if (typeof balanceData !== 'object') {
     throw new DealerRequestError('INVALID_BALANCE_DATA', 'Solde dealer invalide.')
   }
-  const orange = balanceData?.balances?.Orange
-  if (orange === undefined || orange === null) return 0
-  if (typeof orange !== 'object') {
-    throw new DealerRequestError('INVALID_BALANCE_DATA', 'Solde dealer Orange invalide.')
+  const networkBalance = balanceData?.balances?.[network]
+  if (networkBalance === undefined || networkBalance === null) return 0
+  if (typeof networkBalance !== 'object') {
+    throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde dealer ${network} invalide.`)
   }
-  const value = orange[field]
+  const value = networkBalance[field]
   if (value === undefined || value === null) return 0
   if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isSafeInteger(value) || value < 0) {
     throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde dealer Orange.${field} invalide.`)

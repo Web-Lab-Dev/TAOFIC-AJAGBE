@@ -10,9 +10,12 @@
  */
 
 import { DealerRequestError } from '../errors.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
 const VALID_REQUEST_TYPES = new Set(['stock_add', 'liquidity_add', 'open_day'])
-const VALID_NETWORKS = new Set(['Orange'])
+// Réseaux dealer autorisés = profil client (défaut TAOFIC ['Orange']). Injectable
+// par handler pour le multi-réseaux (validateRequestData accepte validNetworks).
+const VALID_NETWORKS = new Set(DEALER_NETWORKS)
 
 // ---------------------------------------------------------------------------
 // Validation de l'identité Firebase
@@ -101,7 +104,7 @@ export function validateRejectionReason(reason) {
 // Validation des données de la demande (état pending propre)
 // ---------------------------------------------------------------------------
 
-export function validateRequestData(reqData, actorStoreId) {
+export function validateRequestData(reqData, actorStoreId, validNetworks = VALID_NETWORKS) {
   if (!reqData || typeof reqData !== 'object') {
     throw new DealerRequestError('INVALID_REQUEST_DATA', 'Données de la demande invalides.')
   }
@@ -114,7 +117,9 @@ export function validateRequestData(reqData, actorStoreId) {
   if (!VALID_REQUEST_TYPES.has(reqData.requestType)) {
     throw new DealerRequestError('INVALID_REQUEST_DATA', 'Type de demande non reconnu.')
   }
-  if (!VALID_NETWORKS.has(reqData.network)) {
+  // Réseaux autorisés selon le profil client (Set ou tableau accepté).
+  const validNetworkSet = validNetworks instanceof Set ? validNetworks : new Set(validNetworks)
+  if (!validNetworkSet.has(reqData.network)) {
     throw new DealerRequestError('INVALID_REQUEST_DATA', 'Réseau non reconnu.')
   }
   if (!Number.isSafeInteger(reqData.amount) || reqData.amount <= 0) {
@@ -171,7 +176,7 @@ export function validateProfileData(profile) {
 // Lecture du solde courant depuis les données brutes du document
 // ---------------------------------------------------------------------------
 
-export function readCurrentBalance(balanceData, requestType) {
+export function readCurrentBalance(balanceData, requestType, network = 'Orange') {
   if (!balanceData || typeof balanceData !== 'object') {
     throw new DealerRequestError('BALANCE_NOT_FOUND', 'Document de soldes introuvable ou invalide.')
   }
@@ -179,12 +184,12 @@ export function readCurrentBalance(balanceData, requestType) {
   if (!balances || typeof balances !== 'object') {
     throw new DealerRequestError('INVALID_BALANCE_DATA', 'Structure balances manquante dans le document de soldes.')
   }
-  const orange = balances.Orange
-  if (!orange || typeof orange !== 'object') {
-    throw new DealerRequestError('INVALID_BALANCE_DATA', 'Solde Orange manquant dans le document de soldes.')
+  const networkBalance = balances[network]
+  if (!networkBalance || typeof networkBalance !== 'object') {
+    throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde ${network} manquant dans le document de soldes.`)
   }
   const field = getBalanceField(requestType)
-  const value = orange[field]
+  const value = networkBalance[field]
   // Number.isSafeInteger rejette les décimaux (100.5), Infinity, NaN, et les
   // entiers hors plage ±2^53. On rejette aussi les négatifs.
   if (
@@ -195,7 +200,7 @@ export function readCurrentBalance(balanceData, requestType) {
   ) {
     throw new DealerRequestError(
       'INVALID_BALANCE_DATA',
-      `Solde Orange.${field} invalide : entier sûr non-négatif requis.`
+      `Solde ${network}.${field} invalide : entier sûr non-négatif requis.`
     )
   }
   return value

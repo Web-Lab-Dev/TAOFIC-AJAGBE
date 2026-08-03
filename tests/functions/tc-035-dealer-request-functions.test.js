@@ -1134,3 +1134,67 @@ describe('TC-035-AU — audit unique après transaction réussie', () => {
     expect(auditSnap.docs[0].data().action).toBe('DEALER_REQUEST_REJECTED')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §MN — Multi-réseaux (chantier dealer multi-réseaux)
+//   Le réseau est porté par la demande (reqData.network) et validé contre les
+//   réseaux du profil (dealerNetworks, injectable). Sur un client mono-réseau
+//   (défaut ['Orange']), une demande sur un autre réseau est refusée.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TC-035-MN — dealer multi-réseaux', () => {
+  it('[MN-01] confirme une demande Moov (dealerNetworks=[Orange,Moov]) → balances.Moov mis à jour, Orange préservé', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-moov', { ...BASE_REQ, network: 'Moov' })
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    const result = await confirmDealerRequestHandler(
+      makeRequest(STORE_ADMIN_UID, { requestId: 'req-moov' }),
+      { db, FieldValue, dealerNetworks: ['Orange', 'Moov'] }
+    )
+
+    expect(result.previousBalance).toBe(10000) // Moov.stock initial
+    expect(result.newBalance).toBe(20000)      // + 10000
+
+    const bal = (await db.doc(`clients/${STORE_A}/networkBalances/current`).get()).data()
+    expect(bal.balances.Moov.stock).toBe(20000)
+    expect(bal.balances.Orange.stock).toBe(50000) // autre réseau préservé
+
+    const audit = (await db.collection(`clients/${STORE_A}/auditLogs`).get()).docs[0].data()
+    expect(audit.network).toBe('Moov')
+  })
+
+  it('[MN-02] client mono-réseau (défaut Orange) : demande Moov refusée → INVALID_REQUEST_DATA, solde inchangé', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-moov-mono', { ...BASE_REQ, network: 'Moov' })
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    await expect(
+      confirmDealerRequestHandler(
+        makeRequest(STORE_ADMIN_UID, { requestId: 'req-moov-mono' }),
+        { db, FieldValue } // dealerNetworks par défaut = ['Orange']
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST_DATA' })
+
+    const bal = (await db.doc(`clients/${STORE_A}/networkBalances/current`).get()).data()
+    expect(bal.balances.Moov.stock).toBe(10000) // inchangé
+    const auditSnap = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(auditSnap.size).toBe(0)
+  })
+
+  it('[MN-03] rejette une demande Moov (dealerNetworks=[Orange,Moov]) → status rejected, aucun solde touché', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedRequest('req-moov-rej', { ...BASE_REQ, network: 'Moov' })
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    await rejectDealerRequestHandler(
+      makeRequest(STORE_ADMIN_UID, { requestId: 'req-moov-rej', rejectionReason: 'Rejet Moov valide.' }),
+      { db, FieldValue, dealerNetworks: ['Orange', 'Moov'] }
+    )
+
+    const reqData = (await db.doc('dealerRequests/req-moov-rej').get()).data()
+    expect(reqData.status).toBe('rejected')
+    const bal = (await db.doc(`clients/${STORE_A}/networkBalances/current`).get()).data()
+    expect(bal.balances.Moov.stock).toBe(10000) // inchangé
+  })
+})

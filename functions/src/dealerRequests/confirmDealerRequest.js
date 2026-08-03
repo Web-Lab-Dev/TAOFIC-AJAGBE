@@ -27,8 +27,9 @@ import {
   buildAuditEntry,
 } from './shared.js'
 import { readDealerBalanceAmount } from '../storeTransfers/shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
+export async function confirmDealerRequestHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
@@ -69,8 +70,10 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
       }
       const reqData = reqSnap.data()
 
-      // Valide : status pending, store match, type/réseau/montant propres
-      validateRequestData(reqData, actorStoreId)
+      // Valide : status pending, store match, type/réseau (∈ profil)/montant propres
+      validateRequestData(reqData, actorStoreId, dealerNetworks)
+      // Réseau ciblé par cette opération (validé ∈ dealerNetworks ci-dessus).
+      const network = reqData.network
 
       // Lecture du solde dans la même transaction
       const balRef  = db.doc(`clients/${actorStoreId}/networkBalances/current`)
@@ -101,19 +104,19 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
           throw new DealerRequestError('INVALID_REQUEST_DATA', 'Montant liquidité invalide pour open_day.')
         }
         // Lire les deux soldes précédents pour la piste d'audit complète
-        previousBalance          = readCurrentBalance(balSnap.data(), 'stock_add')
+        previousBalance          = readCurrentBalance(balSnap.data(), 'stock_add', network)
         newBalance               = stockAmount
-        previousLiquidityBalance = readCurrentBalance(balSnap.data(), 'liquidity_add')
+        previousLiquidityBalance = readCurrentBalance(balSnap.data(), 'liquidity_add', network)
         newLiquidityBalance      = liquiditeAmount
 
         balUpdatePayload = {
-          'balances.Orange.stock':     stockAmount,
-          'balances.Orange.liquidite': liquiditeAmount,
+          [`balances.${network}.stock`]:     stockAmount,
+          [`balances.${network}.liquidite`]: liquiditeAmount,
           updatedAt: now,
         }
       } else {
         const balField  = getBalanceField(reqData.requestType)
-        previousBalance = readCurrentBalance(balSnap.data(), reqData.requestType)
+        previousBalance = readCurrentBalance(balSnap.data(), reqData.requestType, network)
         newBalance      = previousBalance + reqData.amount
 
         if (!Number.isSafeInteger(newBalance)) {
@@ -123,15 +126,15 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
           )
         }
         balUpdatePayload = {
-          [`balances.Orange.${balField}`]: newBalance,
+          [`balances.${network}.${balField}`]: newBalance,
           updatedAt: now,
         }
 
-        // Décrément inventaire dealer (même champ) si l'inventaire est amorcé.
+        // Décrément inventaire dealer (même champ + réseau) si l'inventaire est amorcé.
         const dealerBalRef  = db.doc(`dealerBalances/${reqData.dealerUid}`)
         const dealerBalSnap = await t.get(dealerBalRef)
         if (dealerBalSnap.exists) {
-          const previousDealerBalance = readDealerBalanceAmount(dealerBalSnap.data(), balField)
+          const previousDealerBalance = readDealerBalanceAmount(dealerBalSnap.data(), balField, network)
           if (previousDealerBalance < reqData.amount) {
             throw new DealerRequestError(
               'INSUFFICIENT_DEALER_BALANCE',
@@ -168,7 +171,7 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
       // Décrément inventaire dealer + audit dealer (si amorcé)
       if (dealerDebit) {
         t.update(dealerDebit.ref, {
-          [`balances.Orange.${dealerDebit.field}`]: dealerDebit.next,
+          [`balances.${network}.${dealerDebit.field}`]: dealerDebit.next,
           updatedAt: now,
         })
         const dealerAuditRef = db.collection(`dealerBalances/${reqData.dealerUid}/auditLogs`).doc()
@@ -180,7 +183,7 @@ export async function confirmDealerRequestHandler(request, { db, FieldValue }) {
           requestId,
           dealerUid:       reqData.dealerUid,
           requestType:     reqData.requestType,
-          network:         'Orange',
+          network,
           resource:        dealerDebit.field,
           amount:          reqData.amount,
           previousBalance: dealerDebit.previous,

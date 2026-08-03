@@ -22,8 +22,9 @@ import {
   validateProfileData,
   buildAuditEntry,
 } from './shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-export async function rejectDealerRequestHandler(request, { db, FieldValue }) {
+export async function rejectDealerRequestHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
@@ -64,8 +65,8 @@ export async function rejectDealerRequestHandler(request, { db, FieldValue }) {
       }
       const reqData = reqSnap.data()
 
-      // Valide : status pending, store match, type/réseau/montant propres
-      validateRequestData(reqData, actorStoreId)
+      // Valide : status pending, store match, type/réseau (∈ profil)/montant propres
+      validateRequestData(reqData, actorStoreId, dealerNetworks)
 
       const now = FieldValue.serverTimestamp()
 
