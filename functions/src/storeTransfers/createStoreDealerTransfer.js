@@ -17,17 +17,19 @@ import {
   transferBalanceField,
   readBalanceAmount,
   resolveSingleDealer,
-  TRANSFER_NETWORK,
+  resolveTransferNetwork,
 } from './shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-export async function createStoreDealerTransferHandler(request, { db, FieldValue }) {
+export async function createStoreDealerTransferHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
   // ── 2. Forme du payload (allow-list) ───────────────────────────────────────
-  const payload = validateInputPayload(request.data, ['transferType', 'amount'])
+  const payload = validateInputPayload(request.data, ['transferType', 'amount', 'network'])
   const transferType = validateTransferType(payload.transferType)
   const amount = validateTransferAmount(payload.amount)
+  const network = resolveTransferNetwork(payload.network, dealerNetworks)
   const field = transferBalanceField(transferType)
 
   // ── 3. Prévalidation profil (store_admin actif avec storeId) ──────────────
@@ -62,7 +64,7 @@ export async function createStoreDealerTransferHandler(request, { db, FieldValue
       if (!balSnap.exists) {
         throw new DealerRequestError('BALANCE_NOT_FOUND', 'Document de soldes introuvable pour cette boutique.')
       }
-      const previousStoreBalance = readBalanceAmount(balSnap.data(), field)
+      const previousStoreBalance = readBalanceAmount(balSnap.data(), field, network)
       if (previousStoreBalance < amount) {
         throw new DealerRequestError('INSUFFICIENT_STORE_BALANCE', 'Solde insuffisant pour ce transfert.')
       }
@@ -71,7 +73,7 @@ export async function createStoreDealerTransferHandler(request, { db, FieldValue
 
       // Débit boutique (chemin pointé pour préserver les autres champs/réseaux)
       t.update(balRef, {
-        [`balances.Orange.${field}`]: newStoreBalance,
+        [`balances.${network}.${field}`]: newStoreBalance,
         updatedAt: now,
       })
 
@@ -84,7 +86,7 @@ export async function createStoreDealerTransferHandler(request, { db, FieldValue
         dealerUid: dealer.uid,
         dealerName: dealer.name,
         transferType,
-        network: TRANSFER_NETWORK,
+        network,
         amount,
         status: 'pending',
         previousStoreBalance,
@@ -112,7 +114,7 @@ export async function createStoreDealerTransferHandler(request, { db, FieldValue
         transferId: transferRef.id,
         dealerUid: dealer.uid,
         transferType,
-        network: TRANSFER_NETWORK,
+        network,
         amount,
         previousBalance: previousStoreBalance,
         newBalance: newStoreBalance,

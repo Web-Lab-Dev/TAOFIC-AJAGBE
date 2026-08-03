@@ -65,9 +65,11 @@ seulement masquée dans l'UI. Deux artefacts sont **générés depuis le profil*
 `--check` échoue en CI si un artefact ne correspond plus au profil. Comportement-préservant :
 pour `taofic_ajagbe`, la génération reproduit le mono-réseau `['Orange']` (identique à l'historique).
 
-**État (chantier dealer multi-réseaux)** : couche règles + functions `dealerRequests` + `closures`
-faites (réseau porté par l'opération, validé contre le profil, `balances[network]`). Restent
-`storeTransfers` (ajout d'un champ `network` au payload) et le sélecteur de réseau côté front.
+**État (chantier dealer multi-réseaux)** : couche règles + functions **complète** — `dealerRequests`,
+`closures` **et** `storeTransfers` portent le réseau par l'opération (validé ∈ profil,
+`balances[network]` ; helper pur `resolveTransferNetwork` avec défaut mono-réseau préservant TAOFIC).
+Reste **uniquement** le sélecteur de réseau côté front (UI + affichage inventaire multi-réseaux), à
+câbler quand un client dealer multi-réseaux est signé.
 
 ### Dépendance `canEditBalances`
 État actuel de TAOFIC = `false` : l'affordance d'édition est **masquée dans l'UI**, mais les

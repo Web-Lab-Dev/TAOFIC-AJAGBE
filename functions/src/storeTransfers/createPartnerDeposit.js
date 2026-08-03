@@ -18,20 +18,22 @@ import {
   validatePartnerOperation,
   validateDealerProfile,
   readDealerBalanceAmount,
-  TRANSFER_NETWORK,
+  resolveTransferNetwork,
 } from './shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-export async function createPartnerDepositHandler(request, { db, FieldValue }) {
+export async function createPartnerDepositHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
   // ── 2. Payload ─────────────────────────────────────────────────────────────
   const payload = validateInputPayload(request.data, [
-    'partnerId', 'partnerNom', 'partnerPrenom', 'partnerNumeroDA', 'partnerLocalite', 'amount', 'operation',
+    'partnerId', 'partnerNom', 'partnerPrenom', 'partnerNumeroDA', 'partnerLocalite', 'amount', 'operation', 'network',
   ])
   const amount = validateTransferAmount(payload.amount)
   const operation = validatePartnerOperation(payload.operation) // 'deposit' | 'withdrawal'
   const partner = validatePartnerInput(payload)
+  const network = resolveTransferNetwork(payload.network, dealerNetworks)
   const isWithdrawal = operation === 'withdrawal'
 
   // ── 3. Prévalidation profil dealer ─────────────────────────────────────────
@@ -55,8 +57,8 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
       const balRef = db.doc(`dealerBalances/${actorUid}`)
       const balSnap = await t.get(balRef)
       const balData = balSnap.exists ? balSnap.data() : null
-      const previousStock = readDealerBalanceAmount(balData, 'stock')
-      const previousLiquidite = readDealerBalanceAmount(balData, 'liquidite')
+      const previousStock = readDealerBalanceAmount(balData, 'stock', network)
+      const previousLiquidite = readDealerBalanceAmount(balData, 'liquidite', network)
 
       // Dépôt : −stock +liquidité (exige stock). Retrait : +stock −liquidité (exige liquidité).
       const previousDebit = isWithdrawal ? previousLiquidite : previousStock
@@ -77,7 +79,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
 
       // Mise à jour atomique des deux champs (set+merge : préserve le document).
       t.set(balRef, {
-        balances: { Orange: { stock: newStock, liquidite: newLiquidite } },
+        balances: { [network]: { stock: newStock, liquidite: newLiquidite } },
         updatedAt: now,
       }, { merge: true })
 
@@ -93,7 +95,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
         partnerNumeroDA: partner.partnerNumeroDA,
         partnerLocalite: partner.partnerLocalite,
         operation,
-        network: TRANSFER_NETWORK,
+        network,
         amount,
         previousStock,
         newStock,
@@ -115,7 +117,7 @@ export async function createPartnerDepositHandler(request, { db, FieldValue }) {
         depositId: depositRef.id,
         partnerId: partner.partnerId,
         partnerNom: partner.partnerNom,
-        network: TRANSFER_NETWORK,
+        network,
         amount,
         previousStock, newStock,
         previousLiquidite, newLiquidite,

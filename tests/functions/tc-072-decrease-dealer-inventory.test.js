@@ -143,3 +143,45 @@ describe('TC-072 — decreaseDealerInventory', () => {
     )
   })
 })
+
+// ── §MN — multi-réseaux : réseau porté par l'opération (balances[network]) ───
+// Profil dealer multi-réseaux injecté. Une diminution Moov ne touche QUE balances.Moov
+// (Orange préservé) et l'audit porte network:'Moov'. Réseau hors profil →
+// INVALID_TRANSFER_NETWORK sans aucune écriture.
+describe('TC-072-MN — multi-réseaux (réseau porté)', () => {
+  it('[DE-MN-01] décrément Moov : débite balances.Moov.stock, Orange préservé, audit network=Moov', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await db.doc(`dealerBalances/${DEALER_UID}`).set({ balances: {
+      Orange: { stock: 20000, liquidite: 5000 },
+      Moov:   { stock: 12000, liquidite: 3000 },
+    } })
+
+    const res = await decreaseDealerInventoryHandler(
+      makeRequest(DEALER_UID, { resource: 'stock', amount: 4000, network: 'Moov' }),
+      { db, FieldValue, dealerNetworks: ['Orange', 'Moov'] },
+    )
+    expect(res.newBalance).toBe(8000) // 12000 - 4000 (Moov)
+
+    const bal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(bal.balances.Moov.stock).toBe(8000)
+    expect(bal.balances.Orange.stock).toBe(20000)    // préservé
+    expect(bal.balances.Orange.liquidite).toBe(5000) // préservé
+    const audit = await db.collection(`dealerBalances/${DEALER_UID}/auditLogs`).get()
+    expect(audit.docs[0].data().network).toBe('Moov')
+  })
+
+  it('[DE-MN-02] réseau hors profil (mono Orange) → INVALID_TRANSFER_NETWORK, aucune écriture', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedDealerBalance(DEALER_UID, { stock: 20000, liquidite: 5000 })
+    await expectError(
+      decreaseDealerInventoryHandler(
+        makeRequest(DEALER_UID, { resource: 'stock', amount: 4000, network: 'Moov' }),
+        { db, FieldValue, dealerNetworks: ['Orange'] },
+      ),
+      'INVALID_TRANSFER_NETWORK',
+    )
+    const bal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(bal.balances.Orange.stock).toBe(20000) // inchangé
+    expect((await db.collection(`dealerBalances/${DEALER_UID}/auditLogs`).get()).size).toBe(0)
+  })
+})

@@ -48,21 +48,24 @@ Cloud Functions autoritaires) :
   `Encaissé/Payé/Remboursé par X`).
 - Déjà couvert par les tests : `tc-020`, `tc-060`, `tc-061` (données multi-réseaux).
 
-## 3. Circuit dealer/ravitaillement — verrouillé en dur sur Orange (seul vrai chantier)
+## 3. Circuit dealer/ravitaillement — réseau porté par le profil (couche serveur ✅)
 
-Contrairement à la boutique, le circuit dealer est mono-réseau **côté serveur** (pas seulement
-UI). Le nouveau client ayant besoin du dealer multi-réseaux, voici les 8 verrous à lever :
+Contrairement à la boutique, le circuit dealer était mono-réseau **côté serveur** (pas seulement
+UI). Le nouveau client ayant besoin du dealer multi-réseaux, voici les 8 verrous — **7 sur 8 levés** :
+toute la couche serveur (règles + functions `dealerRequests`, `closures`, `storeTransfers`) dérive
+désormais du profil `dealer.networks` (réseau porté par l'opération et validé ∈ profil,
+`balances[network]`). Reste **uniquement le front** (verrou 8).
 
-| # | Verrou | Emplacement |
-|---|---|---|
-| 1 | Règle : `data.network == 'Orange'` | `firestore.rules:180` |
-| 2 | `VALID_NETWORKS = ['Orange']` | `functions/src/dealerRequests/shared.js:15` |
-| 3 | `network: 'Orange'` en dur à la confirmation | `functions/src/dealerRequests/confirmDealerRequest.js:183` |
-| 4 | `VALID_NETWORK = 'Orange'` (clôtures) | `functions/src/closures/createDealerClosure.js:57` |
-| 5 | `TRANSFER_NETWORK = 'Orange'` (transferts boutique↔dealer) | `functions/src/storeTransfers/shared.js:16` |
-| 6 | Lecteurs de soldes en dur sur `balances.Orange` | `functions/src/storeTransfers/shared.js:113` et `:137` |
-| 7 | `balances: { Orange: … }` en dur (dépôt partenaire) | `functions/src/storeTransfers/createPartnerDeposit.js:80` |
-| 8 | `DEALER_NETWORK = 'Orange'` (front) + champ réseau readonly | `src/constants/dealerConstants.js:23`, `src/pages/dealer/NewDealerRequest.jsx:341`, affichages inventaire (DealerInventoryBar, AdminDealerInventory, DealerTransferForm) |
+| # | Verrou (avant → après) | Emplacement | État |
+|---|---|---|---|
+| 1 | `data.network == 'Orange'` → `data.network in profileDealerNetworks()` (bloc généré) | `firestore.rules` | ✅ levé |
+| 2 | `VALID_NETWORKS = ['Orange']` → `DEALER_NETWORKS` (profil, injectable) | `functions/src/dealerRequests/shared.js` | ✅ levé |
+| 3 | `network` en dur → réseau porté par la demande | `functions/src/dealerRequests/confirmDealerRequest.js` | ✅ levé |
+| 4 | `VALID_NETWORK = 'Orange'` → réseau validé ∈ profil | `functions/src/closures/createDealerClosure.js` | ✅ levé |
+| 5 | `TRANSFER_NETWORK = 'Orange'` → `resolveTransferNetwork(candidate, profil)` | `functions/src/storeTransfers/shared.js` | ✅ levé |
+| 6 | Lecteurs de soldes `balances.Orange` → `balances[network]` | `functions/src/storeTransfers/shared.js` | ✅ levé |
+| 7 | `balances: { Orange: … }` → `balances: { [network]: … }` (dépôt partenaire + inventaire) | `functions/src/storeTransfers/*` | ✅ levé |
+| 8 | `DEALER_NETWORK = 'Orange'` (front) + champ réseau readonly | `src/constants/dealerConstants.js`, `src/pages/dealer/NewDealerRequest.jsx`, affichages inventaire (DealerInventoryBar, AdminDealerInventory, DealerTransferForm) | ⏳ reste (session front dédiée) |
 
 Points favorables :
 

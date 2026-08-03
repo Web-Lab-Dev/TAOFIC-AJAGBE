@@ -11,9 +11,27 @@
  */
 
 import { DealerRequestError } from '../errors.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
 export const TRANSFER_TYPES = new Set(['return_stock', 'return_liquidity'])
-export const TRANSFER_NETWORK = 'Orange'
+
+// ── Réseau porté par l'opération : validé ∈ profil client (dealer.networks) ──
+// Remplace l'ancienne constante TRANSFER_NETWORK='Orange'. Défaut préservant :
+// un profil mono-réseau (TAOFIC) résout le réseau unique sans que le client ait
+// à l'envoyer (comportement historique Orange). Un profil multi-réseaux exige un
+// réseau explicite (aucun choix silencieux). `dealerNetworks` est injectable par
+// handler pour les tests (mirror dealerRequests/closures).
+export function resolveTransferNetwork(candidate, dealerNetworks = DEALER_NETWORKS) {
+  const list = Array.isArray(dealerNetworks) ? dealerNetworks : [...dealerNetworks]
+  if (candidate == null || candidate === '') {
+    if (list.length === 1) return list[0]
+    throw new DealerRequestError('INVALID_TRANSFER_NETWORK', 'Réseau requis (profil multi-réseaux).')
+  }
+  if (!list.includes(candidate)) {
+    throw new DealerRequestError('INVALID_TRANSFER_NETWORK', 'Réseau non reconnu pour ce profil.')
+  }
+  return candidate
+}
 
 // ── Type de transfert → champ de solde ──────────────────────────────────────
 export function validateTransferType(transferType) {
@@ -102,7 +120,7 @@ export function validateDealerProfile(profile) {
 }
 
 // ── Lecture d'un champ de solde (stock|liquidite) : entier sûr >= 0 ──────────
-export function readBalanceAmount(balanceData, field) {
+export function readBalanceAmount(balanceData, field, network = 'Orange') {
   if (!balanceData || typeof balanceData !== 'object') {
     throw new DealerRequestError('BALANCE_NOT_FOUND', 'Document de soldes introuvable ou invalide.')
   }
@@ -110,18 +128,18 @@ export function readBalanceAmount(balanceData, field) {
   if (!balances || typeof balances !== 'object') {
     throw new DealerRequestError('INVALID_BALANCE_DATA', 'Structure balances manquante.')
   }
-  const orange = balances.Orange
-  if (!orange || typeof orange !== 'object') {
-    throw new DealerRequestError('INVALID_BALANCE_DATA', 'Solde Orange manquant.')
+  const networkBalance = balances[network]
+  if (!networkBalance || typeof networkBalance !== 'object') {
+    throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde ${network} manquant.`)
   }
-  const value = orange[field]
+  const value = networkBalance[field]
   if (
     typeof value !== 'number' ||
     !Number.isFinite(value) ||
     !Number.isSafeInteger(value) ||
     value < 0
   ) {
-    throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde Orange.${field} invalide : entier sûr non-négatif requis.`)
+    throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde ${network}.${field} invalide : entier sûr non-négatif requis.`)
   }
   return value
 }
@@ -142,7 +160,7 @@ export function readDealerBalanceAmount(balanceData, field, network = 'Orange') 
   const value = networkBalance[field]
   if (value === undefined || value === null) return 0
   if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isSafeInteger(value) || value < 0) {
-    throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde dealer Orange.${field} invalide.`)
+    throw new DealerRequestError('INVALID_BALANCE_DATA', `Solde dealer ${network}.${field} invalide.`)
   }
   return value
 }

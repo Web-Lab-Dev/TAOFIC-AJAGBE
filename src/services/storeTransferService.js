@@ -35,6 +35,7 @@ const ERROR_MESSAGES = {
   INVALID_TRANSFER_TYPE:      'Type de transfert invalide.',
   INVALID_TRANSFER_AMOUNT:    'Montant invalide : entier strictement positif requis.',
   INVALID_TRANSFER_ID:        'Identifiant de transfert invalide.',
+  INVALID_TRANSFER_NETWORK:   'Réseau invalide pour ce profil.',
   INVALID_INVENTORY_RESOURCE: 'Ressource invalide (stock ou liquidité).',
   INVALID_PARTNER:            'Partenaire invalide.',
   INVALID_TRANSFER_DATA:      'Les données de ce transfert sont invalides.',

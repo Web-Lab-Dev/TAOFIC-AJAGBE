@@ -18,17 +18,19 @@ import {
   validateInventoryResource,
   validateTransferAmount,
   readDealerBalanceAmount,
-  TRANSFER_NETWORK,
+  resolveTransferNetwork,
 } from './shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-export async function decreaseDealerInventoryHandler(request, { db, FieldValue }) {
+export async function decreaseDealerInventoryHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
   // ── 2. Payload ─────────────────────────────────────────────────────────────
-  const payload = validateInputPayload(request.data, ['resource', 'amount'])
+  const payload = validateInputPayload(request.data, ['resource', 'amount', 'network'])
   const resource = validateInventoryResource(payload.resource) // 'stock' | 'liquidite'
   const amount = validateTransferAmount(payload.amount)
+  const network = resolveTransferNetwork(payload.network, dealerNetworks)
 
   // ── 3. Prévalidation profil dealer ─────────────────────────────────────────
   const profileSnap = await db.doc(`users/${actorUid}`).get()
@@ -50,7 +52,7 @@ export async function decreaseDealerInventoryHandler(request, { db, FieldValue }
 
       const balRef = db.doc(`dealerBalances/${actorUid}`)
       const balSnap = await t.get(balRef)
-      const previousBalance = readDealerBalanceAmount(balSnap.exists ? balSnap.data() : null, resource)
+      const previousBalance = readDealerBalanceAmount(balSnap.exists ? balSnap.data() : null, resource, network)
       const newBalance = previousBalance - amount
       if (newBalance < 0) {
         throw new DealerRequestError('INSUFFICIENT_DEALER_BALANCE', 'Solde dealer insuffisant pour cette diminution.')
@@ -59,7 +61,7 @@ export async function decreaseDealerInventoryHandler(request, { db, FieldValue }
 
       // Set + merge : préserve l'autre champ (stock ↔ liquidite).
       t.set(balRef, {
-        balances: { Orange: { [resource]: newBalance } },
+        balances: { [network]: { [resource]: newBalance } },
         updatedAt: now,
       }, { merge: true })
 
@@ -70,7 +72,7 @@ export async function decreaseDealerInventoryHandler(request, { db, FieldValue }
         actorEmail: txProfile.email ?? null,
         actorName: txProfile.name ?? null,
         actorRole: 'dealer',
-        network: TRANSFER_NETWORK,
+        network,
         resource,
         amount,
         previousBalance,

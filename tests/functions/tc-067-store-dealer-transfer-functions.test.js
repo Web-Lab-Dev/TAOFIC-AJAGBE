@@ -453,3 +453,117 @@ describe('TC-067-RP — replenish', () => {
     )
   })
 })
+
+// ── §MN — multi-réseaux : réseau porté par l'opération (balances[network]) ───
+// Profil dealer multi-réseaux injecté (dealerNetworks:['Orange','Moov']). Prouve
+// qu'une opération sur Moov n'écrit QUE balances.Moov (Orange préservé) et que le
+// document + l'audit portent network:'Moov' ; réseau hors profil ou requis manquant
+// → INVALID_TRANSFER_NETWORK sans aucune écriture. BASE_BALANCE contient déjà Moov.
+describe('TC-067-MN — multi-réseaux (réseau porté)', () => {
+  const MULTI = ['Orange', 'Moov']
+
+  it('[MN-01] create return_stock Moov : débite balances.Moov.stock, Orange préservé, doc + audit network=Moov', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    const res = await createStoreDealerTransferHandler(
+      makeRequest(STORE_ADMIN_UID, { transferType: 'return_stock', amount: 4000, network: 'Moov' }),
+      { db, FieldValue, dealerNetworks: MULTI },
+    )
+    expect(res.success).toBe(true)
+    expect(res.previousStoreBalance).toBe(10000) // Moov.stock
+    expect(res.newStoreBalance).toBe(6000)       // 10000 - 4000
+
+    const bal = (await db.doc(`clients/${STORE_A}/networkBalances/current`).get()).data()
+    expect(bal.balances.Moov.stock).toBe(6000)
+    expect(bal.balances.Orange.stock).toBe(50000)     // préservé
+    expect(bal.balances.Orange.liquidite).toBe(30000) // préservé
+
+    const tr = (await db.doc(`storeDealerTransfers/${res.transferId}`).get()).data()
+    expect(tr.network).toBe('Moov')
+    const audit = await db.collection(`clients/${STORE_A}/auditLogs`).get()
+    expect(audit.docs[0].data().network).toBe('Moov')
+  })
+
+  it('[MN-02] confirm lit transfer.network=Moov : crédite balances.Moov.stock, Orange dealer préservé', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    // Le dealer possède déjà de l'Orange : le crédit Moov ne doit pas l'écraser (merge).
+    await db.doc(`dealerBalances/${DEALER_UID}`).set({ balances: { Orange: { stock: 7000, liquidite: 1000 } } })
+    await seedTransfer('t-moov', basePendingTransfer({ network: 'Moov', amount: 4000 }))
+
+    const res = await confirmStoreDealerTransferHandler(
+      makeRequest(DEALER_UID, { transferId: 't-moov' }),
+      { db, FieldValue, dealerNetworks: MULTI },
+    )
+    expect(res.newDealerBalance).toBe(4000)
+
+    const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(dbal.balances.Moov.stock).toBe(4000)
+    expect(dbal.balances.Orange.stock).toBe(7000) // préservé
+    const audit = await db.collection(`dealerBalances/${DEALER_UID}/auditLogs`).get()
+    expect(audit.docs[0].data().network).toBe('Moov')
+  })
+
+  it('[MN-03] reject Moov : restaure exactement balances.Moov.stock, Orange préservé', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedBalance(STORE_A, BASE_BALANCE) // boutique post-débit fictif : Moov.stock=10000
+    await seedTransfer('t-moov-r', basePendingTransfer({ network: 'Moov', amount: 4000 }))
+
+    const res = await rejectStoreDealerTransferHandler(
+      makeRequest(DEALER_UID, { transferId: 't-moov-r', rejectionReason: 'Stock erroné' }),
+      { db, FieldValue, dealerNetworks: MULTI },
+    )
+    expect(res.success).toBe(true)
+
+    const bal = (await db.doc(`clients/${STORE_A}/networkBalances/current`).get()).data()
+    expect(bal.balances.Moov.stock).toBe(14000)   // 10000 + 4000 restauré
+    expect(bal.balances.Orange.stock).toBe(50000) // préservé
+  })
+
+  it('[MN-04] replenish Moov : crédite balances.Moov.stock (crée le doc), audit network=Moov', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    const res = await replenishDealerInventoryHandler(
+      makeRequest(DEALER_UID, { resource: 'stock', amount: 8000, network: 'Moov' }),
+      { db, FieldValue, dealerNetworks: MULTI },
+    )
+    expect(res.newBalance).toBe(8000)
+    const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(dbal.balances.Moov.stock).toBe(8000)
+    const audit = await db.collection(`dealerBalances/${DEALER_UID}/auditLogs`).get()
+    expect(audit.docs[0].data().network).toBe('Moov')
+  })
+
+  it('[MN-05] réseau hors profil (mono Orange) → INVALID_TRANSFER_NETWORK, aucune écriture', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    await expectError(
+      createStoreDealerTransferHandler(
+        makeRequest(STORE_ADMIN_UID, { transferType: 'return_stock', amount: 4000, network: 'Moov' }),
+        { db, FieldValue, dealerNetworks: ['Orange'] },
+      ),
+      'INVALID_TRANSFER_NETWORK',
+    )
+    const bal = (await db.doc(`clients/${STORE_A}/networkBalances/current`).get()).data()
+    expect(bal.balances.Orange.stock).toBe(50000) // inchangé
+    expect(bal.balances.Moov.stock).toBe(10000)   // inchangé
+    expect((await db.collection('storeDealerTransfers').get()).size).toBe(0)
+  })
+
+  it('[MN-06] profil multi-réseaux + network omis → INVALID_TRANSFER_NETWORK (réseau requis)', async () => {
+    await seedUser(STORE_ADMIN_UID, STORE_ADMIN_PROFILE)
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedBalance(STORE_A, BASE_BALANCE)
+
+    await expectError(
+      createStoreDealerTransferHandler(
+        makeRequest(STORE_ADMIN_UID, { transferType: 'return_stock', amount: 4000 }),
+        { db, FieldValue, dealerNetworks: MULTI },
+      ),
+      'INVALID_TRANSFER_NETWORK',
+    )
+    expect((await db.collection('storeDealerTransfers').get()).size).toBe(0)
+  })
+})

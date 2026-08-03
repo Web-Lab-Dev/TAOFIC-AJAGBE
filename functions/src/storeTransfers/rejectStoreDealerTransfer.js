@@ -20,10 +20,11 @@ import {
   validateTransferType,
   transferBalanceField,
   readBalanceAmount,
-  TRANSFER_NETWORK,
+  resolveTransferNetwork,
 } from './shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-export async function rejectStoreDealerTransferHandler(request, { db, FieldValue }) {
+export async function rejectStoreDealerTransferHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
@@ -63,6 +64,8 @@ export async function rejectStoreDealerTransferHandler(request, { db, FieldValue
         throw new DealerRequestError('TRANSFER_NOT_PENDING', 'Ce transfert a déjà été traité.')
       }
       const field = transferBalanceField(validateTransferType(transfer.transferType))
+      // Réseau du transfert (persisté à la création), validé ∈ profil (défense en profondeur).
+      const network = resolveTransferNetwork(transfer.network, dealerNetworks)
       const amount = transfer.amount
       if (!Number.isSafeInteger(amount) || amount <= 0) {
         throw new DealerRequestError('INVALID_TRANSFER_DATA', 'Montant du transfert invalide.')
@@ -74,7 +77,7 @@ export async function rejectStoreDealerTransferHandler(request, { db, FieldValue
       if (!balSnap.exists) {
         throw new DealerRequestError('BALANCE_NOT_FOUND', 'Document de soldes introuvable pour cette boutique.')
       }
-      const previousStoreBalance = readBalanceAmount(balSnap.data(), field)
+      const previousStoreBalance = readBalanceAmount(balSnap.data(), field, network)
       const newStoreBalance = previousStoreBalance + amount
       if (!Number.isSafeInteger(newStoreBalance)) {
         throw new DealerRequestError('BALANCE_OVERFLOW', 'Le solde résultant dépasse la limite des entiers sûrs.')
@@ -82,7 +85,7 @@ export async function rejectStoreDealerTransferHandler(request, { db, FieldValue
       const now = FieldValue.serverTimestamp()
 
       t.update(balRef, {
-        [`balances.Orange.${field}`]: newStoreBalance,
+        [`balances.${network}.${field}`]: newStoreBalance,
         updatedAt: now,
       })
 
@@ -108,7 +111,7 @@ export async function rejectStoreDealerTransferHandler(request, { db, FieldValue
         transferId,
         dealerUid: actorUid,
         transferType: transfer.transferType,
-        network: TRANSFER_NETWORK,
+        network,
         amount,
         previousBalance: previousStoreBalance,
         newBalance: newStoreBalance,
@@ -128,7 +131,7 @@ export async function rejectStoreDealerTransferHandler(request, { db, FieldValue
         storeId: transfer.storeId,
         storeName: transfer.storeName ?? null,
         transferType: transfer.transferType,
-        network: TRANSFER_NETWORK,
+        network,
         amount,
         rejectionReason,
         createdAt: now,

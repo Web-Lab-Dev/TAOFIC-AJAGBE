@@ -16,10 +16,11 @@ import {
   validateTransferType,
   transferBalanceField,
   readDealerBalanceAmount,
-  TRANSFER_NETWORK,
+  resolveTransferNetwork,
 } from './shared.js'
+import { DEALER_NETWORKS } from '../config/dealerProfile.js'
 
-export async function confirmStoreDealerTransferHandler(request, { db, FieldValue }) {
+export async function confirmStoreDealerTransferHandler(request, { db, FieldValue, dealerNetworks = DEALER_NETWORKS }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
@@ -59,6 +60,8 @@ export async function confirmStoreDealerTransferHandler(request, { db, FieldValu
         throw new DealerRequestError('TRANSFER_NOT_PENDING', 'Ce transfert a déjà été traité.')
       }
       const field = transferBalanceField(validateTransferType(transfer.transferType))
+      // Réseau du transfert (persisté à la création), validé ∈ profil (défense en profondeur).
+      const network = resolveTransferNetwork(transfer.network, dealerNetworks)
       const amount = transfer.amount
       if (!Number.isSafeInteger(amount) || amount <= 0) {
         throw new DealerRequestError('INVALID_TRANSFER_DATA', 'Montant du transfert invalide.')
@@ -76,7 +79,7 @@ export async function confirmStoreDealerTransferHandler(request, { db, FieldValu
         // Solde dealer (peut ne pas exister → 0)
         const balRef = db.doc(`dealerBalances/${actorUid}`)
         const balSnap = await t.get(balRef)
-        previousDealerBalance = readDealerBalanceAmount(balSnap.exists ? balSnap.data() : null, field)
+        previousDealerBalance = readDealerBalanceAmount(balSnap.exists ? balSnap.data() : null, field, network)
         newDealerBalance = previousDealerBalance + amount
         if (!Number.isSafeInteger(newDealerBalance)) {
           throw new DealerRequestError('BALANCE_OVERFLOW', 'Le solde résultant dépasse la limite des entiers sûrs.')
@@ -84,7 +87,7 @@ export async function confirmStoreDealerTransferHandler(request, { db, FieldValu
         // Crédit dealer — set + merge (crée le document s'il n'existe pas encore,
         // le merge profond préserve l'autre champ : stock ↔ liquidite).
         t.set(balRef, {
-          balances: { Orange: { [field]: newDealerBalance } },
+          balances: { [network]: { [field]: newDealerBalance } },
           updatedAt: now,
         }, { merge: true })
       }
@@ -114,7 +117,7 @@ export async function confirmStoreDealerTransferHandler(request, { db, FieldValu
         storeId: transfer.storeId,
         storeName: transfer.storeName ?? null,
         transferType: transfer.transferType,
-        network: TRANSFER_NETWORK,
+        network,
         amount,
         previousBalance: previousDealerBalance,
         newBalance: newDealerBalance,

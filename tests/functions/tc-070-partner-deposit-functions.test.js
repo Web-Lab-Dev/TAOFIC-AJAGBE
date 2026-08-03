@@ -177,3 +177,51 @@ describe('TC-070 — createPartnerDeposit', () => {
     expect((await db.collection('dealerPartnerDeposits').get()).size).toBe(0)
   })
 })
+
+// ── §MN — multi-réseaux : réseau porté par l'opération partenaire ────────────
+// Profil dealer multi-réseaux injecté. Une opération Moov n'ajuste QUE balances.Moov
+// (Orange préservé) ; le dépôt enregistré porte network:'Moov'. Réseau hors profil
+// → INVALID_TRANSFER_NETWORK sans aucune écriture.
+describe('TC-070-MN — multi-réseaux (réseau porté)', () => {
+  it('[PD-MN-01] deposit Moov : balances.Moov (stock−/liquidité+), Orange préservé, doc network=Moov', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await db.doc(`dealerBalances/${DEALER_UID}`).set({ balances: {
+      Orange: { stock: 40000, liquidite: 10000 },
+      Moov:   { stock: 20000, liquidite:  5000 },
+    } })
+
+    const res = await createPartnerDepositHandler(
+      req(DEALER_UID, { ...PARTNER, amount: 8000, network: 'Moov' }),
+      { db, FieldValue, dealerNetworks: ['Orange', 'Moov'] },
+    )
+    expect(res.newStock).toBe(12000)     // 20000 - 8000 (Moov)
+    expect(res.newLiquidite).toBe(13000) // 5000 + 8000 (Moov)
+
+    const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(dbal.balances.Moov.stock).toBe(12000)
+    expect(dbal.balances.Moov.liquidite).toBe(13000)
+    expect(dbal.balances.Orange.stock).toBe(40000)     // préservé
+    expect(dbal.balances.Orange.liquidite).toBe(10000) // préservé
+
+    const d = (await db.collection('dealerPartnerDeposits').get()).docs[0].data()
+    expect(d.network).toBe('Moov')
+    const audit = (await db.collection(`dealerBalances/${DEALER_UID}/auditLogs`).get()).docs[0].data()
+    expect(audit.network).toBe('Moov')
+  })
+
+  it('[PD-MN-02] réseau hors profil (mono Orange) → INVALID_TRANSFER_NETWORK, aucune écriture', async () => {
+    await seedUser(DEALER_UID, DEALER_PROFILE)
+    await seedDealerBal({ stock: 40000, liquidite: 10000 })
+    await expectError(
+      createPartnerDepositHandler(
+        req(DEALER_UID, { ...PARTNER, amount: 8000, network: 'Moov' }),
+        { db, FieldValue, dealerNetworks: ['Orange'] },
+      ),
+      'INVALID_TRANSFER_NETWORK',
+    )
+    const dbal = (await db.doc(`dealerBalances/${DEALER_UID}`).get()).data()
+    expect(dbal.balances.Orange.stock).toBe(40000)      // inchangé
+    expect(dbal.balances.Orange.liquidite).toBe(10000)  // inchangé
+    expect((await db.collection('dealerPartnerDeposits').get()).size).toBe(0)
+  })
+})
