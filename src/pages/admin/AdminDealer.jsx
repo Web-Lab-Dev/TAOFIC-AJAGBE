@@ -1,20 +1,14 @@
 import { useState, useCallback, useEffect } from 'react'
 import { listAllDealerRequests } from '../../services/adminService'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { formatDateTime as formatDate } from '../../utils/formatters'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
 import ErrorState from '../../components/ui/ErrorState'
 import StatusBadge from '../../components/ui/StatusBadge'
 import { SkeletonTable } from '../../components/ui/SkeletonList'
 
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-const STATUS_LABELS  = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
+const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
 const TYPE_LABELS    = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité' }
 const STATUS_OPTIONS = [
   { value: '', label: 'Tous les statuts' },

@@ -1,17 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { listConsolidatedHistory, listStoreHistory, listStoreOptions } from '../../services/adminService'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { formatDateTime as formatDate } from '../../utils/formatters'
 import EmptyState from '../../components/ui/EmptyState'
 import ErrorState from '../../components/ui/ErrorState'
 import StatusBadge from '../../components/ui/StatusBadge'
 import { SkeletonTable } from '../../components/ui/SkeletonList'
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
 
 // Nom du client : les transactions stockent l'objet `client` (nom/prénom) ;
 // `clientNom` (aplati) n'existe pas → on le reconstruit, avec repli legacy.

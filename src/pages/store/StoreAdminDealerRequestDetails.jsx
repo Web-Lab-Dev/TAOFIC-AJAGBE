@@ -8,33 +8,14 @@ import {
 } from '../../services/storeDealerRequestCommandService'
 import { formatStoredAmount } from '../../utils/formatCurrency'
 import { formatFirestoreDate } from '../../utils/formatFirestoreDate'
+import DealerRequestStatusBadge from '../../components/ui/DealerRequestStatusBadge'
 import {
-  DEALER_REQUEST_STATUS_LABELS,
   DEALER_REQUEST_TYPE_LABELS,
 } from '../../constants/dealerConstants'
 
 // ---------------------------------------------------------------------------
 // Badges statut
 // ---------------------------------------------------------------------------
-
-const STATUS_STYLES = {
-  pending:   'bg-yellow-100 text-yellow-800',
-  confirmed: 'bg-green-100 text-green-800',
-  rejected:  'bg-red-100 text-red-800',
-}
-
-function StatusBadge({ status }) {
-  const label = DEALER_REQUEST_STATUS_LABELS[status] ?? 'Statut inconnu'
-  const style = STATUS_STYLES[status] ?? 'bg-gray-100 text-gray-700'
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}
-      aria-label={`Statut : ${label}`}
-    >
-      {label}
-    </span>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Helper d'affichage d'un champ (null/undefined → '—')
@@ -586,7 +567,7 @@ function StoreAdminDealerRequestDetails() {
             <h1 className="text-lg font-bold text-gray-800">Détail de la demande</h1>
             <p className="text-xs text-gray-400 mt-0.5 break-all">{request.id}</p>
           </div>
-          <StatusBadge status={request.status} />
+          <DealerRequestStatusBadge status={request.status} />
         </div>
 
         {/* Champs */}
@@ -597,7 +578,7 @@ function StoreAdminDealerRequestDetails() {
           <Field label="Type" value={typeLabel} />
           <Field label="Montant" value={amountDisplay} />
           <Field label="Réseau" value={request.network ?? '—'} />
-          <Field label="Statut" value={<StatusBadge status={request.status} />} />
+          <Field label="Statut" value={<DealerRequestStatusBadge status={request.status} />} />
           <Field label="Créée le" value={formatFirestoreDate(request.createdAt)} />
           <Field label="Mise à jour le" value={formatFirestoreDate(request.updatedAt)} />
           <Field label="Ancien solde" value={request.previousBalance != null ? formatStoredAmount(request.previousBalance) : '—'} />

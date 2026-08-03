@@ -215,6 +215,23 @@ export const getAvailableActions = (transactionType) => {
 }
 
 /**
+ * Un draft est « en cours de règlement » dès qu'une Cloud Function y a écrit un
+ * champ de comptabilité (première tranche encaissée / remboursée).
+ *
+ * Miroir applicatif du helper Firestore `draftIsSettling` (firestore.rules) : les
+ * règles refusent désormais toute mutation de `type`/`montant`/`clientId` sur un tel
+ * draft. On aligne l'UI pour ne pas proposer une action « Modifier » que le serveur
+ * rejetterait — évite une erreur pour le caissier.
+ */
+export const isDraftSettling = (transaction) =>
+  !!transaction && (
+    transaction.settlementStatus != null ||
+    transaction.paidAmount != null ||
+    transaction.remainingAmount != null ||
+    transaction.settlementSummary != null
+  )
+
+/**
  * Valide si une action est possible selon le type de transaction et le contexte
  */
 export const validateTransactionAction = (transactionType, action, context = {}) => {

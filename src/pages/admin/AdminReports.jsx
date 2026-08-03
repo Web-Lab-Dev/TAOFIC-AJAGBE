@@ -2,22 +2,11 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import PageHeader from '../../components/ui/PageHeader'
 import ErrorState from '../../components/ui/ErrorState'
 import { getRequestsForReport } from '../../services/adminService'
+import { formatDateShort as fmtDate } from '../../utils/formatters'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
-
-function tsToDate(ts) {
-  if (!ts) return null
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  return Number.isFinite(d.getTime()) ? d : null
-}
-
-function fmtDate(ts) {
-  const d = tsToDate(ts)
-  if (!d) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
 
 function fmtAmount(n) {
   if (typeof n !== 'number') return '—'

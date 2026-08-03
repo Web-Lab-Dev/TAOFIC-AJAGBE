@@ -60,7 +60,12 @@ function DealerInventoryBar() {
   const [mode, setMode]             = useState('increase')  // 'increase' | 'decrease'
   const [amount, setAmount]         = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const submittingRef = useRef(false) // verrou synchrone anti-double-clic
+  // Défense en profondeur pour une action financière (appel de Cloud Function) :
+  //  - submittingRef : verrou SYNCHRONE, bloque deux clics dans le même tick avant
+  //    que le re-render n'applique `disabled` (fenêtre de double-soumission).
+  //  - submitting (state) : pilote `disabled` + le libellé du bouton.
+  // Les deux sont volontaires : ne pas retirer le ref au profit du seul `disabled`.
+  const submittingRef = useRef(false)
 
   const dealerUid = currentUser?.uid
   const isDealer = userProfile?.role === 'dealer'

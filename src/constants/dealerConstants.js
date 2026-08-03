@@ -26,6 +26,10 @@ export const DEALER_REQUESTS_PAGE_SIZE = 20
 export const DEALER_STORES_PAGE_SIZE = 20
 export const STORE_DEALER_REQUESTS_PAGE_SIZE = 20
 
+// Espaces gérant/admin (supervision) : pages plus denses (tableaux larges) →
+// 25 lignes, contre 20 côté dealer/boutique. Valeur volontairement distincte.
+export const ADMIN_PAGE_SIZE = 25
+
 // ── Transferts boutique → dealer (retours de stock / liquidité) ──────────────
 export const STORE_TRANSFER_TYPES = Object.freeze({
   RETURN_STOCK: 'return_stock',

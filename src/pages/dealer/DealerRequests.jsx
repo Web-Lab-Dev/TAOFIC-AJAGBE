@@ -11,47 +11,8 @@ import {
   DEALER_NETWORK,
 } from '../../constants/dealerConstants'
 import RejectionRemarkButton from '../../components/ui/RejectionRemarkButton'
-
-// ---------------------------------------------------------------------------
-// Statut badge
-// ---------------------------------------------------------------------------
-
-const STATUS_STYLES = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  confirmed: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-}
-
-function StatusBadge({ status }) {
-  const label = DEALER_REQUEST_STATUS_LABELS[status] ?? status
-  const style = STATUS_STYLES[status] ?? 'bg-gray-100 text-gray-700'
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}
-      aria-label={`Statut : ${label}`}
-      data-testid={`status-badge-${status}`}
-    >
-      {label}
-    </span>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Formatage date — Firestore Timestamp ou Date
-// ---------------------------------------------------------------------------
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+import DealerRequestStatusBadge from '../../components/ui/DealerRequestStatusBadge'
+import { formatDateTime as formatDate } from '../../utils/formatters'
 
 // ---------------------------------------------------------------------------
 // DealerRequests
@@ -393,7 +354,7 @@ function DealerRequests() {
                       {req.network ?? DEALER_NETWORK}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <StatusBadge status={req.status} />
+                      <DealerRequestStatusBadge status={req.status} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <RejectionRemarkButton

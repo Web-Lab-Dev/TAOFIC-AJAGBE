@@ -8,6 +8,7 @@ import {
 import { formatStoredAmount } from '../../utils/formatCurrency'
 import { mergeUniqueRequests } from '../../utils/mergeRequests'
 import { formatFirestoreDate } from '../../utils/formatFirestoreDate'
+import DealerRequestStatusBadge from '../../components/ui/DealerRequestStatusBadge'
 import {
   DEALER_REQUEST_STATUS_LABELS,
   DEALER_REQUEST_STATUSES,
@@ -18,26 +19,6 @@ import {
 // ---------------------------------------------------------------------------
 // Badges statut
 // ---------------------------------------------------------------------------
-
-const STATUS_STYLES = {
-  pending:   'bg-yellow-100 text-yellow-800',
-  confirmed: 'bg-green-100 text-green-800',
-  rejected:  'bg-red-100 text-red-800',
-}
-
-function StatusBadge({ status }) {
-  const label = DEALER_REQUEST_STATUS_LABELS[status] ?? 'Statut inconnu'
-  const style = STATUS_STYLES[status] ?? 'bg-gray-100 text-gray-700'
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}
-      aria-label={`Statut : ${label}`}
-      data-testid={`status-badge-${status}`}
-    >
-      {label}
-    </span>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Options de filtres
@@ -387,7 +368,7 @@ function StoreAdminDealerRequests() {
                       {req.network ?? '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <StatusBadge status={req.status} />
+                      <DealerRequestStatusBadge status={req.status} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-500 text-xs">
                       {formatFirestoreDate(req.createdAt)}

@@ -15,13 +15,7 @@ import ErrorState from '../../components/ui/ErrorState'
 import StatusBadge from '../../components/ui/StatusBadge'
 import { SkeletonTable } from '../../components/ui/SkeletonList'
 import RejectionRemarkButton from '../../components/ui/RejectionRemarkButton'
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+import { formatDateTime as formatDate } from '../../utils/formatters'
 
 const ms = (ts) => ts?.toMillis?.() ?? (ts ? new Date(ts).getTime() : 0)
 

@@ -13,13 +13,7 @@ import EmptyState from '../../components/ui/EmptyState'
 import ErrorState from '../../components/ui/ErrorState'
 import { SkeletonTable } from '../../components/ui/SkeletonList'
 import Toast from '../../components/Toast'
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+import { formatDateTime as formatDate } from '../../utils/formatters'
 
 function DealerTransfers() {
   const { currentUser } = useAuth()
@@ -31,6 +25,8 @@ function DealerTransfers() {
   const [actingId, setActingId]   = useState(null)
   const [rejectFor, setRejectFor] = useState(null) // transfer id
   const [reason, setReason]       = useState('')
+  // Incrémenté par « Réessayer » pour relancer l'abonnement sans recharger la page.
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const dealerUid = currentUser?.uid
 
@@ -44,7 +40,7 @@ function DealerTransfers() {
       onError: (err) => { setError(err.message); setLoading(false) },
     })
     return unsub
-  }, [dealerUid])
+  }, [dealerUid, refreshKey])
 
   const handleConfirm = useCallback(async (id) => {
     setActingId(id)
@@ -81,7 +77,7 @@ function DealerTransfers() {
       />
 
       {loading && <SkeletonTable rows={5} cols={5} />}
-      {error && <ErrorState message={error} onRetry={() => window.location.reload()} />}
+      {error && <ErrorState message={error} onRetry={() => { setError(null); setRefreshKey(k => k + 1) }} />}
       {!loading && !error && transfers.length === 0 && (
         <EmptyState title="Aucun retour en attente" message="Les boutiques n'ont envoyé aucun retour pour le moment." />
       )}

@@ -16,13 +16,7 @@ import { formatCurrency } from '../../utils/formatCurrency'
 import StatusBadge from '../ui/StatusBadge'
 import RejectionRemarkButton from '../ui/RejectionRemarkButton'
 import Toast from '../Toast'
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+import { formatDateTime as formatDate } from '../../utils/formatters'
 
 /**
  * Chemin dealer du formulaire de transactions boutique.

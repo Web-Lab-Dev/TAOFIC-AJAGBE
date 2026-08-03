@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { listActiveStores, listDealerRequests, subscribeDealerPendingCount } from '../../services/dealerService'
 import { subscribeIncomingTransfersCount } from '../../services/storeTransferService'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { formatDateTime as formatDate } from '../../utils/formatters'
 import StatCard from '../../components/ui/StatCard'
 import PageHeader from '../../components/ui/PageHeader'
 import ErrorState from '../../components/ui/ErrorState'
@@ -16,13 +17,6 @@ import { CARD, TABLE_WRAP, TABLE_HEAD } from '../../constants/workspaceTheme'
 
 const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
 const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité' }
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
 
 function DealerDashboard() {
   const { currentUser, userProfile } = useAuth()

@@ -7,19 +7,9 @@ import {
   getRecentDealerRequests,
 } from '../../services/adminService'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { formatDateTime as formatDate } from '../../utils/formatters'
 import ErrorState from '../../components/ui/ErrorState'
 import { SkeletonCards } from '../../components/ui/SkeletonList'
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────────────────────────
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
 
 const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
 const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité' }

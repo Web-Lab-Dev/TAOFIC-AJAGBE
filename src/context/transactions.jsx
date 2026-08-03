@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { getTransactionStyles, getAvailableActions, parsefrenchDate } from '../utils/helpers.js'
+import { getTransactionStyles, getAvailableActions, isDraftSettling, parsefrenchDate } from '../utils/helpers.js'
 import { STORAGE_KEYS } from '../constants/index.js'
 import { firestoreService } from '../services/firestore'
 import { addTransactionPayment, addTransactionRefund } from '../services/settlementService'
@@ -252,7 +252,14 @@ export const TransactionsProvider = ({ children }) => {
   }, [])
 
   const getActionButtons = useCallback((transaction) => {
-    return getAvailableActions(transaction.type)
+    const actions = getAvailableActions(transaction.type)
+    // Dès qu'un règlement est engagé, `type`/`montant`/`clientId` sont figés côté
+    // règles Firestore : on masque donc « Modifier » pour rester cohérent avec le
+    // serveur (les tranches restent accessibles via Encaisser/Payer/Rembourser).
+    if (isDraftSettling(transaction)) {
+      return { ...actions, modifier: false }
+    }
+    return actions
   }, [])
 
   const getTransactionStylesFunc = useCallback((type) => {

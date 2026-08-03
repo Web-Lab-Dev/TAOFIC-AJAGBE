@@ -1,17 +1,11 @@
 import { useState, useCallback, useEffect } from 'react'
 import { listDealerInventoryMovements } from '../../services/adminService'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { formatDateTime as formatDate } from '../../utils/formatters'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
 import ErrorState from '../../components/ui/ErrorState'
 import { SkeletonTable } from '../../components/ui/SkeletonList'
-
-function formatDate(ts) {
-  if (!ts) return '—'
-  const d = ts?.toDate ? ts.toDate() : new Date(ts)
-  if (!Number.isFinite(d.getTime())) return '—'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
 
 const SENS_STYLES = {
   '+': 'text-green-700 bg-green-50',
