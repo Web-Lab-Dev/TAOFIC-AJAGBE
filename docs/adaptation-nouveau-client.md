@@ -126,7 +126,7 @@ Scripts éprouvés lors du lancement du client actuel (`scripts/`) :
 Invariants métier à respecter au provisioning :
 
 - **Un seul dealer actif** dans tout le système (vérifié côté serveur,
-  `functions/src/storeTransfers/shared.js:151`).
+  `resolveSingleDealer` dans `functions/src/storeTransfers/shared.js`).
 - Les soldes réseau s'initialisent automatiquement à 0 au premier login boutique
   (`ensureNetworkBalances`).
 
@@ -135,7 +135,7 @@ Invariants métier à respecter au provisioning :
 | # | Chantier | Ampleur | Déploiement |
 |---|---|---|---|
 | 1 | Boutique multi-réseaux + Crédit + règlements inter-réseaux | Trivial — 4 constantes UI + grille CSS | Front uniquement |
-| 2 | Dealer multi-réseaux | Moyen — 8 points (1 règle, ~6 fichiers functions, 1 sélecteur UI) + extension de tests | Règles + Functions sur le nouveau projet |
+| 2 | Dealer multi-réseaux | **7/8 faits** — règles + functions portent le réseau par le profil (commité, non déployé) ; reste le **sélecteur UI** (verrou 8) | Règles + Functions sur le nouveau projet |
 | 3 | Rebranding | Trivial — ~5 fichiers front | Front uniquement |
 | 4 | Nouveau projet Firebase | Configuration + déploiement + garde-fous scripts | Nouveau projet |
 | 5 | Provisioning | Scripts existants à exécuter | Nouveau projet |

@@ -95,7 +95,50 @@ séparément — ça fermerait au passage la faille networkBalances direct-write
   chaque profil génère des règles valides + invariants respectés).
 - **Migrations de données** : par projet Firebase (outillage `scripts/`, gardé par projet).
 
-## 6. Registre des clients
+## 6. Onboarder un nouveau client (runbook)
+
+Étapes exactes, dans l'ordre, pour mettre le pilote en service chez un nouveau client. Chaque
+étape est **reproductible** et **sans risque pour les clients existants** (projet Firebase séparé).
+
+### A. Profil (code, commité sur `main`)
+1. **Créer `config/clients/<id>.js`** : copier `_pilot.js` (tout activé) puis **désactiver** ce que
+   le client n'utilise pas (réseaux, type `Crédit`, méthodes de règlement, `cashier.canEditBalances`,
+   `dealer.networks`, `regional.timezone`, `branding`). `id` = identifiant **normalisé** (minuscules,
+   non-alphanumérique → `_`) ; `firebaseProject` = id du projet Firebase.
+2. **L'enregistrer** dans `config/clients/index.js` → `PROFILES` (clé = `id` normalisé).
+3. **Test de caractérisation** façon `tc-083` : figer les constantes attendues du nouveau profil
+   (garantit qu'un futur changement ne dérive pas son comportement).
+
+### B. Génération serveur (dérivée du profil)
+4. `node scripts/generate-rules.mjs --client <id>` → régénère le bloc `profileDealerNetworks()`
+   de `firestore.rules`.
+5. `node scripts/generate-functions-config.mjs --client <id>` → régénère
+   `functions/src/config/dealerProfile.js` (`DEALER_NETWORKS`).
+6. Vérifier (`npm run test:unit` anti-dérive tc-084/085 + `npm run test:functions`) puis commiter.
+
+> ⚠ Les artefacts générés (`firestore.rules`, `dealerProfile.js`) sont **partagés** : ils portent
+> le profil du **dernier** client généré. Avant tout déploiement, **toujours** relancer les deux
+> générateurs pour le client cible (le futur script `deploy-client` automatisera cet enchaînement).
+
+### C. Projet Firebase & déploiement (utilisateur — jamais l'agent)
+7. Créer le projet Firebase + app web ; remplir un **`.env` dédié** (clés API, project id,
+   `VITE_CLIENT_ID=<id>`) ; ajouter l'alias dans `.firebaserc`.
+8. **Adapter les garde-fous des scripts** (`assertFirebaseProject.mjs`, `assertResetProject.mjs`)
+   pour référencer le nouveau projet — sinon aucun script admin ne tournera dessus (la prod du
+   client actuel reste protégée). Détails : `docs/adaptation-nouveau-client.md` §5.
+9. `npm run build` (avec le bon `VITE_CLIENT_ID`) puis déployer **règles + functions + hosting**
+   sur SON projet. App Check recommandé.
+
+### D. Provisioning (scripts existants — voir `docs/adaptation-nouveau-client.md` §6)
+10. Boutiques (`seedStores`), comptes (`createTechnicalUser`), remise à zéro (`resetDataToZero`,
+    4 verrous). Invariant serveur : **un seul dealer actif** dans tout le système.
+11. **Mettre à jour le registre** (§7) : client, projet, version, date, particularités.
+
+**Cas dealer multi-réseaux** : si `dealer.networks` compte **plusieurs** réseaux, le sélecteur de
+réseau côté front (verrou 8, cf. `docs/adaptation-nouveau-client.md` §3) doit être câblé au
+préalable — non requis pour un dealer mono-réseau.
+
+## 7. Registre des clients
 
 | Client (`id`) | Projet Firebase | Version déployée | Dernier déploiement | Particularités |
 |---|---|---|---|---|
@@ -103,22 +146,23 @@ séparément — ça fermerait au passage la faille networkBalances direct-write
 
 _(Le registre est mis à jour à chaque déploiement client.)_
 
-## 7. Principe de sûreté
+## 8. Principe de sûreté
 
 **Extraire, ne pas changer.** À chaque phase, le profil `taofic-ajagbe` reproduit au bit
 près le comportement déployé, prouvé par des tests de caractérisation. On rend configurable
 ce qui était figé — on ne modifie jamais le runtime d'un client en production au passage.
 
-## 8. Plan par phases
+## 9. Plan par phases
 
 | Phase | Contenu | Déploiement | État |
 |---|---|---|---|
 | **0** | Schéma de profil + `_pilot` + `taofic_ajagbe` + résolveur | Aucun | ✅ Fait |
 | **1** | Front : `NETWORK_OPTIONS`, `TRANSACTION_TYPES`, `PAYMENT_METHODS`, `VISIBLE_NETWORK_CARDS`, `DEALER_NETWORK` dérivent du profil (UI TAOFIC identique, prouvé par tc-083) | Front | ✅ Fait |
-| 2 | Générateur `firestore.rules` depuis le profil (diff nul pour TAOFIC) | Aucun | À venir |
-| 3 | Functions dérivent du profil (dealer multi-réseaux ; masquage édition soldes → enforcement serveur + migration si `canEditBalances:false`) | Règles+functions, nouveau projet | À venir |
-| 4 | Branding paramétré + script `deploy-client` + checklist onboarding | Front | À venir |
+| **2** | Générateur `firestore.rules` depuis le profil (diff nul pour TAOFIC) | Aucun | ✅ Fait |
+| **3** | Functions dérivent du profil (dealer multi-réseaux) | Règles+functions, nouveau projet | 🔶 Serveur fait (dealerRequests, closures, storeTransfers). **Reste** : sélecteur réseau front ; enforcement serveur `canEditBalances:false` + migration |
+| **4** | Branding paramétré + script `deploy-client` + checklist onboarding | Front | 🔶 Checklist onboarding faite (§6). **Reste** : branding paramétré + script `deploy-client` |
 
-> Reste **non encore câblé** en Phase 1 (rattaché à des phases dédiées, car touchant
-> plusieurs couches) : le **masquage UI de l'édition des soldes** (`cashier.canEditBalances`,
-> à traiter avec son enforcement Phase 3) et le **branding** (`branding`, Phase 4).
+> Reste **non encore câblé** (rattaché à des phases dédiées, car touchant plusieurs couches) :
+> le **masquage UI de l'édition des soldes** (`cashier.canEditBalances`, à traiter avec son
+> enforcement Phase 3), le **sélecteur de réseau dealer front** (Phase 3) et le **branding**
+> (`branding`, Phase 4).
