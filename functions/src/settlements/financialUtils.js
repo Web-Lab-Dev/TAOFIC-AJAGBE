@@ -25,7 +25,9 @@
  *     avant d'appeler cette fonction.
  *   • reverseSettlementImpact : ajoutée ici (absente de financialImpact.js).
  *
- * Parité garantie par TC-060-F (tests unitaires identiques sur les deux implémentations).
+ * Parité front↔functions verrouillée par TC-081 (tests-unit/tc-081-financial-parity) :
+ * mêmes entrées → mêmes sorties/erreurs sur les deux implémentations. (TC-060-F ne teste que
+ * cette version functions ; il ne garantit PAS la parité — c'est le rôle de TC-081.)
  * Toute modification de la logique financière doit être répercutée dans les DEUX fichiers.
  */
 

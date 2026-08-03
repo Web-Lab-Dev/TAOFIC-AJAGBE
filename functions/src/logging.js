@@ -102,3 +102,21 @@ export function writeSafeErrorLog(logWriter, payload) {
     // Le logging ne doit jamais interrompre le callable.
   }
 }
+
+/**
+ * Journalise un événement d'audit métier CONTRÔLÉ (non une erreur inattendue).
+ *
+ * À la différence de writeSafeErrorLog, l'appelant fournit ici des champs déjà
+ * connus et sûrs (identifiants, montants d'un conflit financier…) : c'est un log
+ * serveur légitime pour le diagnostic, jamais renvoyé au client. Ne lève jamais.
+ *
+ * @param {function} logWriter - Écrivain de log injectable (défaut appelant).
+ * @param {object} payload - Champs déjà sûrs à consigner (severity par défaut WARNING).
+ */
+export function writeSafeAuditLog(logWriter, payload) {
+  try {
+    logWriter({ severity: 'WARNING', ...payload })
+  } catch {
+    // Le logging ne doit jamais interrompre le callable.
+  }
+}

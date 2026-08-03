@@ -15,7 +15,9 @@
  *   settlementSummary du draft maintenu incrémentalement.
  */
 
+import { write } from 'firebase-functions/logger'
 import { DealerRequestError } from '../errors.js'
+import { writeSafeAuditLog } from '../logging.js'
 import { validateAuthUid, validateInputPayload } from '../dealerRequests/shared.js'
 import {
   normalizeNetworkBalances,
@@ -45,7 +47,7 @@ function updateSummaryForRefund(prevSummary, network, amount) {
   }
 }
 
-export async function addTransactionRefundHandler(request, { db, FieldValue }) {
+export async function addTransactionRefundHandler(request, { db, FieldValue, logWriter = write }) {
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   const actorUid = validateAuthUid(request.auth?.uid)
 
@@ -90,6 +92,9 @@ export async function addTransactionRefundHandler(request, { db, FieldValue }) {
   const settlementId = `ref_${draftId}_${actorUid}_${trimmedKey}`
 
   // ── 6. Transaction atomique ───────────────────────────────────────────────
+  // Détail d'un éventuel conflit d'idempotence, capturé DANS la transaction mais journalisé
+  // UNE SEULE FOIS hors transaction (le corps peut être rejoué sur contention).
+  let idempotencyConflictLog = null
   let txResult
   try {
     txResult = await db.runTransaction(async (t) => {
@@ -117,10 +122,22 @@ export async function addTransactionRefundHandler(request, { db, FieldValue }) {
       if (settlementSnap.exists) {
         const existingData = settlementSnap.data()
         if (existingData.amount !== amount || existingData.paymentMethod !== paymentMethod) {
+          // On CAPTURE le détail (montants/méthode) pour un log serveur émis hors transaction
+          // (diagnostic — jamais renvoyé au client ; message client volontairement générique).
+          idempotencyConflictLog = {
+            event:          'SETTLEMENT_IDEMPOTENCY_CONFLICT',
+            action:         'addTransactionRefund',
+            actorUid,
+            storeId,
+            settlementId,
+            existingAmount: existingData.amount,
+            newAmount:      amount,
+            existingMethod: existingData.paymentMethod,
+            newMethod:      paymentMethod,
+          }
           throw new DealerRequestError(
             'IDEMPOTENCY_CONFLICT',
-            `Clé d'idempotence "${trimmedKey}" déjà utilisée avec un payload différent ` +
-            `(montant: ${existingData.amount} vs ${amount}, méthode: ${existingData.paymentMethod} vs ${paymentMethod}).`
+            'Cette opération a déjà été enregistrée avec des paramètres différents. Rechargez la page et réessayez.'
           )
         }
         return { idempotent: true }
@@ -131,6 +148,12 @@ export async function addTransactionRefundHandler(request, { db, FieldValue }) {
       }
 
       const draft = draftSnap.data()
+
+      // ── Type métier ÉPINGLÉ (défense en profondeur, cf. C1) ────────────────
+      // On relit le type épinglé par la 1re tranche (settlementType, champ serveur
+      // immuable verrouillé côté règles) plutôt que draft.type — le signe de
+      // l'impact réseau reste stable même si le gel des règles était contourné.
+      const effectiveType = draft.settlementType ?? draft.type
 
       // ── Initialisation lazy ───────────────────────────────────────────────
       const originalAmount  = draft.originalAmount  ?? draft.montant
@@ -152,7 +175,7 @@ export async function addTransactionRefundHandler(request, { db, FieldValue }) {
       // ── Impact financier inverse ──────────────────────────────────────────
       const currentBalances = normalizeNetworkBalances(balanceSnap.exists ? balanceSnap.data() : {})
       const affectedNetwork = mapPaymentMethodToNetwork(paymentMethod)
-      const nextBalances    = reverseSettlementImpact(currentBalances, { type: draft.type, montant: amount }, paymentMethod)
+      const nextBalances    = reverseSettlementImpact(currentBalances, { type: effectiveType, montant: amount }, paymentMethod)
 
       const previousBalanceEntry = currentBalances[affectedNetwork] ?? { stock: 0, liquidite: 0 }
       const newBalanceEntry      = nextBalances[affectedNetwork]    ?? { stock: 0, liquidite: 0 }
@@ -215,6 +238,7 @@ export async function addTransactionRefundHandler(request, { db, FieldValue }) {
         refundedAmount:      newRefunded,
         remainingAmount:     newRemaining,
         settlementStatus:    'partial',
+        settlementType:      effectiveType,
         settlementSummary:   newSummary,
         settlementUpdatedAt: now,
       })
@@ -222,6 +246,8 @@ export async function addTransactionRefundHandler(request, { db, FieldValue }) {
       return { idempotent: false }
     })
   } catch (err) {
+    // Conflit d'idempotence : log d'audit serveur émis UNE SEULE fois, hors transaction.
+    if (idempotencyConflictLog) writeSafeAuditLog(logWriter, idempotencyConflictLog)
     if (err instanceof DealerRequestError) throw err
     throw new DealerRequestError('TRANSACTION_FAILED', 'La transaction a échoué. Veuillez réessayer.')
   }

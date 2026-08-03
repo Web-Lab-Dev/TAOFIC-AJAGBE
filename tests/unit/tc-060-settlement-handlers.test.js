@@ -829,3 +829,202 @@ describe('TC-060-K — Concurrence (simulation séquentielle sur mocks)', () => 
     expect(draftUpdate.data.settlementStatus).toBe('partial')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-060-L — Audit du conflit d'idempotence : log serveur émis EXACTEMENT une fois
+//
+// Correctif M2 : le détail du conflit (montants/méthode) est capturé DANS la
+// transaction mais journalisé UNE SEULE fois hors transaction (dans le catch),
+// pour éviter les doublons si le corps de la transaction est rejoué sur contention.
+// On injecte un logWriter espion et on vérifie le nombre exact d'appels.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TC-060-L — Log d\'audit du conflit d\'idempotence (émission unique)', () => {
+  it('paiement : conflit de payload → logWriter appelé EXACTEMENT une fois (WARNING, event dédié)', async () => {
+    const logWriter = vi.fn()
+    const { db } = makeDb({
+      settlementExists: true,
+      settlementData: { amount: 5000, paymentMethod: 'Cash', fullySettled: false },
+    })
+
+    await expect(
+      addTransactionPaymentHandler(
+        makeRequest({ draftId: DRAFT_ID, amount: 9999, paymentMethod: 'Cash', idempotencyKey: 'conflict-log-1' }),
+        { db, FieldValue, logWriter }
+      )
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' })
+
+    // Émission unique — pas de doublon sur retry.
+    expect(logWriter).toHaveBeenCalledTimes(1)
+    const logged = logWriter.mock.calls[0][0]
+    expect(logged.severity).toBe('WARNING')
+    expect(logged.event).toBe('SETTLEMENT_IDEMPOTENCY_CONFLICT')
+    expect(logged.action).toBe('addTransactionPayment')
+    expect(logged.existingAmount).toBe(5000)
+    expect(logged.newAmount).toBe(9999)
+  })
+
+  it('paiement : re-exécution du corps de transaction (contention) → toujours un seul log', async () => {
+    // Simule un retry de la transaction Firestore : runTransaction rappelle le corps
+    // deux fois. Le log ne doit être émis qu'une fois, hors transaction.
+    const logWriter = vi.fn()
+    const base = makeDb({
+      settlementExists: true,
+      settlementData: { amount: 5000, paymentMethod: 'Cash', fullySettled: false },
+    })
+    base.db.runTransaction = vi.fn(async (fn) => {
+      // Premier passage : le corps lève (capture le conflit). Firestore rejouerait
+      // silencieusement le corps sur contention — on avale donc cette 1re erreur.
+      try { await fn(base.mockTx) } catch { /* rejeu comme Firestore */ }
+      // Second passage : le corps relève ; c'est cette erreur qui remonte au handler.
+      return fn(base.mockTx)
+    })
+
+    await expect(
+      addTransactionPaymentHandler(
+        makeRequest({ draftId: DRAFT_ID, amount: 9999, paymentMethod: 'Cash', idempotencyKey: 'conflict-log-retry' }),
+        { db: base.db, FieldValue, logWriter }
+      )
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' })
+
+    expect(logWriter).toHaveBeenCalledTimes(1)
+  })
+
+  it('paiement : même payload (idempotent OK) → aucun log de conflit', async () => {
+    const logWriter = vi.fn()
+    const { db } = makeDb({
+      settlementExists: true,
+      settlementData: { amount: 5000, paymentMethod: 'Cash', fullySettled: false },
+    })
+
+    const result = await addTransactionPaymentHandler(
+      makeRequest({ draftId: DRAFT_ID, amount: 5000, paymentMethod: 'Cash', idempotencyKey: 'no-conflict' }),
+      { db, FieldValue, logWriter }
+    )
+
+    expect(result.idempotent).toBe(true)
+    expect(logWriter).not.toHaveBeenCalled()
+  })
+
+  it('paiement : succès partiel normal → aucun log de conflit', async () => {
+    const logWriter = vi.fn()
+    const { db } = makeDb({ draftData: { ...BASE_DRAFT, montant: 10000 } })
+
+    await addTransactionPaymentHandler(
+      makeRequest({ draftId: DRAFT_ID, amount: 4000, paymentMethod: 'Cash', idempotencyKey: 'ok-partial' }),
+      { db, FieldValue, logWriter }
+    )
+
+    expect(logWriter).not.toHaveBeenCalled()
+  })
+
+  it('remboursement : conflit de payload → logWriter appelé EXACTEMENT une fois (action refund)', async () => {
+    const logWriter = vi.fn()
+    const { db } = makeDb({
+      settlementExists: true,
+      settlementData: { amount: 2000, paymentMethod: 'Cash' },
+    })
+
+    await expect(
+      addTransactionRefundHandler(
+        makeRequest({ draftId: DRAFT_ID, amount: 3000, paymentMethod: 'Cash', idempotencyKey: 'conflict-log-ref' }),
+        { db, FieldValue, logWriter }
+      )
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' })
+
+    expect(logWriter).toHaveBeenCalledTimes(1)
+    const logged = logWriter.mock.calls[0][0]
+    expect(logged.severity).toBe('WARNING')
+    expect(logged.event).toBe('SETTLEMENT_IDEMPOTENCY_CONFLICT')
+    expect(logged.action).toBe('addTransactionRefund')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TC-060-M — Défense en profondeur : type ÉPINGLÉ (settlementType) prime sur draft.type
+//
+// Correctif C1 (défense en profondeur) : dès la 1re tranche, le handler épingle le
+// type dans un champ serveur immuable (settlementType) et le relit ensuite. Même si
+// le gel des règles Firestore était contourné et draft.type falsifié entre deux
+// tranches, le signe de l'impact réseau reste déterminé par settlementType.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TC-060-M — Type épinglé (settlementType) neutralise l\'inversion de signe', () => {
+  it('paiement : 1re tranche → settlementType est écrit sur le draft (égal à draft.type)', async () => {
+    const { db, written } = makeDb({ draftData: { ...BASE_DRAFT, type: 'Retrait', montant: 10000 } })
+
+    await addTransactionPaymentHandler(
+      makeRequest({ draftId: DRAFT_ID, amount: 4000, paymentMethod: 'Orange Money', idempotencyKey: 'pin-1' }),
+      { db, FieldValue }
+    )
+
+    const draftUpdate = written.find(w => w.op === 'update' && w.path.includes(`/drafts/${DRAFT_ID}`))
+    expect(draftUpdate.data.settlementType).toBe('Retrait')
+  })
+
+  it('paiement : draft.type falsifié (Dépôt) mais settlementType=Retrait → impact reste un DÉBIT', async () => {
+    // Simule un draft dont le gel des règles aurait été contourné : draft.type a été
+    // basculé en 'Dépôt' entre deux tranches, mais settlementType='Retrait' est épinglé.
+    const tamperedDraft = {
+      ...BASE_DRAFT,
+      type:            'Dépôt',      // ← falsifié
+      settlementType:  'Retrait',    // ← épinglé à la 1re tranche (source de vérité)
+      originalAmount:  10000,
+      paidAmount:      4000,
+      refundedAmount:  0,
+      remainingAmount: 6000,
+      settlementStatus: 'partial',
+    }
+    const { db, written } = makeDb({ draftData: tamperedDraft })
+
+    await addTransactionPaymentHandler(
+      makeRequest({ draftId: DRAFT_ID, amount: 5000, paymentMethod: 'Cash', idempotencyKey: 'pin-2' }),
+      { db, FieldValue }
+    )
+
+    const balanceWrite = written.find(w => w.op === 'set' && w.path.includes('networkBalances'))
+    // Retrait/Cash ⇒ liquidité DÉBITÉE : 20000 - 5000 = 15000 (et non +5000 si Dépôt).
+    expect(balanceWrite.data.balances.Orange.liquidite).toBe(15000)
+
+    // settlementType reste épinglé sur Retrait après la tranche.
+    const draftUpdate = written.find(w => w.op === 'update' && w.path.includes(`/drafts/${DRAFT_ID}`))
+    expect(draftUpdate.data.settlementType).toBe('Retrait')
+  })
+
+  it('remboursement : draft.type falsifié mais settlementType=Retrait → reversal reste un CRÉDIT', async () => {
+    // Retrait remboursé ⇒ reverseSettlementImpact rend les fonds (liquidité +amount).
+    const tamperedDraft = {
+      ...BASE_DRAFT,
+      type:            'Dépôt',      // ← falsifié (donnerait -amount à tort)
+      settlementType:  'Retrait',    // ← épinglé
+      originalAmount:  10000,
+      paidAmount:      6000,
+      refundedAmount:  0,
+      remainingAmount: 4000,
+      settlementStatus: 'partial',
+    }
+    const { db, written } = makeDb({ draftData: tamperedDraft })
+
+    await addTransactionRefundHandler(
+      makeRequest({ draftId: DRAFT_ID, amount: 2000, paymentMethod: 'Cash', idempotencyKey: 'pin-3' }),
+      { db, FieldValue }
+    )
+
+    const balanceWrite = written.find(w => w.op === 'set' && w.path.includes('networkBalances'))
+    // Retrait remboursé ⇒ +2000 : 20000 + 2000 = 22000 (et non -2000 si Dépôt).
+    expect(balanceWrite.data.balances.Orange.liquidite).toBe(22000)
+  })
+
+  it('paiement complet : settlementType épinglé propagé dans le document history', async () => {
+    const { db, written } = makeDb({ draftData: { ...BASE_DRAFT, type: 'Retrait', montant: 5000 } })
+
+    await addTransactionPaymentHandler(
+      makeRequest({ draftId: DRAFT_ID, amount: 5000, paymentMethod: 'Cash', idempotencyKey: 'pin-4' }),
+      { db, FieldValue }
+    )
+
+    const historyWrite = written.find(w => w.op === 'set' && w.path.includes('/history/'))
+    expect(historyWrite.data.settlementType).toBe('Retrait')
+    expect(historyWrite.data.statut).toBe('Payé par Cash')
+  })
+})
