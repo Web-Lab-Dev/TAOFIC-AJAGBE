@@ -337,6 +337,7 @@ describe('TC-078-IM — listDealerInventoryMovements', () => {
     const res = await listDealerInventoryMovements()
     expect(res).toEqual({
       dealerUid: null, dealerName: null, balance: { stock: 0, liquidite: 0 },
+      byNetwork: { Orange: { stock: 0, liquidite: 0 } }, totalLiquidite: 0,
       movements: [], lastDoc: null, hasMore: false, multipleActiveDealers: false,
     })
   })
@@ -353,6 +354,9 @@ describe('TC-078-IM — listDealerInventoryMovements', () => {
     expect(res.multipleActiveDealers).toBe(true)
     expect(res.dealerUid).toBe('d1')
     expect(res.balance).toEqual({ stock: 100, liquidite: 50 })
+    // Inventaire par réseau (profil mono → Orange) + liquidité globale.
+    expect(res.byNetwork).toEqual({ Orange: { stock: 100, liquidite: 50 } })
+    expect(res.totalLiquidite).toBe(50)
   })
 
   it('[IM-03] solde absent → { stock: 0, liquidite: 0 }', async () => {

@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect } from 'react'
 import { listDealerInventoryMovements } from '../../services/adminService'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { formatDateTime as formatDate } from '../../utils/formatters'
+import { DEALER_NETWORKS, IS_DEALER_MULTI_NETWORK } from '../../constants/dealerConstants'
+import { NETWORK_CONFIG } from '../../constants/networkConfig'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
 import ErrorState from '../../components/ui/ErrorState'
@@ -13,11 +15,14 @@ const SENS_STYLES = {
   '±': 'text-amber-700 bg-amber-50',
 }
 
-function BalanceCard({ label, value, icon, tint }) {
+function BalanceCard({ label, value, icon, tint, dotColor }) {
   return (
     <div className={`flex-1 min-w-40 rounded-xl border border-gray-100 bg-gradient-to-br ${tint} to-white px-4 py-3`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</span>
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden="true" />}
+          {label}
+        </span>
         <span className="text-lg" aria-hidden="true">{icon}</span>
       </div>
       <p className="mt-0.5 text-xl font-bold text-gray-900">{formatCurrency(value)}</p>
@@ -29,6 +34,8 @@ function AdminDealerInventory() {
   const [dealerUid, setDealerUid]   = useState(null)
   const [dealerName, setDealerName] = useState(null)
   const [balance, setBalance]       = useState({ stock: 0, liquidite: 0 })
+  const [byNetwork, setByNetwork]   = useState({})   // solde par réseau (multi-réseaux)
+  const [totalLiquidite, setTotalLiquidite] = useState(0) // somme des liquidités réseau
   const [movements, setMovements]   = useState([])
   const [lastDoc, setLastDoc]       = useState(null)
   const [hasMore, setHasMore]       = useState(false)
@@ -49,6 +56,8 @@ function AdminDealerInventory() {
       setDealerUid(result.dealerUid)
       setDealerName(result.dealerName)
       setBalance(result.balance)
+      setByNetwork(result.byNetwork ?? {})
+      setTotalLiquidite(result.totalLiquidite ?? 0)
       if (reset) setMultipleDealers(!!result.multipleActiveDealers)
       if (reset) setMovements(result.movements)
       else setMovements(prev => [...prev, ...result.movements])
@@ -88,11 +97,28 @@ function AdminDealerInventory() {
         </div>
       )}
 
-      {/* Solde courant */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-        <BalanceCard label="Stock (Orange)" value={balance.stock} icon="📦" tint="from-blue-50" />
-        <BalanceCard label="Liquidité (Orange)" value={balance.liquidite} icon="💵" tint="from-teal-50" />
-      </div>
+      {/* Solde courant — mono-réseau : Stock/Liquidité (Orange). Multi-réseaux :
+          une carte Stock par réseau + une carte Liquidité globale (somme). */}
+      {IS_DEALER_MULTI_NETWORK ? (
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {DEALER_NETWORKS.map(net => (
+            <BalanceCard
+              key={net}
+              label={NETWORK_CONFIG[net]?.name ?? net}
+              value={byNetwork[net]?.stock ?? 0}
+              icon="📦"
+              tint="from-blue-50"
+              dotColor={NETWORK_CONFIG[net]?.color}
+            />
+          ))}
+          <BalanceCard label="Liquidité" value={totalLiquidite} icon="💵" tint="from-teal-50" />
+        </div>
+      ) : (
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <BalanceCard label="Stock (Orange)" value={balance.stock} icon="📦" tint="from-blue-50" />
+          <BalanceCard label="Liquidité (Orange)" value={balance.liquidite} icon="💵" tint="from-teal-50" />
+        </div>
+      )}
 
       {loading && <SkeletonTable rows={6} cols={6} />}
       {error && <ErrorState message={error} onRetry={() => load(true)} />}

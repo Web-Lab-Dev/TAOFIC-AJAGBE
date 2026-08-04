@@ -27,6 +27,12 @@ import { activeProfile } from '../config/activeClientProfile.js'
 
 export const DEALER_NETWORK = activeProfile.dealer.networks[0]
 
+// Tous les réseaux du circuit dealer du profil (dealer multi-SIM). Mono-réseau
+// (ex. TAOFIC → ['Orange']) : un seul élément → l'UI dealer garde sa vue simple
+// (Stock/Liquidité). Multi-réseaux : une carte Stock par réseau + liquidité globale.
+export const DEALER_NETWORKS = activeProfile.dealer.networks
+export const IS_DEALER_MULTI_NETWORK = DEALER_NETWORKS.length > 1
+
 export const DEALER_REQUESTS_PAGE_SIZE = 20
 export const DEALER_STORES_PAGE_SIZE = 20
 export const STORE_DEALER_REQUESTS_PAGE_SIZE = 20

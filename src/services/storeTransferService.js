@@ -22,6 +22,7 @@ import {
 import { functions, db } from '../config/firebase'
 import { STORE_TRANSFERS_PAGE_SIZE } from '../constants/dealerConstants'
 import { parseStrictInteger as parseAmountLocal } from '../utils/parseStrictInteger'
+import { shapeDealerInventory, emptyDealerInventory } from '../utils/dealerInventory'
 
 const TRANSFERS_COLLECTION = 'storeDealerTransfers'
 
@@ -107,14 +108,24 @@ export async function confirmStoreDealerTransfer(transferId) {
   }
 }
 
+// network n'est transmis au serveur QUE s'il est fourni (dealer multi-réseaux).
+// En mono-réseau, le payload reste { resource, amount } — strictement inchangé et
+// compatible avec des functions non encore déployées (le serveur applique alors
+// le défaut mono-réseau via resolveTransferNetwork).
+function buildInventoryPayload(resource, parsed, network) {
+  const payload = { resource, amount: parsed }
+  if (network) payload.network = network
+  return payload
+}
+
 /** Dealer : approvisionne son inventaire (crédit stock ou liquidité). */
-export async function replenishDealerInventory({ resource, amount }) {
+export async function replenishDealerInventory({ resource, amount, network } = {}) {
   if (resource !== 'stock' && resource !== 'liquidite') throw new Error('Ressource invalide (stock ou liquidité).')
   const parsed = parseAmountLocal(amount)
   if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
   const callable = httpsCallable(functions, 'replenishDealerInventory')
   try {
-    const result = await callable({ resource, amount: parsed })
+    const result = await callable(buildInventoryPayload(resource, parsed, network))
     return result.data
   } catch (err) {
     throw mapTransferError(err)
@@ -122,13 +133,13 @@ export async function replenishDealerInventory({ resource, amount }) {
 }
 
 /** Dealer : diminue son inventaire (débit stock ou liquidité, bloqué sous zéro). */
-export async function decreaseDealerInventory({ resource, amount }) {
+export async function decreaseDealerInventory({ resource, amount, network } = {}) {
   if (resource !== 'stock' && resource !== 'liquidite') throw new Error('Ressource invalide (stock ou liquidité).')
   const parsed = parseAmountLocal(amount)
   if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
   const callable = httpsCallable(functions, 'decreaseDealerInventory')
   try {
-    const result = await callable({ resource, amount: parsed })
+    const result = await callable(buildInventoryPayload(resource, parsed, network))
     return result.data
   } catch (err) {
     throw mapTransferError(err)
@@ -238,15 +249,17 @@ export function subscribeIncomingTransfersCount({ dealerUid, onUpdate } = {}) {
   return onSnapshot(q, (snap) => onUpdate?.(snap.size), () => onUpdate?.(0))
 }
 
-/** Dealer : son inventaire (dealerBalances/{uid}) en temps réel. */
+/**
+ * Dealer : son inventaire (dealerBalances/{uid}) en temps réel.
+ * Renvoie la forme façonnée { byNetwork, stock, liquidite, totalLiquidite } :
+ *   - `stock`/`liquidite` = réseau primaire → vue mono-réseau inchangée ;
+ *   - `byNetwork`/`totalLiquidite` = vue multi-réseaux (cartes par réseau).
+ */
 export function subscribeDealerBalance({ dealerUid, onUpdate, onError } = {}) {
-  if (!dealerUid) { onUpdate?.({ stock: 0, liquidite: 0 }); return () => {} }
+  if (!dealerUid) { onUpdate?.(emptyDealerInventory()); return () => {} }
   return onSnapshot(
     doc(db, 'dealerBalances', dealerUid),
-    (snap) => {
-      const orange = snap.exists() ? (snap.data()?.balances?.Orange ?? {}) : {}
-      onUpdate?.({ stock: Number(orange.stock) || 0, liquidite: Number(orange.liquidite) || 0 })
-    },
+    (snap) => onUpdate?.(shapeDealerInventory(snap.exists() ? snap.data() : null)),
     (err) => onError?.(mapTransferError(err)),
   )
 }

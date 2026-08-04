@@ -3,13 +3,19 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../hooks/useToast'
 import { subscribeDealerBalance, replenishDealerInventory, decreaseDealerInventory } from '../../services/storeTransferService'
 import { formatCurrency } from '../../utils/formatCurrency'
+import { DEALER_NETWORKS, IS_DEALER_MULTI_NETWORK } from '../../constants/dealerConstants'
+import { NETWORK_CONFIG } from '../../constants/networkConfig'
+import { emptyDealerInventory } from '../../utils/dealerInventory'
 import Toast from '../Toast'
 
 /**
  * Bandeau d'inventaire dealer — persistant en haut de chaque page (comme le
- * bandeau des cartes réseau de l'espace boutique). Toujours visible : Stock +
- * Liquidité (Orange). Un unique bouton « Ajuster » ouvre une modale unifiée
- * (ressource + opération + montant) plutôt qu'un mur de 4 boutons.
+ * bandeau des cartes réseau de l'espace boutique). Un unique bouton « Ajuster »
+ * ouvre une modale unifiée (ressource + opération + montant).
+ *
+ * Mono-réseau (ex. TAOFIC) : deux cartes Stock + Liquidité (comportement historique,
+ * inchangé). Multi-réseaux (dealer multi-SIM) : une carte Stock PAR réseau + une
+ * carte Liquidité globale (somme), et la modale ajoute un sélecteur de réseau.
  */
 
 const RESOURCES = [
@@ -20,6 +26,8 @@ const OPERATIONS = [
   { value: 'increase', label: '+ Ajouter' },
   { value: 'decrease', label: '− Retirer' },
 ]
+// Options du sélecteur de réseau (dealer multi-réseaux) — nom lisible du profil.
+const NETWORK_SEGMENT_OPTIONS = DEALER_NETWORKS.map(n => ({ value: n, label: NETWORK_CONFIG[n]?.name ?? n }))
 
 // Petit sélecteur segmenté accessible (radiogroup).
 function Segmented({ label, options, value, onChange, name }) {
@@ -54,10 +62,11 @@ function DealerInventoryBar() {
   const { currentUser, userProfile } = useAuth()
   const { toasts, showToast, removeToast } = useToast()
 
-  const [inventory, setInventory] = useState({ stock: 0, liquidite: 0 })
+  const [inventory, setInventory] = useState(emptyDealerInventory())
   const [adjustOpen, setAdjustOpen] = useState(false)
   const [resource, setResource]     = useState('stock')     // 'stock' | 'liquidite'
   const [mode, setMode]             = useState('increase')  // 'increase' | 'decrease'
+  const [network, setNetwork]       = useState(DEALER_NETWORKS[0]) // réseau ciblé (multi-réseaux)
   const [amount, setAmount]         = useState('')
   const [submitting, setSubmitting] = useState(false)
   // Défense en profondeur pour une action financière (appel de Cloud Function) :
@@ -71,7 +80,7 @@ function DealerInventoryBar() {
   const isDealer = userProfile?.role === 'dealer'
 
   useEffect(() => {
-    if (!isDealer || !dealerUid) { setInventory({ stock: 0, liquidite: 0 }); return undefined }
+    if (!isDealer || !dealerUid) { setInventory(emptyDealerInventory()); return undefined }
     return subscribeDealerBalance({ dealerUid, onUpdate: setInventory })
   }, [dealerUid, isDealer])
 
@@ -80,6 +89,7 @@ function DealerInventoryBar() {
     setAmount('')
     setResource('stock')
     setMode('increase')
+    setNetwork(DEALER_NETWORKS[0])
   }, [])
 
   // Fermeture à la touche Échap
@@ -95,9 +105,12 @@ function DealerInventoryBar() {
     submittingRef.current = true
     setSubmitting(true)
     const isDecrease = mode === 'decrease'
+    // Mono-réseau : payload historique { resource, amount } (aucun réseau transmis,
+    // compatible functions non mises à jour). Multi-réseaux : réseau sélectionné.
+    const args = IS_DEALER_MULTI_NETWORK ? { resource, amount, network } : { resource, amount }
     try {
-      if (isDecrease) await decreaseDealerInventory({ resource, amount })
-      else await replenishDealerInventory({ resource, amount })
+      if (isDecrease) await decreaseDealerInventory(args)
+      else await replenishDealerInventory(args)
       showToast(isDecrease ? 'Inventaire diminué.' : 'Inventaire approvisionné.', 'success')
       closeModal()
     } catch (err) {
@@ -106,17 +119,20 @@ function DealerInventoryBar() {
       setSubmitting(false)
       submittingRef.current = false
     }
-  }, [resource, mode, amount, showToast, closeModal])
+  }, [resource, mode, amount, network, showToast, closeModal])
 
   if (!isDealer) return null
 
   const isDecrease = mode === 'decrease'
   const amountValid = /^[0-9]+$/.test(amount.trim())
 
-  const Card = ({ label, value, icon, tint }) => (
+  const Card = ({ label, value, icon, tint, dotColor }) => (
     <div className={`flex-1 min-w-40 rounded-xl border border-gray-100 bg-gradient-to-br ${tint} to-white px-4 py-2.5`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</span>
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} aria-hidden="true" />}
+          {label}
+        </span>
         <span className="text-lg" aria-hidden="true">{icon}</span>
       </div>
       <p className="mt-0.5 text-xl font-bold text-gray-900">{formatCurrency(value)}</p>
@@ -128,16 +144,34 @@ function DealerInventoryBar() {
       <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center">
         <div className="flex shrink-0 items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-green-500" />
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Mon inventaire (Orange)</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            {IS_DEALER_MULTI_NETWORK ? 'Mon inventaire' : 'Mon inventaire (Orange)'}
+          </span>
         </div>
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row">
-          <Card label="Stock" value={inventory.stock} icon="📦" tint="from-blue-50" />
-          <Card label="Liquidité" value={inventory.liquidite} icon="💵" tint="from-teal-50" />
-        </div>
+        {IS_DEALER_MULTI_NETWORK ? (
+          <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3">
+            {DEALER_NETWORKS.map(net => (
+              <Card
+                key={net}
+                label={NETWORK_CONFIG[net]?.name ?? net}
+                value={inventory.byNetwork?.[net]?.stock ?? 0}
+                icon="📦"
+                tint="from-blue-50"
+                dotColor={NETWORK_CONFIG[net]?.color}
+              />
+            ))}
+            <Card label="Liquidité" value={inventory.totalLiquidite ?? 0} icon="💵" tint="from-teal-50" />
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+            <Card label="Stock" value={inventory.stock} icon="📦" tint="from-blue-50" />
+            <Card label="Liquidité" value={inventory.liquidite} icon="💵" tint="from-teal-50" />
+          </div>
+        )}
         <div className="flex shrink-0">
           <button
             type="button"
-            onClick={() => { setAdjustOpen(true); setAmount(''); setResource('stock'); setMode('increase') }}
+            onClick={() => { setAdjustOpen(true); setAmount(''); setResource('stock'); setMode('increase'); setNetwork(DEALER_NETWORKS[0]) }}
             className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
             data-testid="dealer-inventory-adjust"
           >
@@ -151,9 +185,16 @@ function DealerInventoryBar() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="dealer-adjust-title">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <h2 id="dealer-adjust-title" className="text-lg font-semibold text-gray-900">Ajuster l'inventaire</h2>
-            <p className="mt-1 text-sm text-gray-500">Approvisionnement ou correction de votre inventaire (Orange).</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {IS_DEALER_MULTI_NETWORK
+                ? 'Approvisionnement ou correction de votre inventaire.'
+                : 'Approvisionnement ou correction de votre inventaire (Orange).'}
+            </p>
 
             <div className="mt-4 space-y-4">
+              {IS_DEALER_MULTI_NETWORK && (
+                <Segmented label="Réseau" name="network" options={NETWORK_SEGMENT_OPTIONS} value={network} onChange={setNetwork} />
+              )}
               <Segmented label="Ressource" name="resource" options={RESOURCES} value={resource} onChange={setResource} />
               <Segmented label="Opération" name="operation" options={OPERATIONS} value={mode} onChange={setMode} />
               <div>

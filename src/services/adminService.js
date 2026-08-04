@@ -36,6 +36,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { ADMIN_PAGE_SIZE } from '../constants/dealerConstants'
+import { shapeDealerInventory } from '../utils/dealerInventory'
 
 const PAGE = ADMIN_PAGE_SIZE
 
@@ -258,7 +259,8 @@ export async function listDealerInventoryMovements({ lastDoc = null, dealerUid =
         query(collection(db, 'users'), where('role', '==', 'dealer'), where('active', '==', true), limit(2))
       )
       if (dealerSnap.empty) {
-        return { dealerUid: null, dealerName: null, balance: { stock: 0, liquidite: 0 }, movements: [], lastDoc: null, hasMore: false, multipleActiveDealers: false }
+        const empty = shapeDealerInventory(null)
+        return { dealerUid: null, dealerName: null, balance: { stock: empty.stock, liquidite: empty.liquidite }, byNetwork: empty.byNetwork, totalLiquidite: empty.totalLiquidite, movements: [], lastDoc: null, hasMore: false, multipleActiveDealers: false }
       }
       multipleActiveDealers = dealerSnap.size > 1
       uid = dealerSnap.docs[0].id
@@ -266,8 +268,10 @@ export async function listDealerInventoryMovements({ lastDoc = null, dealerUid =
     }
 
     const balSnap = await getDoc(doc(db, 'dealerBalances', uid))
-    const orange = balSnap.exists() ? (balSnap.data()?.balances?.Orange ?? {}) : {}
-    const balance = { stock: Number(orange.stock) || 0, liquidite: Number(orange.liquidite) || 0 }
+    // Inventaire par réseau (profil) : `balance` = réseau primaire (vue mono
+    // inchangée) ; `byNetwork`/`totalLiquidite` alimentent la vue multi-réseaux.
+    const shaped = shapeDealerInventory(balSnap.exists() ? balSnap.data() : null)
+    const balance = { stock: shaped.stock, liquidite: shaped.liquidite }
 
     const constraints = [orderBy('createdAt', 'desc'), limit(PAGE + 1)]
     if (lastDoc) constraints.push(startAfter(lastDoc))
@@ -276,7 +280,7 @@ export async function listDealerInventoryMovements({ lastDoc = null, dealerUid =
     const docs = hasMore ? snap.docs.slice(0, PAGE) : snap.docs
     const movements = docs.map(d => ({ id: d.id, ...normalizeDealerMovement(d.data()) }))
 
-    return { dealerUid: uid, dealerName, balance, movements, lastDoc: docs.at(-1) ?? null, hasMore, multipleActiveDealers }
+    return { dealerUid: uid, dealerName, balance, byNetwork: shaped.byNetwork, totalLiquidite: shaped.totalLiquidite, movements, lastDoc: docs.at(-1) ?? null, hasMore, multipleActiveDealers }
   } catch (err) {
     throw mapErr(err)
   }
