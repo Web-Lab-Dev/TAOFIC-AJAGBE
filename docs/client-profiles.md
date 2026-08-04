@@ -65,11 +65,12 @@ seulement masquée dans l'UI. Deux artefacts sont **générés depuis le profil*
 `--check` échoue en CI si un artefact ne correspond plus au profil. Comportement-préservant :
 pour `taofic_ajagbe`, la génération reproduit le mono-réseau `['Orange']` (identique à l'historique).
 
-**État (chantier dealer multi-réseaux)** : couche règles + functions **complète** — `dealerRequests`,
-`closures` **et** `storeTransfers` portent le réseau par l'opération (validé ∈ profil,
-`balances[network]` ; helper pur `resolveTransferNetwork` avec défaut mono-réseau préservant TAOFIC).
-Reste **uniquement** le sélecteur de réseau côté front (UI + affichage inventaire multi-réseaux), à
-câbler quand un client dealer multi-réseaux est signé.
+**État (chantier dealer multi-réseaux)** : **complet — serveur + front**. Règles + functions
+(`dealerRequests`, `closures`, `storeTransfers`) **et** le front (formulaires `NewDealerRequest`/
+`DealerTransferForm` + inventaire `DealerInventoryBar`/`AdminDealerInventory`) portent le réseau par
+l'opération (validé ∈ profil, `balances[network]`). Mono-réseau (TAOFIC) strictement préservé :
+branches multi gardées par `IS_DEALER_MULTI_NETWORK` (code mort chez un client mono) + envoi `network`
+**deploy-safe** (omis en mono pour les callables → compatible functions non redéployées).
 
 ### Dépendance `canEditBalances`
 État actuel de TAOFIC = `false` : l'affordance d'édition est **masquée dans l'UI**, mais les
@@ -159,10 +160,9 @@ ce qui était figé — on ne modifie jamais le runtime d'un client en productio
 | **0** | Schéma de profil + `_pilot` + `taofic_ajagbe` + résolveur | Aucun | ✅ Fait |
 | **1** | Front : `NETWORK_OPTIONS`, `TRANSACTION_TYPES`, `PAYMENT_METHODS`, `VISIBLE_NETWORK_CARDS`, `DEALER_NETWORK` dérivent du profil (UI TAOFIC identique, prouvé par tc-083) | Front | ✅ Fait |
 | **2** | Générateur `firestore.rules` depuis le profil (diff nul pour TAOFIC) | Aucun | ✅ Fait |
-| **3** | Functions dérivent du profil (dealer multi-réseaux) | Règles+functions, nouveau projet | 🔶 Serveur fait (dealerRequests, closures, storeTransfers). **Reste** : sélecteur réseau front ; enforcement serveur `canEditBalances:false` + migration |
+| **3** | Dealer multi-réseaux du profil (règles + functions + front) | Règles+functions, nouveau projet | ✅ Dealer multi-réseaux **complet** (serveur + front). **Reste hors dealer** : enforcement serveur `canEditBalances:false` + migration |
 | **4** | Branding paramétré + script `deploy-client` + checklist onboarding | Front | 🔶 Checklist onboarding faite (§6). **Reste** : branding paramétré + script `deploy-client` |
 
 > Reste **non encore câblé** (rattaché à des phases dédiées, car touchant plusieurs couches) :
 > le **masquage UI de l'édition des soldes** (`cashier.canEditBalances`, à traiter avec son
-> enforcement Phase 3), le **sélecteur de réseau dealer front** (Phase 3) et le **branding**
-> (`branding`, Phase 4).
+> enforcement Phase 3) et le **branding** (`branding`, Phase 4).

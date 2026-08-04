@@ -48,13 +48,14 @@ Cloud Functions autoritaires) :
   `Encaissé/Payé/Remboursé par X`).
 - Déjà couvert par les tests : `tc-020`, `tc-060`, `tc-061` (données multi-réseaux).
 
-## 3. Circuit dealer/ravitaillement — réseau porté par le profil (couche serveur ✅)
+## 3. Circuit dealer/ravitaillement — réseau porté par le profil (serveur + front ✅)
 
 Contrairement à la boutique, le circuit dealer était mono-réseau **côté serveur** (pas seulement
-UI). Le nouveau client ayant besoin du dealer multi-réseaux, voici les 8 verrous — **7 sur 8 levés** :
-toute la couche serveur (règles + functions `dealerRequests`, `closures`, `storeTransfers`) dérive
-désormais du profil `dealer.networks` (réseau porté par l'opération et validé ∈ profil,
-`balances[network]`). Reste **uniquement le front** (verrou 8).
+UI). Le nouveau client ayant besoin du dealer multi-réseaux, voici les 8 verrous — **tous levés** :
+la couche serveur (règles + functions `dealerRequests`, `closures`, `storeTransfers`) **et** le front
+(sélecteur de réseau + inventaire multi-réseaux) dérivent désormais du profil `dealer.networks`
+(réseau porté par l'opération, validé ∈ profil, `balances[network]`). Tout est **gardé par
+`IS_DEALER_MULTI_NETWORK`** → mono-réseau (TAOFIC) strictement inchangé.
 
 | # | Verrou (avant → après) | Emplacement | État |
 |---|---|---|---|
@@ -65,7 +66,7 @@ désormais du profil `dealer.networks` (réseau porté par l'opération et valid
 | 5 | `TRANSFER_NETWORK = 'Orange'` → `resolveTransferNetwork(candidate, profil)` | `functions/src/storeTransfers/shared.js` | ✅ levé |
 | 6 | Lecteurs de soldes `balances.Orange` → `balances[network]` | `functions/src/storeTransfers/shared.js` | ✅ levé |
 | 7 | `balances: { Orange: … }` → `balances: { [network]: … }` (dépôt partenaire + inventaire) | `functions/src/storeTransfers/*` | ✅ levé |
-| 8 | `DEALER_NETWORK = 'Orange'` (front) + champ réseau readonly | `src/constants/dealerConstants.js`, `src/pages/dealer/NewDealerRequest.jsx`, affichages inventaire (DealerInventoryBar, AdminDealerInventory, DealerTransferForm) | ⏳ reste (session front dédiée) |
+| 8 | Front figé Orange → sélecteur de réseau + inventaire multi-réseaux (gardés par `IS_DEALER_MULTI_NETWORK`) | `src/constants/dealerConstants.js`, `NewDealerRequest.jsx`, `DealerTransferForm.jsx`, `DealerInventoryBar.jsx`, `AdminDealerInventory.jsx`, `src/utils/dealerInventory.js` | ✅ levé |
 
 Points favorables :
 
@@ -135,7 +136,7 @@ Invariants métier à respecter au provisioning :
 | # | Chantier | Ampleur | Déploiement |
 |---|---|---|---|
 | 1 | Boutique multi-réseaux + Crédit + règlements inter-réseaux | Trivial — 4 constantes UI + grille CSS | Front uniquement |
-| 2 | Dealer multi-réseaux | **7/8 faits** — règles + functions portent le réseau par le profil (commité, non déployé) ; reste le **sélecteur UI** (verrou 8) | Règles + Functions sur le nouveau projet |
+| 2 | Dealer multi-réseaux | **8/8 faits** — règles + functions + front dérivent du profil (commité, non déployé) ; mono préservé via `IS_DEALER_MULTI_NETWORK` | Règles + Functions sur le nouveau projet |
 | 3 | Rebranding | Trivial — ~5 fichiers front | Front uniquement |
 | 4 | Nouveau projet Firebase | Configuration + déploiement + garde-fous scripts | Nouveau projet |
 | 5 | Provisioning | Scripts existants à exécuter | Nouveau projet |
