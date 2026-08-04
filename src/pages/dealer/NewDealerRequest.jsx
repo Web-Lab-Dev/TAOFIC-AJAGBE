@@ -8,7 +8,10 @@ import {
   DEALER_REQUEST_TYPES,
   DEALER_REQUEST_TYPE_LABELS,
   DEALER_NETWORK,
+  DEALER_NETWORKS,
+  IS_DEALER_MULTI_NETWORK,
 } from '../../constants/dealerConstants'
+import { NETWORK_CONFIG } from '../../constants/networkConfig'
 import { DEALER_PARTNERS, partnerLabel, findPartner } from '../../constants/dealerPartners'
 
 function validateAmount(raw) {
@@ -40,6 +43,7 @@ function NewDealerRequest() {
   )
   const [selectedPartnerId, setSelectedPartnerId] = useState('')
   const [partnerOperation, setPartnerOperation] = useState('deposit') // 'deposit' | 'withdrawal'
+  const [network, setNetwork] = useState(DEALER_NETWORKS[0]) // réseau ciblé (multi-réseaux)
   const [amountRaw, setAmountRaw] = useState('')
   const [amountError, setAmountError] = useState(null)
 
@@ -88,15 +92,23 @@ function NewDealerRequest() {
 
     try {
       if (isPartner) {
-        await createPartnerDeposit({ partner: findPartner(selectedPartnerId), amount: parseDealerAmount(amountRaw), operation: partnerOperation })
+        // callable → network omis en mono (deploy-safe : le serveur applique le défaut).
+        await createPartnerDeposit({
+          partner: findPartner(selectedPartnerId),
+          amount: parseDealerAmount(amountRaw),
+          operation: partnerOperation,
+          network: IS_DEALER_MULTI_NETWORK ? network : undefined,
+        })
         navigate('/dealer/history', { replace: true })
       } else {
+        // écriture directe : network toujours présent (champ requis) ; mono = 'Orange'.
         await createDealerRequest({
           currentUser,
           userProfile,
           targetStoreId: selectedStoreId,
           requestType,
           amount: parseDealerAmount(amountRaw),
+          network,
         })
         navigate('/dealer/requests', { replace: true })
       }
@@ -107,7 +119,7 @@ function NewDealerRequest() {
       submitLockRef.current = false
       setIsSubmitting(false)
     }
-  }, [isPartner, currentUser, userProfile, selectedStoreId, requestType, selectedPartnerId, partnerOperation, amountRaw, navigate, isSubmitting])
+  }, [isPartner, currentUser, userProfile, selectedStoreId, requestType, selectedPartnerId, partnerOperation, network, amountRaw, navigate, isSubmitting])
 
   const switchTarget = (t) => {
     setTargetType(t)
@@ -115,6 +127,7 @@ function NewDealerRequest() {
     setSubmitError(null)
     setAmountError(null)
     setPartnerOperation('deposit')
+    setNetwork(DEALER_NETWORKS[0]) // repart du réseau primaire au changement de cible
   }
 
   if (storesLoading) {
@@ -178,7 +191,7 @@ function NewDealerRequest() {
             </div>
             <div className="flex py-3">
               <dt className="w-36 flex-shrink-0 text-sm text-gray-500">Réseau</dt>
-              <dd className="text-sm font-medium text-gray-800">{DEALER_NETWORK}</dd>
+              <dd className="text-sm font-medium text-gray-800" data-testid="confirm-network">{network}</dd>
             </div>
           </dl>
 
@@ -334,14 +347,26 @@ function NewDealerRequest() {
             </>
           )}
 
-          {/* Réseau (lecture seule) */}
+          {/* Réseau — lecture seule en mono ; sélecteur en multi-réseaux */}
           <div className="mb-4">
             <label htmlFor="network-display" className="block text-sm font-medium text-gray-700 mb-1">Réseau</label>
-            <input
-              id="network-display" type="text" value={DEALER_NETWORK} readOnly
-              className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
-              aria-readonly="true" data-testid="network-display"
-            />
+            {IS_DEALER_MULTI_NETWORK ? (
+              <select
+                id="network-display"
+                value={network}
+                onChange={e => setNetwork(e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                data-testid="select-network"
+              >
+                {DEALER_NETWORKS.map(n => (<option key={n} value={n}>{NETWORK_CONFIG[n]?.name ?? n}</option>))}
+              </select>
+            ) : (
+              <input
+                id="network-display" type="text" value={DEALER_NETWORK} readOnly
+                className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
+                aria-readonly="true" data-testid="network-display"
+              />
+            )}
           </div>
 
           {/* Montant */}

@@ -39,6 +39,7 @@ import { parseStrictInteger as parseDealerAmount } from '../utils/parseStrictInt
 import { AUTH_ROLES } from '../constants/authMessages'
 import {
   DEALER_NETWORK,
+  DEALER_NETWORKS,
   DEALER_REQUEST_TYPES,
   DEALER_REQUESTS_PAGE_SIZE,
   DEALER_STORES_PAGE_SIZE,
@@ -280,9 +281,16 @@ export async function createDealerRequest({
   targetStoreId,
   requestType,
   amount,
+  network = DEALER_NETWORK,
 } = {}) {
   // Validation contexte dealer
   validateDealerContext(currentUser, userProfile)
+
+  // Validation réseau : ∈ réseaux du profil dealer (défense en profondeur ; les
+  // règles Firestore revalident via profileDealerNetworks()). Mono → 'Orange'.
+  if (!DEALER_NETWORKS.includes(network)) {
+    throw new Error('Réseau invalide.')
+  }
 
   // Validation boutique cible
   if (!targetStoreId || typeof targetStoreId !== 'string' || targetStoreId.trim() === '') {
@@ -332,7 +340,7 @@ export async function createDealerRequest({
     targetStoreId,
     targetStoreName: storeData.name,
     requestType,
-    network: DEALER_NETWORK,
+    network,
     amount: parsedAmount,
     liquidityAmount: parsedLiquidityAmount,
     status: 'pending',

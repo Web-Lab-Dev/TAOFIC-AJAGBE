@@ -10,7 +10,10 @@ import {
   STORE_TRANSFER_TYPES,
   STORE_TRANSFER_TYPE_LABELS,
   DEALER_REQUEST_STATUS_LABELS,
+  DEALER_NETWORKS,
+  IS_DEALER_MULTI_NETWORK,
 } from '../../constants/dealerConstants'
+import { NETWORK_CONFIG } from '../../constants/networkConfig'
 import { parseFcfaAmount } from '../../utils/fcfaAmount.js'
 import { formatCurrency } from '../../utils/formatCurrency'
 import StatusBadge from '../ui/StatusBadge'
@@ -30,6 +33,7 @@ function DealerTransferForm() {
   const { networkData } = useSimpleNetworkData()
 
   const [transferType, setTransferType] = useState(STORE_TRANSFER_TYPES.RETURN_STOCK)
+  const [network, setNetwork] = useState(DEALER_NETWORKS[0]) // réseau ciblé (multi-réseaux)
   const [amount, setAmount] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pending, setPending] = useState(null) // confirmation modal
@@ -38,11 +42,13 @@ function DealerTransferForm() {
 
   const storeId = userProfile?.storeId
 
-  // Soldes Orange spécifiques (le backend débite balances.Orange.<field>)
-  const orange = networkData?.Orange ?? { stock: 0, liquidite: 0 }
+  // Solde du réseau ciblé. En mono, activeNetwork = 'Orange' (le backend débite
+  // balances.Orange.<field>) → comportement inchangé ; en multi, réseau sélectionné.
+  const activeNetwork = IS_DEALER_MULTI_NETWORK ? network : 'Orange'
+  const netBal = networkData?.[activeNetwork] ?? { stock: 0, liquidite: 0 }
   const available = transferType === STORE_TRANSFER_TYPES.RETURN_STOCK
-    ? (Number(orange.stock) || 0)
-    : (Number(orange.liquidite) || 0)
+    ? (Number(netBal.stock) || 0)
+    : (Number(netBal.liquidite) || 0)
 
   useEffect(() => {
     if (!storeId) { setTransfers([]); return undefined }
@@ -62,8 +68,8 @@ function DealerTransferForm() {
 
   const openConfirm = useCallback(() => {
     if (!validation.ok) { showToast(validation.reason, 'error'); return }
-    setPending({ transferType, amount: validation.value })
-  }, [validation, transferType, showToast])
+    setPending({ transferType, amount: validation.value, network: activeNetwork })
+  }, [validation, transferType, activeNetwork, showToast])
 
   const confirmSubmit = useCallback(async () => {
     // Verrou synchrone : empêche un double-clic de déclencher deux débits avant
@@ -72,7 +78,8 @@ function DealerTransferForm() {
     submittingRef.current = true
     setIsSubmitting(true)
     try {
-      await createStoreDealerTransfer({ transferType: pending.transferType, amount: pending.amount })
+      // network omis en mono (deploy-safe : le serveur applique le défaut mono-réseau).
+      await createStoreDealerTransfer({ transferType: pending.transferType, amount: pending.amount, network: IS_DEALER_MULTI_NETWORK ? pending.network : undefined })
       showToast('Envoi au dealer effectué. En attente de validation.', 'success')
       setAmount('')
       setPending(null)
@@ -92,6 +99,21 @@ function DealerTransferForm() {
       </p>
 
       <div className="space-y-4">
+        {/* Réseau (multi-réseaux) — mono : réseau unique implicite (Orange) */}
+        {IS_DEALER_MULTI_NETWORK && (
+          <div>
+            <label htmlFor="transfer-network" className="block text-sm font-semibold text-gray-700 mb-2">Réseau</label>
+            <select
+              id="transfer-network"
+              value={network}
+              onChange={(e) => { setNetwork(e.target.value); setAmount('') }}
+              className="w-full rounded border-2 border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-green-500"
+              data-testid="transfer-select-network"
+            >
+              {DEALER_NETWORKS.map(n => (<option key={n} value={n}>{NETWORK_CONFIG[n]?.name ?? n}</option>))}
+            </select>
+          </div>
+        )}
         {/* Ressource */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Ressource à renvoyer</label>
@@ -113,7 +135,7 @@ function DealerTransferForm() {
                 />
                 <span className="block text-sm font-medium text-gray-800">{STORE_TRANSFER_TYPE_LABELS[t]}</span>
                 <span className="mt-0.5 block text-xs text-gray-500">
-                  Disponible : {formatCurrency(t === STORE_TRANSFER_TYPES.RETURN_STOCK ? (Number(orange.stock) || 0) : (Number(orange.liquidite) || 0))}
+                  Disponible : {formatCurrency(t === STORE_TRANSFER_TYPES.RETURN_STOCK ? (Number(netBal.stock) || 0) : (Number(netBal.liquidite) || 0))}
                 </span>
               </label>
             ))}
@@ -197,6 +219,7 @@ function DealerTransferForm() {
             <h3 className="text-xl font-bold text-gray-900">Confirmer l'envoi au dealer</h3>
             <div className="mt-4 space-y-2 text-sm text-gray-700">
               <p><span className="font-semibold">Opération :</span> {STORE_TRANSFER_TYPE_LABELS[pending.transferType]}</p>
+              {IS_DEALER_MULTI_NETWORK && <p><span className="font-semibold">Réseau :</span> {pending.network}</p>}
               <p><span className="font-semibold">Montant :</span> {formatCurrency(pending.amount)}</p>
               <p className="text-xs text-gray-500">Le solde de la boutique sera débité immédiatement.</p>
             </div>

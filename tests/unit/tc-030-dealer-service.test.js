@@ -342,6 +342,24 @@ describe('TC-030-CREATE — Création réussie', () => {
     expect(result.id).toBe('new-req-id')
   })
 
+  it('[CREATE-08] réseau explicite ∈ profil → écrit tel quel dans le payload', async () => {
+    await createDealerRequest({
+      currentUser: DEALER_USER, userProfile: DEALER_PROFILE,
+      targetStoreId: 'store-alpha', requestType: 'stock_add', amount: 5000,
+      network: 'Orange', // ∈ DEALER_NETWORKS (profil mono TAOFIC)
+    })
+    expect(mocks.addDoc.mock.calls[0][1].network).toBe('Orange')
+  })
+
+  it('[CREATE-09] réseau hors profil → rejeté (Réseau invalide), aucune écriture', async () => {
+    await expect(createDealerRequest({
+      currentUser: DEALER_USER, userProfile: DEALER_PROFILE,
+      targetStoreId: 'store-alpha', requestType: 'stock_add', amount: 5000,
+      network: 'Moov', // ∉ DEALER_NETWORKS en mono
+    })).rejects.toThrow('Réseau invalide')
+    expect(mocks.addDoc).not.toHaveBeenCalled()
+  })
+
   it('[CREATE-02] serverTimestamp appelé deux fois', async () => {
     await createDealerRequest({
       currentUser: DEALER_USER,

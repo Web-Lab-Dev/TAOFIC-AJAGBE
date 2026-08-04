@@ -83,12 +83,16 @@ export function mapTransferError(err) {
 // ── Commandes (callable) ─────────────────────────────────────────────────────
 
 /** Boutique : initie un retour (débit immédiat côté serveur). */
-export async function createStoreDealerTransfer({ transferType, amount }) {
+export async function createStoreDealerTransfer({ transferType, amount, network } = {}) {
   const parsed = parseAmountLocal(amount)
   if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
   const callable = httpsCallable(functions, 'createStoreDealerTransfer')
   try {
-    const result = await callable({ transferType, amount: parsed })
+    // network transmis uniquement s'il est fourni (multi-réseaux) — deploy-safe :
+    // en mono le payload reste { transferType, amount }, inchangé.
+    const payload = { transferType, amount: parsed }
+    if (network) payload.network = network
+    const result = await callable(payload)
     return result.data
   } catch (err) {
     throw mapTransferError(err)
@@ -167,14 +171,14 @@ export async function rejectStoreDealerTransfer(transferId, rejectionReason) {
  *   - 'deposit'    (dépôt)  : −stock +liquidité
  *   - 'withdrawal' (retrait): +stock −liquidité
  */
-export async function createPartnerDeposit({ partner, amount, operation = 'deposit' }) {
+export async function createPartnerDeposit({ partner, amount, operation = 'deposit', network } = {}) {
   if (!partner || !partner.id) throw new Error(ERROR_MESSAGES.INVALID_PARTNER)
   if (operation !== 'deposit' && operation !== 'withdrawal') throw new Error(ERROR_MESSAGES.INVALID_PARTNER)
   const parsed = parseAmountLocal(amount)
   if (parsed === null) throw new Error(ERROR_MESSAGES.INVALID_TRANSFER_AMOUNT)
   const callable = httpsCallable(functions, 'createPartnerDeposit')
   try {
-    const result = await callable({
+    const callablePayload = {
       partnerId: partner.id,
       partnerNom: partner.nom ?? '',
       partnerPrenom: partner.prenom ?? '',
@@ -182,7 +186,10 @@ export async function createPartnerDeposit({ partner, amount, operation = 'depos
       partnerLocalite: partner.localite ?? '',
       amount: parsed,
       operation,
-    })
+    }
+    // network transmis uniquement s'il est fourni (multi-réseaux) — deploy-safe.
+    if (network) callablePayload.network = network
+    const result = await callable(callablePayload)
     return result.data
   } catch (err) {
     throw mapTransferError(err)
