@@ -10,6 +10,7 @@ import { getDefaultRouteForRole } from './utils/roleRouting'
 import RoleGuard from './components/auth/RoleGuard.jsx'
 import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
 import OfflineBanner from './components/OfflineBanner.jsx'
+import { APP_FULL_NAME } from './constants/branding'
 
 // Layouts
 import Layout from './components/Layout'
@@ -164,7 +165,7 @@ export function AppContent() {
 
 function App() {
   useEffect(() => {
-    document.title = 'AKAYIS CRM'
+    document.title = APP_FULL_NAME
   }, [])
 
   return (

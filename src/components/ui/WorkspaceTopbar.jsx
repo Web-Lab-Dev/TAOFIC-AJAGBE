@@ -1,4 +1,5 @@
 import { getRoleAccent } from '../../constants/workspaceTheme'
+import { APP_NAME } from '../../constants/branding'
 
 /**
  * Bandeau de marque slim en haut du contenu des espaces Gérant & Dealer.
@@ -19,7 +20,7 @@ function WorkspaceTopbar({ role = 'dealer', actions }) {
       <div className={`h-1 ${accent.bar}`} aria-hidden="true" />
       <div className="flex items-center justify-between gap-4 px-5 py-3">
         <div className="flex items-baseline gap-2">
-          <span className="text-lg font-black tracking-tight text-green-900">AKAYIS</span>
+          <span className="text-lg font-black tracking-tight text-green-900">{APP_NAME}</span>
           <span className="text-xs font-medium uppercase tracking-widest text-gray-400">
             {accent.label}
           </span>

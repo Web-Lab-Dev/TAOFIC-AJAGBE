@@ -1,3 +1,5 @@
+import { APP_NAME } from '../../constants/branding'
+
 function AuthSidebar({ isSignUp, onToggle }) {
   return (
     <div className={`h-full min-h-[220px] lg:min-h-[500px] flex flex-col items-center justify-center text-white p-6 sm:p-8 lg:p-12 relative overflow-hidden ${
@@ -11,7 +13,7 @@ function AuthSidebar({ isSignUp, onToggle }) {
       <div className="text-center z-10">
         <img
           src="/akayis-mark.svg"
-          alt="AKAYIS"
+          alt={APP_NAME}
           className="mx-auto mb-4 lg:mb-6 h-20 w-20 lg:h-28 lg:w-28 rounded-full bg-white p-2 lg:p-3 shadow-lg"
         />
         {isSignUp ? (
@@ -62,7 +64,7 @@ function AuthSidebar({ isSignUp, onToggle }) {
               />
             </svg>
           </div>
-          <p className="text-sm opacity-75">AKAYIS</p>
+          <p className="text-sm opacity-75">{APP_NAME}</p>
         </div>
       </div>
     </div>

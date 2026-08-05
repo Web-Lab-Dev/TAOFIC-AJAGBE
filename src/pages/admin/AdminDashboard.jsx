@@ -10,6 +10,7 @@ import { formatCurrency } from '../../utils/formatCurrency'
 import { formatDateTime as formatDate } from '../../utils/formatters'
 import ErrorState from '../../components/ui/ErrorState'
 import { SkeletonCards } from '../../components/ui/SkeletonList'
+import { APP_NAME } from '../../constants/branding'
 
 const STATUS_LABELS = { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Rejetée' }
 const TYPE_LABELS   = { stock_add: 'Ajout stock', liquidity_add: 'Ajout liquidité' }
@@ -190,7 +191,7 @@ function AdminDashboard() {
         <div className="flex items-start justify-between gap-4 max-w-7xl mx-auto">
           <div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Vue générale</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Tableau de bord global de la plateforme AKAYIS</p>
+            <p className="mt-0.5 text-sm text-gray-500">Tableau de bord global de la plateforme {APP_NAME}</p>
           </div>
           <button
             type="button"

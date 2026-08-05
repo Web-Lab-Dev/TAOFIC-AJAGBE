@@ -77,19 +77,22 @@ Points favorables :
 - Lever ces verrous nécessite un **déploiement règles + functions**, à faire uniquement sur le
   **nouveau** projet Firebase.
 
-## 4. Rebranding (~5 fichiers front)
+## 4. Rebranding — désormais piloté par le profil (`branding`)
 
-Marque actuelle : **AKAYIS** (interface) / projet Firebase **taofic-ajagbe**.
+Le nom du produit **dérive du profil client** (`config/clients/<id>.js` → `branding.appName` /
+`branding.pwaName`). Un nouveau client ne modifie **aucun fichier front** : il renseigne `branding`
+dans son profil. Défauts = « AKAYIS » / « AKAYIS CRM » → TAOFIC strictement inchangé (prouvé par tc-092).
 
-- `src/components/ui/WorkspaceTopbar.jsx:22` — wordmark « AKAYIS » (texte stylé, pas de logo image)
-- `src/constants/workspaceTheme.js` — marque verte fixe des espaces Gérant/Dealer
-- `src/App.jsx:167` — titre d'onglet « AKAYIS CRM »
-- `index.html` — title, meta description, apple-mobile-web-app-title
-- `vite.config.js:102-104` — manifest PWA (nom de l'app installée sur téléphone)
-- `package.json` — nom du package `akayis-crm` (cosmétique)
+- **Runtime** : `src/constants/branding.js` (`APP_NAME`, `APP_FULL_NAME`) alimente les wordmarks
+  (`Layout`, `WorkspaceTopbar`, `AdminLayout`, `DealerLayout`, `AuthSidebar`, dashboards) et le titre
+  d'onglet (`App.jsx`).
+- **Build-time** : `vite.config.js` résout `branding` depuis `VITE_CLIENT_ID` et l'injecte dans
+  `index.html` (title, meta description, apple-mobile-web-app-title) **et** le manifest PWA.
 
-Les autres mentions TAOFIC/AKAYIS (~40 fichiers) sont dans les tests, scripts et commentaires :
-sans impact fonctionnel.
+**Reste manuel par client** : remplacer les **images de logo** (`public/akayis-mark.svg`,
+`public/pwa-192x192.png`, `public/pwa-512x512.png` — actifs graphiques, pas du texte) ; le nom du
+package `akayis-crm` dans `package.json` est cosmétique. Les autres mentions TAOFIC/AKAYIS (tests,
+scripts, commentaires) sont sans impact fonctionnel.
 
 ## 5. Nouveau projet Firebase — checklist
 

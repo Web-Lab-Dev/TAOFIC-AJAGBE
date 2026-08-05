@@ -5,6 +5,7 @@ import { DEALER_NAV_ITEMS } from '../constants/navigation'
 import { subscribeDealerPendingCount } from '../services/dealerService'
 import { subscribeIncomingTransfersCount } from '../services/storeTransferService'
 import { BRAND, getRoleAccent } from '../constants/workspaceTheme'
+import { APP_NAME } from '../constants/branding'
 import DealerInventoryBar from '../components/dealer/DealerInventoryBar'
 
 const ACCENT = getRoleAccent('dealer')
@@ -81,7 +82,7 @@ function DealerLayout() {
         <div className={`h-1 ${ACCENT.bar}`} aria-hidden="true" />
         <div className={`flex h-16 flex-shrink-0 items-center gap-3 px-5 border-b ${BRAND.sidebarBorder}`}>
           <div>
-            <p className="text-lg font-bold text-white leading-none">AKAYIS</p>
+            <p className="text-lg font-bold text-white leading-none">{APP_NAME}</p>
             <p className={`text-[11px] ${BRAND.sidebarMuted} leading-none mt-0.5`}>Espace Dealer</p>
           </div>
         </div>
@@ -109,7 +110,7 @@ function DealerLayout() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
           <aside className={`absolute inset-y-0 left-0 w-64 flex flex-col ${BRAND.sidebar} shadow-xl`}>
             <div className={`flex h-16 flex-shrink-0 items-center justify-between px-5 border-b ${BRAND.sidebarBorder}`}>
-              <p className="text-lg font-bold text-white">AKAYIS Dealer</p>
+              <p className="text-lg font-bold text-white">{APP_NAME} Dealer</p>
               <button
                 onClick={() => setSidebarOpen(false)}
                 className={`rounded p-1 text-green-200 hover:text-white focus:outline-none focus-visible:ring-2 ${ACCENT.ring}`}
@@ -146,7 +147,7 @@ function DealerLayout() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <p className="font-bold text-green-900">AKAYIS Dealer</p>
+        <p className="font-bold text-green-900">{APP_NAME} Dealer</p>
         {(pendingCount + transfersCount) > 0 && (
           <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
             {(pendingCount + transfersCount) > 99 ? '99+' : (pendingCount + transfersCount)}

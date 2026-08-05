@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ADMIN_NAV_ITEMS } from '../constants/navigation'
 import { BRAND, getRoleAccent } from '../constants/workspaceTheme'
+import { APP_NAME } from '../constants/branding'
 
 const ACCENT = getRoleAccent('admin')
 
@@ -59,7 +60,7 @@ function AdminLayout() {
         <div className={`h-1 ${ACCENT.bar}`} aria-hidden="true" />
         <div className={`flex h-16 flex-shrink-0 items-center gap-3 px-5 border-b ${BRAND.sidebarBorder}`}>
           <div>
-            <p className="text-lg font-bold text-white leading-none">AKAYIS</p>
+            <p className="text-lg font-bold text-white leading-none">{APP_NAME}</p>
             <p className={`text-[11px] ${BRAND.sidebarMuted} leading-none mt-0.5`}>Administration</p>
           </div>
         </div>
@@ -89,7 +90,7 @@ function AdminLayout() {
           />
           <aside className={`absolute inset-y-0 left-0 w-64 flex flex-col ${BRAND.sidebar} shadow-xl`}>
             <div className={`flex h-16 flex-shrink-0 items-center justify-between px-5 border-b ${BRAND.sidebarBorder}`}>
-              <p className="text-lg font-bold text-white">AKAYIS Admin</p>
+              <p className="text-lg font-bold text-white">{APP_NAME} Admin</p>
               <button
                 onClick={() => setSidebarOpen(false)}
                 className={`rounded p-1 text-green-200 hover:text-white focus:outline-none focus-visible:ring-2 ${ACCENT.ring}`}
@@ -127,7 +128,7 @@ function AdminLayout() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <p className="font-bold text-green-900">AKAYIS Admin</p>
+        <p className="font-bold text-green-900">{APP_NAME} Admin</p>
       </header>
 
       {/* ── Contenu principal ─────────────────────────────────────────────────── */}

@@ -161,8 +161,10 @@ ce qui était figé — on ne modifie jamais le runtime d'un client en productio
 | **1** | Front : `NETWORK_OPTIONS`, `TRANSACTION_TYPES`, `PAYMENT_METHODS`, `VISIBLE_NETWORK_CARDS`, `DEALER_NETWORK` dérivent du profil (UI TAOFIC identique, prouvé par tc-083) | Front | ✅ Fait |
 | **2** | Générateur `firestore.rules` depuis le profil (diff nul pour TAOFIC) | Aucun | ✅ Fait |
 | **3** | Dealer multi-réseaux du profil (règles + functions + front) | Règles+functions, nouveau projet | ✅ Dealer multi-réseaux **complet** (serveur + front). **Reste hors dealer** : enforcement serveur `canEditBalances:false` + migration |
-| **4** | Branding paramétré + script `deploy-client` + checklist onboarding | Front | 🔶 Checklist onboarding faite (§6). **Reste** : branding paramétré + script `deploy-client` |
+| **4** | Branding paramétré + script `deploy-client` + checklist onboarding | Front | 🔶 Checklist onboarding faite (§6). **Branding paramétré ✅** (`src/constants/branding.js` runtime + `vite.config.js` build-time dérivent de `profile.branding` ; défaut AKAYIS ⇒ TAOFIC identique, prouvé par tc-092). **Reste** : script `deploy-client` |
 
 > Reste **non encore câblé** (rattaché à des phases dédiées, car touchant plusieurs couches) :
 > le **masquage UI de l'édition des soldes** (`cashier.canEditBalances`, à traiter avec son
-> enforcement Phase 3) et le **branding** (`branding`, Phase 4).
+> enforcement Phase 3). Le **branding** (`branding`) est désormais câblé (runtime + build-time) ;
+> il ne reste qu'à **remplacer les images de logo** par client (`public/akayis-*.svg|png` — actifs,
+> pas du texte) lors de l'onboarding.

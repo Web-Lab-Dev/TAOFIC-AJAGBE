@@ -1,18 +1,58 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { resolveProfile } from './config/clients/index.js'
+import { pilotProfile } from './config/clients/_pilot.js'
 
 /**
- * Configuration Vite pour AKAYIS CRM
+ * Configuration Vite pour le CRM (produit standard paramétré par profil client).
  * - React avec SWC pour compilation rapide
  * - Tailwind CSS v4 intégré
  * - PWA avec Service Worker automatique
+ *
+ * La marque (titre d'onglet, meta, nom PWA) dérive du profil du client ciblé par
+ * VITE_CLIENT_ID — même source que le runtime (src/constants/branding.js). Défaut
+ * « AKAYIS CRM » si l'id est absent/inconnu, pour ne jamais casser un build.
  */
-export default defineConfig({
+
+// Résout la marque build-time depuis le profil. Défaut = marque du pilote (même
+// repli que le runtime src/config/activeClientProfile.js → une seule source de vérité).
+function resolveBuildBranding(clientId) {
+  const fallback = pilotProfile.branding
+  try {
+    return resolveProfile(clientId).branding ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+// Injecte la marque dans index.html (titre + meta) au build/dev. On utilise des
+// fonctions de remplacement : le 2e argument littéral de String.replace interprète
+// `$&`/`$1`/`$\`` → une marque contenant `$` corromprait la sortie. Les fonctions non.
+function brandingHtmlPlugin({ appFullName, description }) {
+  return {
+    name: 'branding-html',
+    transformIndexHtml(html) {
+      return html
+        .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${appFullName}</title>`)
+        .replace(/(<meta name="description" content=")[\s\S]*?(">)/, (_m, p1, p2) => `${p1}${description}${p2}`)
+        .replace(/(<meta name="apple-mobile-web-app-title" content=")[\s\S]*?(">)/, (_m, p1, p2) => `${p1}${appFullName}${p2}`)
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const branding = resolveBuildBranding(env.VITE_CLIENT_ID)
+  const appFullName = branding.pwaName
+  const description = `Application CRM pour la gestion des clients et transactions de ${branding.appName}`
+
+  return {
   plugins: [
     react(),
     tailwindcss(),
+    brandingHtmlPlugin({ appFullName, description }),
     VitePWA({
       // Auto-update du SW quand une nouvelle version est disponible
       registerType: 'autoUpdate',
@@ -99,9 +139,9 @@ export default defineConfig({
 
       // Manifest PWA - métadonnées de l'application
       manifest: {
-        name: 'AKAYIS CRM',
-        short_name: 'AKAYIS CRM',
-        description: 'Application CRM pour la gestion des clients et transactions de AKAYIS',
+        name: appFullName,
+        short_name: appFullName,
+        description,
         theme_color: '#3b82f6', // Couleur de la barre d'adresse mobile
         background_color: '#ffffff',
         display: 'standalone', // Affichage en plein écran (comme une app native)
@@ -141,4 +181,5 @@ export default defineConfig({
       }
     })
   ],
+  }
 })

@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import NavBar from './NavBar'
 import NetworkCardsDrawer from './network/NetworkCardsDrawer'
+import { APP_NAME } from '../constants/branding'
 function Layout({ children }) {
   const { themeClasses, backgroundImage } = useTheme()
   const [navbarHeight, setNavbarHeight] = useState(0)
@@ -52,7 +53,7 @@ function Layout({ children }) {
               textShadow: '0 3px 12px rgba(0, 0, 0, 0.8), 0 2px 6px rgba(0, 0, 0, 0.6)'
             }}
           >
-            AKAYIS
+            {APP_NAME}
           </h1>
         </div>
       </header>
